@@ -21,8 +21,6 @@ public static class ModEntry
     {
         if (_harmony != null) return;
 
-        Godot.GD.Print("[DeckTracker] Mod Initializing...");
-
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
 
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
@@ -43,9 +41,18 @@ public static class ModEntry
 internal static class HookPatches
 {
     private static bool _overlayScheduled;
+    private static IRunState? _lastRunState;
 
     public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
     {
+        // If we detect a completely new run, wipe the run stats
+        if (runState != null && runState != _lastRunState)
+        {
+            _lastRunState = runState;
+            DeckDamageService.ResetRun();
+        }
+
+        // Always reset combat stats at the start of a fight
         DeckDamageService.ResetCombat();
 
         if (!_overlayScheduled)
@@ -64,7 +71,6 @@ internal static class HookPatches
         Creature? target,
         CardModel? cardSource)
     {
-        // Only track damage dealt by the player, using a card, that actually deals > 0 damage
         if (dealer != null && (dealer.IsPlayer || dealer.Side == CombatSide.Player))
         {
             if (results != null && cardSource != null && results.UnblockedDamage > 0)

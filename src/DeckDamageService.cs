@@ -16,6 +16,20 @@ public static class DeckDamageService
     {
         lock (SyncRoot)
         {
+            // Only zero out combat damage, keep the run damage intact!
+            foreach (var stat in Totals.Values)
+            {
+                stat.CombatDamage = 0;
+            }
+        }
+        Publish();
+    }
+
+    public static void ResetRun()
+    {
+        lock (SyncRoot)
+        {
+            // Completely wipe the slate for a new run
             Totals.Clear();
         }
         Publish();
@@ -39,7 +53,9 @@ public static class DeckDamageService
                 Totals[cardId] = stat;
             }
 
-            stat.TotalDamage += damage;
+            // Increment both!
+            stat.CombatDamage += damage;
+            stat.RunDamage += damage;
         }
 
         Publish();
@@ -47,16 +63,13 @@ public static class DeckDamageService
 
     private static void Publish()
     {
-        List<CardStats> sortedList;
+        List<CardStats> statsCopy;
         lock (SyncRoot)
         {
-            sortedList = Totals.Values
-                .OrderByDescending(s => s.TotalDamage)
-                .Select(s => s.Clone())
-                .ToList();
+            statsCopy = Totals.Values.Select(s => s.Clone()).ToList();
         }
 
-        Changed?.Invoke(sortedList);
+        Changed?.Invoke(statsCopy);
     }
 }
 
@@ -64,7 +77,8 @@ public sealed class CardStats
 {
     public string CardId { get; set; } = "";
     public string DisplayName { get; set; } = "";
-    public decimal TotalDamage { get; set; }
+    public decimal CombatDamage { get; set; }
+    public decimal RunDamage { get; set; }
 
     public CardStats Clone()
     {
@@ -72,7 +86,8 @@ public sealed class CardStats
         {
             CardId = CardId,
             DisplayName = DisplayName,
-            TotalDamage = TotalDamage
+            CombatDamage = CombatDamage,
+            RunDamage = RunDamage
         };
     }
 }
