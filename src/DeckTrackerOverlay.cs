@@ -23,7 +23,6 @@ public static class DeckTrackerOverlay
     private static readonly ConcurrentQueue<List<CardStats>> _updateQueue = new();
     private static bool _isHookedToProcess = false;
 
-    // --- State Tracking ---
     private static bool _showRunStats = false; 
     private static List<CardStats> _latestStats = new();
 
@@ -65,10 +64,8 @@ public static class DeckTrackerOverlay
         margin.AddThemeConstantOverride("margin_top", 10);
         margin.AddThemeConstantOverride("margin_bottom", 10);
 
-        // Main wrapper for the small UI
         VBoxContainer mainCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
-        // --- Static Header Row ---
         HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
         _titleLabel = new Label { Text = "Tracker (Combat)", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -85,15 +82,13 @@ public static class DeckTrackerOverlay
         header.AddChild(_titleLabel);
         header.AddChild(_toggleBtn);
         header.AddChild(_expandBtn);
-        // -------------------------
 
         mainCol.AddChild(header);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
 
-        // --- Scrollable Data Area ---
         ScrollContainer scroll = new ScrollContainer 
         { 
-            CustomMinimumSize = new Vector2(0, 250), // Caps the height at 250px and forces scrolling!
+            CustomMinimumSize = new Vector2(0, 250), 
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto
         };
@@ -101,7 +96,6 @@ public static class DeckTrackerOverlay
         _smallRowsContainer = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         scroll.AddChild(_smallRowsContainer);
         mainCol.AddChild(scroll);
-        // ----------------------------
 
         margin.AddChild(mainCol);
         bg.AddChild(margin);
@@ -134,7 +128,6 @@ public static class DeckTrackerOverlay
 
         VBoxContainer mainCol = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
 
-        // --- Full Screen Header ---
         HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
         Label title = new Label { Text = "Detailed Deck Statistics (Current Run)", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -149,28 +142,30 @@ public static class DeckTrackerOverlay
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
-        // --------------------------
 
         // --- Table Column Headers ---
         HBoxContainer tableHeaders = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
         Label colCard = new Label { Text = "CARD NAME", CustomMinimumSize = new Vector2(400, 0) };
         colCard.AddThemeColorOverride("font_color", new Color("687480"));
+
+        // NEW: Floor Added Header
+        Label colFloor = new Label { Text = "FLOOR ADDED", CustomMinimumSize = new Vector2(150, 0) };
+        colFloor.AddThemeColorOverride("font_color", new Color("687480"));
         
         Label colRunDmg = new Label { Text = "TOTAL RUN DAMAGE", CustomMinimumSize = new Vector2(200, 0) };
         colRunDmg.AddThemeColorOverride("font_color", new Color("687480"));
 
         tableHeaders.AddChild(colCard);
+        tableHeaders.AddChild(colFloor); // <--- Inject here
         tableHeaders.AddChild(colRunDmg);
         
         mainCol.AddChild(tableHeaders);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 1), Color = new Color(1, 1, 1, 0.1f) });
-        // ----------------------------
 
-        // --- Scrollable Data Area ---
         ScrollContainer scroll = new ScrollContainer 
         { 
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill, // Expands to fill the rest of the giant panel
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto
         };
@@ -178,14 +173,11 @@ public static class DeckTrackerOverlay
         _fullScreenRowsContainer = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         scroll.AddChild(_fullScreenRowsContainer);
         mainCol.AddChild(scroll);
-        // ----------------------------
 
         margin.AddChild(mainCol);
         _fullScreenPanel.AddChild(margin);
         layer.AddChild(_fullScreenPanel);
     }
-
-    // --- Interaction Events ---
 
     private static void OnTogglePressed()
     {
@@ -205,8 +197,6 @@ public static class DeckTrackerOverlay
     {
         if (_fullScreenPanel != null) _fullScreenPanel.Visible = false;
     }
-
-    // --- Core Update Loop ---
 
     private static void OnProcessFrame()
     {
@@ -230,7 +220,6 @@ public static class DeckTrackerOverlay
         // 1. Update Small UI
         if (GodotObject.IsInstanceValid(_smallRowsContainer))
         {
-            // Because the header is safe in the parent container, we can just nuke everything in the rows container!
             foreach (Node child in _smallRowsContainer.GetChildren())
             {
                 _smallRowsContainer.RemoveChild(child);
@@ -271,10 +260,16 @@ public static class DeckTrackerOverlay
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
                 Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(400, 0) };
+                
+                // NEW: Floor Added Label
+                Label floorLabel = new Label { Text = stat.FloorAdded.ToString(), CustomMinimumSize = new Vector2(150, 0) };
+                floorLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); // Light gray
+                
                 Label damageLabel = new Label { Text = stat.RunDamage.ToString("0.##"), CustomMinimumSize = new Vector2(200, 0) };
                 damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80"));
 
                 row.AddChild(nameLabel);
+                row.AddChild(floorLabel); // <--- Inject here
                 row.AddChild(damageLabel);
                 _fullScreenRowsContainer.AddChild(row);
             }

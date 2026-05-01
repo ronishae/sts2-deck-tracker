@@ -10,10 +10,7 @@ public static class DeckDamageService
 {
     private static readonly object SyncRoot = new();
     
-    // Tracks the damage by unique card instance
     private static readonly Dictionary<string, CardStats> Totals = new();
-    
-    // Keeps track of how many of a specific card type we've seen (for naming purposes)
     private static readonly Dictionary<string, int> TypeCounters = new();
 
     public static event Action<List<CardStats>>? Changed;
@@ -35,7 +32,7 @@ public static class DeckDamageService
         lock (SyncRoot)
         {
             Totals.Clear();
-            TypeCounters.Clear(); // Wipe the numbering for the new run
+            TypeCounters.Clear(); 
         }
         Publish();
     }
@@ -47,13 +44,10 @@ public static class DeckDamageService
         string baseId = card.Id.Entry ?? "Unknown_ID";
         string uniqueTrackingId;
 
-        // 1. Try to track it by its permanent Deck Version.
-        // The game creates temporary clones in combat, but they should point back to the master deck card.
         if (card.DeckVersion != null)
         {
             uniqueTrackingId = RuntimeHelpers.GetHashCode(card.DeckVersion).ToString();
         }
-        // 2. If it has no Deck Version (e.g., generated mid-combat like a Shiv), track the instance itself.
         else
         {
             uniqueTrackingId = RuntimeHelpers.GetHashCode(card).ToString();
@@ -63,7 +57,6 @@ public static class DeckDamageService
         {
             if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
-                // Assign a number (e.g., "Strike #1") the first time we see this unique card
                 if (!TypeCounters.ContainsKey(baseId)) 
                 {
                     TypeCounters[baseId] = 0;
@@ -72,10 +65,17 @@ public static class DeckDamageService
 
                 string displayName = $"{card.Title ?? baseId} #{TypeCounters[baseId]}";
 
+                // Grab the floor it was added. If it's null, default to 0 (generated card)
+                // Starter deck is 1
+                int floorAdded = card.DeckVersion != null 
+                    ? (card.DeckVersion.FloorAddedToDeck ?? 0) 
+                    : (card.FloorAddedToDeck ?? 0);
+
                 stat = new CardStats 
                 { 
                     CardId = uniqueTrackingId, 
-                    DisplayName = displayName 
+                    DisplayName = displayName,
+                    FloorAdded = floorAdded // Store the floor here!
                 };
                 Totals[uniqueTrackingId] = stat;
             }
@@ -103,6 +103,7 @@ public sealed class CardStats
 {
     public string CardId { get; set; } = "";
     public string DisplayName { get; set; } = "";
+    public int FloorAdded { get; set; } // <--- New Data Field
     public decimal CombatDamage { get; set; }
     public decimal RunDamage { get; set; }
 
@@ -112,6 +113,7 @@ public sealed class CardStats
         {
             CardId = CardId,
             DisplayName = DisplayName,
+            FloorAdded = FloorAdded, // <--- Clone the new field
             CombatDamage = CombatDamage,
             RunDamage = RunDamage
         };
