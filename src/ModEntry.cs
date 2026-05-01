@@ -20,7 +20,7 @@ public static class ModEntry
 
         GD.Print("[DeckTracker] ModEntry.Initialize() called! Mod is loading.");
 
-        _harmony = new Harmony("com.yourname.sts2.deck_tracker");
+        _harmony = new Harmony("com.roni.sts2.deck_tracker");
 
         MethodInfo original = AccessTools.Method(typeof(Hook), nameof(Hook.BeforeCombatStart))
                               ?? throw new MissingMethodException(typeof(Hook).FullName, nameof(Hook.BeforeCombatStart));
