@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
@@ -8,7 +9,12 @@ namespace DeckTracker;
 public static class DeckDamageService
 {
     private static readonly object SyncRoot = new();
+    
+    // Tracks the damage by unique card instance
     private static readonly Dictionary<string, CardStats> Totals = new();
+    
+    // Keeps track of how many of a specific card type we've seen (for naming purposes)
+    private static readonly Dictionary<string, int> TypeCounters = new();
 
     public static event Action<List<CardStats>>? Changed;
 
@@ -16,7 +22,6 @@ public static class DeckDamageService
     {
         lock (SyncRoot)
         {
-            // Only zero out combat damage, keep the run damage intact!
             foreach (var stat in Totals.Values)
             {
                 stat.CombatDamage = 0;
@@ -29,8 +34,8 @@ public static class DeckDamageService
     {
         lock (SyncRoot)
         {
-            // Completely wipe the slate for a new run
             Totals.Clear();
+            TypeCounters.Clear(); // Wipe the numbering for the new run
         }
         Publish();
     }
@@ -39,21 +44,42 @@ public static class DeckDamageService
     {
         if (damage <= 0) return;
 
-        string cardId = card.Id.Entry ?? "Unknown_ID";
+        string baseId = card.Id.Entry ?? "Unknown_ID";
+        string uniqueTrackingId;
+
+        // 1. Try to track it by its permanent Deck Version.
+        // The game creates temporary clones in combat, but they should point back to the master deck card.
+        if (card.DeckVersion != null)
+        {
+            uniqueTrackingId = RuntimeHelpers.GetHashCode(card.DeckVersion).ToString();
+        }
+        // 2. If it has no Deck Version (e.g., generated mid-combat like a Shiv), track the instance itself.
+        else
+        {
+            uniqueTrackingId = RuntimeHelpers.GetHashCode(card).ToString();
+        }
         
         lock (SyncRoot)
         {
-            if (!Totals.TryGetValue(cardId, out CardStats? stat))
+            if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
+                // Assign a number (e.g., "Strike #1") the first time we see this unique card
+                if (!TypeCounters.ContainsKey(baseId)) 
+                {
+                    TypeCounters[baseId] = 0;
+                }
+                TypeCounters[baseId]++;
+
+                string displayName = $"{card.Title ?? baseId} #{TypeCounters[baseId]}";
+
                 stat = new CardStats 
                 { 
-                    CardId = cardId, 
-                    DisplayName = card.Title?.ToString() ?? cardId 
+                    CardId = uniqueTrackingId, 
+                    DisplayName = displayName 
                 };
-                Totals[cardId] = stat;
+                Totals[uniqueTrackingId] = stat;
             }
 
-            // Increment both!
             stat.CombatDamage += damage;
             stat.RunDamage += damage;
         }
