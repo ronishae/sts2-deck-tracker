@@ -8,14 +8,22 @@ namespace DeckTracker;
 public static class DeckTrackerOverlay
 {
     private static CanvasLayer? _instance;
-    private static VBoxContainer? _rowsContainer;
+    
+    // --- Small UI Elements ---
+    private static VBoxContainer? _smallRowsContainer;
     private static Label? _titleLabel;
     private static Button? _toggleBtn;
+    private static Button? _expandBtn;
     
+    // --- Full Screen UI Elements ---
+    private static PanelContainer? _fullScreenPanel;
+    private static VBoxContainer? _fullScreenRowsContainer;
+    
+    // --- Thread-Safe Data ---
     private static readonly ConcurrentQueue<List<CardStats>> _updateQueue = new();
     private static bool _isHookedToProcess = false;
 
-    // View State Tracking
+    // --- State Tracking ---
     private static bool _showRunStats = false; 
     private static List<CardStats> _latestStats = new();
 
@@ -34,65 +42,167 @@ public static class DeckTrackerOverlay
 
             _instance = new CanvasLayer { Layer = 100, Name = "DeckTrackerOverlay" };
             
-            PanelContainer bg = new PanelContainer { Position = new Vector2(20, 100), CustomMinimumSize = new Vector2(220, 50) };
-            bg.AddThemeStyleboxOverride("panel", new StyleBoxFlat 
-            { 
-                BgColor = new Color(0, 0, 0, 0.8f),
-                CornerRadiusTopLeft = 4, CornerRadiusTopRight = 4,
-                CornerRadiusBottomLeft = 4, CornerRadiusBottomRight = 4
-            });
-
-            MarginContainer margin = new MarginContainer();
-            margin.AddThemeConstantOverride("margin_left", 10);
-            margin.AddThemeConstantOverride("margin_right", 10);
-            margin.AddThemeConstantOverride("margin_top", 10);
-            margin.AddThemeConstantOverride("margin_bottom", 10);
-
-            _rowsContainer = new VBoxContainer();
+            // 1. Build the Small Overlay
+            BuildSmallOverlay(_instance);
             
-            // --- Header Row ---
-            HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            
-            _titleLabel = new Label { Text = "Tracker (Combat)", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            _titleLabel.AddThemeColorOverride("font_color", new Color("FACC15")); 
-            
-            _toggleBtn = new Button { Text = "View Run", FocusMode = Control.FocusModeEnum.None };
-            _toggleBtn.AddThemeFontSizeOverride("font_size", 12);
-            _toggleBtn.Pressed += OnTogglePressed; // Hook up the click event
-
-            header.AddChild(_titleLabel);
-            header.AddChild(_toggleBtn);
-            // ------------------
-
-            _rowsContainer.AddChild(header);
-            _rowsContainer.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
-
-            margin.AddChild(_rowsContainer);
-            bg.AddChild(margin);
-            _instance.AddChild(bg);
+            // 2. Build the Full Screen Overlay (Starts Hidden)
+            BuildFullScreenOverlay(_instance);
 
             tree.Root.CallDeferred(Node.MethodName.AddChild, _instance);
         }
     }
 
+    private static void BuildSmallOverlay(CanvasLayer layer)
+    {
+        PanelContainer bg = new PanelContainer { Position = new Vector2(20, 100), CustomMinimumSize = new Vector2(240, 50) };
+        bg.AddThemeStyleboxOverride("panel", new StyleBoxFlat 
+        { 
+            BgColor = new Color(0, 0, 0, 0.8f),
+            CornerRadiusTopLeft = 4, CornerRadiusTopRight = 4,
+            CornerRadiusBottomLeft = 4, CornerRadiusBottomRight = 4
+        });
+
+        MarginContainer margin = new MarginContainer();
+        margin.AddThemeConstantOverride("margin_left", 10);
+        margin.AddThemeConstantOverride("margin_right", 10);
+        margin.AddThemeConstantOverride("margin_top", 10);
+        margin.AddThemeConstantOverride("margin_bottom", 10);
+
+        _smallRowsContainer = new VBoxContainer();
+        
+        // --- Header Row ---
+        HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        
+        _titleLabel = new Label { Text = "Tracker (Combat)", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _titleLabel.AddThemeColorOverride("font_color", new Color("FACC15")); 
+        
+        _toggleBtn = new Button { Text = "View Run", FocusMode = Control.FocusModeEnum.None };
+        _toggleBtn.AddThemeFontSizeOverride("font_size", 12);
+        _toggleBtn.Pressed += OnTogglePressed; 
+
+        _expandBtn = new Button { Text = "[+]", FocusMode = Control.FocusModeEnum.None };
+        _expandBtn.AddThemeFontSizeOverride("font_size", 12);
+        _expandBtn.Pressed += OnExpandPressed;
+
+        header.AddChild(_titleLabel);
+        header.AddChild(_toggleBtn);
+        header.AddChild(_expandBtn);
+        // ------------------
+
+        _smallRowsContainer.AddChild(header);
+        _smallRowsContainer.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
+
+        margin.AddChild(_smallRowsContainer);
+        bg.AddChild(margin);
+        layer.AddChild(bg);
+    }
+
+    private static void BuildFullScreenOverlay(CanvasLayer layer)
+    {
+        _fullScreenPanel = new PanelContainer { Visible = false };
+        
+        // This makes the panel stretch across the screen but leaves a 100px border around the edges
+        _fullScreenPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _fullScreenPanel.OffsetLeft = 100;
+        _fullScreenPanel.OffsetTop = 100;
+        _fullScreenPanel.OffsetRight = -100;
+        _fullScreenPanel.OffsetBottom = -100;
+
+        _fullScreenPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat 
+        { 
+            BgColor = new Color(0.05f, 0.05f, 0.08f, 0.98f), // Very dark, barely transparent blue/black
+            BorderColor = new Color("3A3A5C"),
+            BorderWidthLeft = 2, BorderWidthTop = 2, BorderWidthRight = 2, BorderWidthBottom = 2,
+            CornerRadiusTopLeft = 8, CornerRadiusTopRight = 8,
+            CornerRadiusBottomLeft = 8, CornerRadiusBottomRight = 8
+        });
+
+        MarginContainer margin = new MarginContainer();
+        margin.AddThemeConstantOverride("margin_left", 20);
+        margin.AddThemeConstantOverride("margin_right", 20);
+        margin.AddThemeConstantOverride("margin_top", 20);
+        margin.AddThemeConstantOverride("margin_bottom", 20);
+
+        VBoxContainer mainCol = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+
+        // --- Full Screen Header ---
+        HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        
+        Label title = new Label { Text = "Detailed Deck Statistics (Current Run)", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        title.AddThemeColorOverride("font_color", new Color("FACC15"));
+        title.AddThemeFontSizeOverride("font_size", 24);
+
+        Button closeBtn = new Button { Text = "  X  ", FocusMode = Control.FocusModeEnum.None };
+        closeBtn.AddThemeColorOverride("font_color", new Color("F87171"));
+        closeBtn.Pressed += OnClosePressed;
+
+        header.AddChild(title);
+        header.AddChild(closeBtn);
+        mainCol.AddChild(header);
+        mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
+        // --------------------------
+
+        // --- Table Column Headers ---
+        HBoxContainer tableHeaders = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        
+        Label colCard = new Label { Text = "CARD NAME", CustomMinimumSize = new Vector2(400, 0) };
+        colCard.AddThemeColorOverride("font_color", new Color("687480"));
+        
+        Label colRunDmg = new Label { Text = "TOTAL RUN DAMAGE", CustomMinimumSize = new Vector2(200, 0) };
+        colRunDmg.AddThemeColorOverride("font_color", new Color("687480"));
+
+        tableHeaders.AddChild(colCard);
+        tableHeaders.AddChild(colRunDmg);
+        
+        mainCol.AddChild(tableHeaders);
+        mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 1), Color = new Color(1, 1, 1, 0.1f) });
+        // ----------------------------
+
+        // --- Scrollable Data Area ---
+        ScrollContainer scroll = new ScrollContainer 
+        { 
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+
+        _fullScreenRowsContainer = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        scroll.AddChild(_fullScreenRowsContainer);
+        mainCol.AddChild(scroll);
+        // ----------------------------
+
+        margin.AddChild(mainCol);
+        _fullScreenPanel.AddChild(margin);
+        layer.AddChild(_fullScreenPanel);
+    }
+
+    // --- Interaction Events ---
+
     private static void OnTogglePressed()
     {
         _showRunStats = !_showRunStats;
-        
-        // Update the text on the UI
         if (_titleLabel != null) _titleLabel.Text = _showRunStats ? "Tracker (Run)" : "Tracker (Combat)";
         if (_toggleBtn != null) _toggleBtn.Text = _showRunStats ? "View Combat" : "View Run";
-
-        // Instantly redraw the UI using the latest data bucket we have
         RedrawUI(_latestStats);
     }
 
+    private static void OnExpandPressed()
+    {
+        if (_fullScreenPanel != null) _fullScreenPanel.Visible = true;
+        RedrawUI(_latestStats); // Force a redraw so it populates immediately when opened
+    }
+
+    private static void OnClosePressed()
+    {
+        if (_fullScreenPanel != null) _fullScreenPanel.Visible = false;
+    }
+
+    // --- Core Update Loop ---
+
     private static void OnProcessFrame()
     {
-        if (!GodotObject.IsInstanceValid(_rowsContainer)) return;
+        if (!GodotObject.IsInstanceValid(_smallRowsContainer)) return;
 
         bool hasUpdate = false;
-
         while (_updateQueue.TryDequeue(out var stats))
         {
             _latestStats = stats;
@@ -107,37 +217,60 @@ public static class DeckTrackerOverlay
 
     private static void RedrawUI(List<CardStats> stats)
     {
-        if (_rowsContainer == null) return;
-
-        // Clean up old rows
-        int childCount = _rowsContainer.GetChildCount();
-        for (int i = childCount - 1; i >= 2; i--)
+        // 1. Update Small UI
+        if (GodotObject.IsInstanceValid(_smallRowsContainer))
         {
-            Node child = _rowsContainer.GetChild(i);
-            _rowsContainer.RemoveChild(child);
-            child.QueueFree();
+            int childCount = _smallRowsContainer.GetChildCount();
+            for (int i = childCount - 1; i >= 2; i--)
+            {
+                Node child = _smallRowsContainer.GetChild(i);
+                _smallRowsContainer.RemoveChild(child);
+                child.QueueFree();
+            }
+
+            var sortedStats = _showRunStats 
+                ? stats.Where(s => s.RunDamage > 0).OrderByDescending(s => s.RunDamage).ToList()
+                : stats.Where(s => s.CombatDamage > 0).OrderByDescending(s => s.CombatDamage).ToList();
+
+            foreach (var stat in sortedStats)
+            {
+                HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+                Label nameLabel = new Label { Text = stat.DisplayName, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+                decimal damageToShow = _showRunStats ? stat.RunDamage : stat.CombatDamage;
+                Label damageLabel = new Label { Text = damageToShow.ToString("0.##") };
+                damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80")); 
+
+                row.AddChild(nameLabel);
+                row.AddChild(damageLabel);
+                _smallRowsContainer.AddChild(row);
+            }
         }
 
-        // Sort and Filter the stats based on what mode the user is currently viewing
-        var sortedStats = _showRunStats 
-            ? stats.Where(s => s.RunDamage > 0).OrderByDescending(s => s.RunDamage).ToList()
-            : stats.Where(s => s.CombatDamage > 0).OrderByDescending(s => s.CombatDamage).ToList();
-
-        foreach (var stat in sortedStats)
+        // 2. Update Full Screen UI (Only if it is currently open to save resources)
+        if (GodotObject.IsInstanceValid(_fullScreenPanel) && _fullScreenPanel.Visible && GodotObject.IsInstanceValid(_fullScreenRowsContainer))
         {
-            HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            
-            Label nameLabel = new Label { Text = stat.DisplayName, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            
-            // Pick the right damage number to show
-            decimal damageToShow = _showRunStats ? stat.RunDamage : stat.CombatDamage;
-            
-            Label damageLabel = new Label { Text = damageToShow.ToString("0.##") };
-            damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80")); 
+            foreach (Node child in _fullScreenRowsContainer.GetChildren())
+            {
+                _fullScreenRowsContainer.RemoveChild(child);
+                child.QueueFree();
+            }
 
-            row.AddChild(nameLabel);
-            row.AddChild(damageLabel);
-            _rowsContainer.AddChild(row);
+            // The full screen view always shows Run stats
+            var runStats = stats.Where(s => s.RunDamage > 0).OrderByDescending(s => s.RunDamage).ToList();
+
+            foreach (var stat in runStats)
+            {
+                HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+                
+                // Matches the CustomMinimumSize of the Table Column Headers
+                Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(400, 0) };
+                Label damageLabel = new Label { Text = stat.RunDamage.ToString("0.##"), CustomMinimumSize = new Vector2(200, 0) };
+                damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80"));
+
+                row.AddChild(nameLabel);
+                row.AddChild(damageLabel);
+                _fullScreenRowsContainer.AddChild(row);
+            }
         }
     }
 }
