@@ -42,10 +42,7 @@ public static class DeckTrackerOverlay
 
             _instance = new CanvasLayer { Layer = 100, Name = "DeckTrackerOverlay" };
             
-            // 1. Build the Small Overlay
             BuildSmallOverlay(_instance);
-            
-            // 2. Build the Full Screen Overlay (Starts Hidden)
             BuildFullScreenOverlay(_instance);
 
             tree.Root.CallDeferred(Node.MethodName.AddChild, _instance);
@@ -68,9 +65,10 @@ public static class DeckTrackerOverlay
         margin.AddThemeConstantOverride("margin_top", 10);
         margin.AddThemeConstantOverride("margin_bottom", 10);
 
-        _smallRowsContainer = new VBoxContainer();
+        // Main wrapper for the small UI
+        VBoxContainer mainCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
-        // --- Header Row ---
+        // --- Static Header Row ---
         HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
         _titleLabel = new Label { Text = "Tracker (Combat)", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -87,12 +85,25 @@ public static class DeckTrackerOverlay
         header.AddChild(_titleLabel);
         header.AddChild(_toggleBtn);
         header.AddChild(_expandBtn);
-        // ------------------
+        // -------------------------
 
-        _smallRowsContainer.AddChild(header);
-        _smallRowsContainer.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
+        mainCol.AddChild(header);
+        mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
 
-        margin.AddChild(_smallRowsContainer);
+        // --- Scrollable Data Area ---
+        ScrollContainer scroll = new ScrollContainer 
+        { 
+            CustomMinimumSize = new Vector2(0, 250), // Caps the height at 250px and forces scrolling!
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto
+        };
+
+        _smallRowsContainer = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        scroll.AddChild(_smallRowsContainer);
+        mainCol.AddChild(scroll);
+        // ----------------------------
+
+        margin.AddChild(mainCol);
         bg.AddChild(margin);
         layer.AddChild(bg);
     }
@@ -100,8 +111,6 @@ public static class DeckTrackerOverlay
     private static void BuildFullScreenOverlay(CanvasLayer layer)
     {
         _fullScreenPanel = new PanelContainer { Visible = false };
-        
-        // This makes the panel stretch across the screen but leaves a 100px border around the edges
         _fullScreenPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _fullScreenPanel.OffsetLeft = 100;
         _fullScreenPanel.OffsetTop = 100;
@@ -110,7 +119,7 @@ public static class DeckTrackerOverlay
 
         _fullScreenPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat 
         { 
-            BgColor = new Color(0.05f, 0.05f, 0.08f, 0.98f), // Very dark, barely transparent blue/black
+            BgColor = new Color(0.05f, 0.05f, 0.08f, 0.98f), 
             BorderColor = new Color("3A3A5C"),
             BorderWidthLeft = 2, BorderWidthTop = 2, BorderWidthRight = 2, BorderWidthBottom = 2,
             CornerRadiusTopLeft = 8, CornerRadiusTopRight = 8,
@@ -161,8 +170,9 @@ public static class DeckTrackerOverlay
         // --- Scrollable Data Area ---
         ScrollContainer scroll = new ScrollContainer 
         { 
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill, // Expands to fill the rest of the giant panel
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto
         };
 
         _fullScreenRowsContainer = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -188,7 +198,7 @@ public static class DeckTrackerOverlay
     private static void OnExpandPressed()
     {
         if (_fullScreenPanel != null) _fullScreenPanel.Visible = true;
-        RedrawUI(_latestStats); // Force a redraw so it populates immediately when opened
+        RedrawUI(_latestStats); 
     }
 
     private static void OnClosePressed()
@@ -220,10 +230,9 @@ public static class DeckTrackerOverlay
         // 1. Update Small UI
         if (GodotObject.IsInstanceValid(_smallRowsContainer))
         {
-            int childCount = _smallRowsContainer.GetChildCount();
-            for (int i = childCount - 1; i >= 2; i--)
+            // Because the header is safe in the parent container, we can just nuke everything in the rows container!
+            foreach (Node child in _smallRowsContainer.GetChildren())
             {
-                Node child = _smallRowsContainer.GetChild(i);
                 _smallRowsContainer.RemoveChild(child);
                 child.QueueFree();
             }
@@ -246,7 +255,7 @@ public static class DeckTrackerOverlay
             }
         }
 
-        // 2. Update Full Screen UI (Only if it is currently open to save resources)
+        // 2. Update Full Screen UI
         if (GodotObject.IsInstanceValid(_fullScreenPanel) && _fullScreenPanel.Visible && GodotObject.IsInstanceValid(_fullScreenRowsContainer))
         {
             foreach (Node child in _fullScreenRowsContainer.GetChildren())
@@ -255,14 +264,12 @@ public static class DeckTrackerOverlay
                 child.QueueFree();
             }
 
-            // The full screen view always shows Run stats
             var runStats = stats.Where(s => s.RunDamage > 0).OrderByDescending(s => s.RunDamage).ToList();
 
             foreach (var stat in runStats)
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
-                // Matches the CustomMinimumSize of the Table Column Headers
                 Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(400, 0) };
                 Label damageLabel = new Label { Text = stat.RunDamage.ToString("0.##"), CustomMinimumSize = new Vector2(200, 0) };
                 damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80"));
