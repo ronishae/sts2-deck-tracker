@@ -143,25 +143,38 @@ public static class DeckTrackerOverlay
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
-
+        
+        // --- Table Column Headers ---
         HBoxContainer tableHeaders = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
-        Label colCard = new Label { Text = "CARD NAME", CustomMinimumSize = new Vector2(400, 0) };
+        Label colCard = new Label { Text = "CARD NAME", CustomMinimumSize = new Vector2(300, 0) };
         colCard.AddThemeColorOverride("font_color", new Color("687480"));
 
-        Label colFloor = new Label { Text = "FLOOR ADDED", CustomMinimumSize = new Vector2(150, 0) };
+        Label colFloor = new Label { Text = "FLOOR", CustomMinimumSize = new Vector2(80, 0) };
         colFloor.AddThemeColorOverride("font_color", new Color("687480"));
         
-        Label colRunDmg = new Label { Text = "TOTAL RUN DAMAGE", CustomMinimumSize = new Vector2(200, 0) };
+        Label colRunDmg = new Label { Text = "ALL DMG (AVG)", CustomMinimumSize = new Vector2(180, 0) };
         colRunDmg.AddThemeColorOverride("font_color", new Color("687480"));
+
+        Label colHallway = new Label { Text = "HALLWAY (AVG)", CustomMinimumSize = new Vector2(180, 0) };
+        colHallway.AddThemeColorOverride("font_color", new Color("687480"));
+
+        Label colElite = new Label { Text = "ELITE (AVG)", CustomMinimumSize = new Vector2(180, 0) };
+        colElite.AddThemeColorOverride("font_color", new Color("687480"));
+
+        Label colBoss = new Label { Text = "BOSS (AVG)", CustomMinimumSize = new Vector2(180, 0) };
+        colBoss.AddThemeColorOverride("font_color", new Color("687480"));
 
         tableHeaders.AddChild(colCard);
         tableHeaders.AddChild(colFloor);
         tableHeaders.AddChild(colRunDmg);
+        tableHeaders.AddChild(colHallway);
+        tableHeaders.AddChild(colElite);
+        tableHeaders.AddChild(colBoss);
         
         mainCol.AddChild(tableHeaders);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 1), Color = new Color(1, 1, 1, 0.1f) });
-
+        
         ScrollContainer scroll = new ScrollContainer 
         { 
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
@@ -245,7 +258,7 @@ public static class DeckTrackerOverlay
             }
         }
 
-        // 2. Update Full Screen UI (No filters! Shows the entire deck)
+        // 2. Update Full Screen UI
         if (GodotObject.IsInstanceValid(_fullScreenPanel) && _fullScreenPanel.Visible && GodotObject.IsInstanceValid(_fullScreenRowsContainer))
         {
             foreach (Node child in _fullScreenRowsContainer.GetChildren())
@@ -254,22 +267,40 @@ public static class DeckTrackerOverlay
                 child.QueueFree();
             }
 
-            // Notice we removed the `.Where` filter! It just sorts by Run Damage now.
-            var allCards = stats.OrderByDescending(s => s.RunDamage).ThenBy(s => s.FloorAdded).ToList();
+            var allCards = stats
+                .Where(s => s.CardType != "Status") 
+                .OrderByDescending(s => s.RunDamage)
+                .ThenBy(s => s.FloorAdded)
+                .ToList();
 
             foreach (var stat in allCards)
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
-                Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(400, 0) };
-                Label floorLabel = new Label { Text = stat.FloorAdded.ToString(), CustomMinimumSize = new Vector2(150, 0) };
+                Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(300, 0) };
+                
+                Label floorLabel = new Label { Text = stat.FloorAdded.ToString(), CustomMinimumSize = new Vector2(80, 0) };
                 floorLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
-                Label damageLabel = new Label { Text = stat.RunDamage.ToString("0.##"), CustomMinimumSize = new Vector2(200, 0) };
-                damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80"));
+                
+                // Formats as: "Total (Avg)"
+                Label allDmgLabel = new Label { Text = $"{stat.RunDamage:0.##} ({stat.AvgTotal:0.#})", CustomMinimumSize = new Vector2(180, 0) };
+                allDmgLabel.AddThemeColorOverride("font_color", new Color("4ADE80"));
+
+                Label hallwayLabel = new Label { Text = $"{stat.DamageHallway:0.##} ({stat.AvgHallway:0.#})", CustomMinimumSize = new Vector2(180, 0) };
+                hallwayLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+
+                Label eliteLabel = new Label { Text = $"{stat.DamageElite:0.##} ({stat.AvgElite:0.#})", CustomMinimumSize = new Vector2(180, 0) };
+                eliteLabel.AddThemeColorOverride("font_color", new Color("FACC15")); // Elite in Yellow
+
+                Label bossLabel = new Label { Text = $"{stat.DamageBoss:0.##} ({stat.AvgBoss:0.#})", CustomMinimumSize = new Vector2(180, 0) };
+                bossLabel.AddThemeColorOverride("font_color", new Color("F87171")); // Boss in Red
 
                 row.AddChild(nameLabel);
                 row.AddChild(floorLabel);
-                row.AddChild(damageLabel);
+                row.AddChild(allDmgLabel);
+                row.AddChild(hallwayLabel);
+                row.AddChild(eliteLabel);
+                row.AddChild(bossLabel);
                 _fullScreenRowsContainer.AddChild(row);
             }
         }

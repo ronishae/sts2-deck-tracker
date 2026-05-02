@@ -167,7 +167,36 @@ public static class CardRegistry
 
         Publish();
     }
+    
+    public static void ProcessCombatEnd(string combatType)
+    {
+        lock (SyncRoot)
+        {
+            // We iterate through every card currently in the registry
+            foreach (var stat in Totals.Values)
+            {
+                // Increment the "Seen" counters so we can calculate accurate averages
+                stat.EncountersSeenTotal++;
+                
+                if (combatType == "Elite") stat.EncountersSeenElite++;
+                else if (combatType == "Boss") stat.EncountersSeenBoss++;
+                else stat.EncountersSeenHallway++;
 
+                // If the card dealt damage this combat, lock it into the specific category
+                if (stat.CombatDamage > 0)
+                {
+                    if (combatType == "Elite") stat.DamageElite += stat.CombatDamage;
+                    else if (combatType == "Boss") stat.DamageBoss += stat.CombatDamage;
+                    else stat.DamageHallway += stat.CombatDamage;
+                }
+                
+            }
+        }
+        
+        SaveState();
+        Publish();
+    }
+    
     public static void ForcePublish() => Publish();
 
     private static void Publish()
@@ -187,15 +216,37 @@ public sealed class CardStats
     public string DisplayName { get; set; } = "";
     public string CardType { get; set; } = "";
     public int FloorAdded { get; set; } 
+    
+    // Volatile (Resets every combat)
     public decimal CombatDamage { get; set; }
+    
+    // Persistent Totals
     public decimal RunDamage { get; set; }
+    public decimal DamageHallway { get; set; }
+    public decimal DamageElite { get; set; }
+    public decimal DamageBoss { get; set; }
+
+    // Persistent Encounter Counters
+    public int EncountersSeenTotal { get; set; }
+    public int EncountersSeenHallway { get; set; }
+    public int EncountersSeenElite { get; set; }
+    public int EncountersSeenBoss { get; set; }
+
+    // Helpers for calculating averages safely
+    public decimal AvgTotal => EncountersSeenTotal > 0 ? RunDamage / EncountersSeenTotal : 0;
+    public decimal AvgHallway => EncountersSeenHallway > 0 ? DamageHallway / EncountersSeenHallway : 0;
+    public decimal AvgElite => EncountersSeenElite > 0 ? DamageElite / EncountersSeenElite : 0;
+    public decimal AvgBoss => EncountersSeenBoss > 0 ? DamageBoss / EncountersSeenBoss : 0;
 
     public CardStats Clone()
     {
         return new CardStats
         {
-            CardId = CardId, DisplayName = DisplayName, FloorAdded = FloorAdded, 
-            CombatDamage = CombatDamage, RunDamage = RunDamage
+            CardId = CardId, DisplayName = DisplayName, CardType = CardType, FloorAdded = FloorAdded, 
+            CombatDamage = CombatDamage, RunDamage = RunDamage,
+            DamageHallway = DamageHallway, DamageElite = DamageElite, DamageBoss = DamageBoss,
+            EncountersSeenTotal = EncountersSeenTotal, EncountersSeenHallway = EncountersSeenHallway,
+            EncountersSeenElite = EncountersSeenElite, EncountersSeenBoss = EncountersSeenBoss
         };
     }
 }

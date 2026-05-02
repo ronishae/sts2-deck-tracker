@@ -1,12 +1,15 @@
 using System;
 using System.Reflection;
+using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
+using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.ValueProps;
 
@@ -123,8 +126,24 @@ internal static class HookPatches
     
     public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
     {
-        // When the victory screen pops and combat officially ends, lock in the data!
-        CardRegistry.SaveState();
+        string combatType = "Unknown"; 
+        // Extract the encounter type via Reflection
+        if (runState != null)
+        {
+            try
+            {
+                var roomType = runState.BaseRoom?.RoomType;
+                GD.Print($"[DeckTracker] Room Type {roomType}");
+                if (roomType == RoomType.Map) combatType = "Hallway";
+                else if (roomType == RoomType.Elite) combatType = "Elite";
+                else if (roomType == RoomType.Boss) combatType = "Boss";
+                
+            }
+            catch { /* Fallback to Hallway if reflection fails */ }
+        }
+
+        // Process the end of the fight and lock in the data!
+        CardRegistry.ProcessCombatEnd(combatType);
     }
     
     public static void TryManualPlayPrefix(CardModel __instance)
