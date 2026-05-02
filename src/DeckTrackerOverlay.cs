@@ -224,12 +224,14 @@ public static class DeckTrackerOverlay
                 _smallRowsContainer.RemoveChild(child);
                 child.QueueFree();
             }
-
-            var sortedStats = _showRunStats 
-                ? stats.Where(s => s.RunDamage > 0).OrderByDescending(s => s.RunDamage).ToList()
-                : stats.Where(s => s.CombatDamage > 0).OrderByDescending(s => s.CombatDamage).ToList();
-
-            foreach (var stat in sortedStats)
+            
+            var allCards = stats
+                .Where(s => s.CardType != "Status") 
+                .OrderByDescending(s => s.RunDamage)
+                .ThenBy(s => s.FloorAdded)
+                .ToList();
+            
+            foreach (var stat in allCards)
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 Label nameLabel = new Label { Text = stat.DisplayName, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };

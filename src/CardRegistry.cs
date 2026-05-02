@@ -142,6 +142,7 @@ public static class CardRegistry
                 { 
                     CardId = uniqueTrackingId, 
                     DisplayName = displayName,
+                    CardType = sourceCard.Type.ToString(),
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
                     CombatDamage = 0,
                     RunDamage = 0
@@ -184,6 +185,7 @@ public sealed class CardStats
 {
     public string CardId { get; set; } = "";
     public string DisplayName { get; set; } = "";
+    public string CardType { get; set; } = "";
     public int FloorAdded { get; set; } 
     public decimal CombatDamage { get; set; }
     public decimal RunDamage { get; set; }
