@@ -56,38 +56,7 @@ internal static class HookPatches
         CardRegistry.ResetCombat();
 
         // --- THE DECK SCANNER ---
-        try 
-        {
-            if (runState != null) 
-            {
-                var playersProp = runState.GetType().GetProperty("Players");
-                if (playersProp?.GetValue(runState) is System.Collections.IEnumerable players) 
-                {
-                    foreach (var player in players) 
-                    {
-                        var pilesProp = player.GetType().GetProperty("Piles");
-                        if (pilesProp?.GetValue(player) is System.Collections.IEnumerable piles) 
-                        {
-                            foreach (var pile in piles) 
-                            {
-                                var cardsProp = pile.GetType().GetProperty("Cards");
-                                if (cardsProp?.GetValue(pile) is System.Collections.IEnumerable cards) 
-                                {
-                                    foreach (var card in cards) 
-                                    {
-                                        if (card is CardModel cardModel) 
-                                        {
-                                            CardRegistry.RegisterCard(cardModel);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } 
-        catch { /* Fails silently if STS2 changes their API */ }
+        ScanDeckForCards(runState);
         // ------------------------
 
         CardRegistry.ForcePublish();
@@ -98,6 +67,52 @@ internal static class HookPatches
             DeckTrackerOverlay.EnsureCreated();
         }
     }
+
+    // ─── DECK SCANNER HELPER METHODS ──────────────────────────────────────
+
+    private static void ScanDeckForCards(IRunState? runState)
+    {
+        if (runState == null) return;
+
+        try 
+        {
+            var players = GetEnumerableProperty(runState, "Players");
+            if (players == null) return;
+
+            foreach (var player in players) 
+            {
+                ScanPlayerPiles(player);
+            }
+        } 
+        catch { /* Fails silently if STS2 changes their API */ }
+    }
+
+    private static void ScanPlayerPiles(object player)
+    {
+        var piles = GetEnumerableProperty(player, "Piles");
+        if (piles == null) return;
+
+        foreach (var pile in piles) 
+        {
+            var cards = GetEnumerableProperty(pile, "Cards");
+            if (cards == null) continue; // Early continue skips empty piles
+
+            foreach (var card in cards) 
+            {
+                if (card is CardModel cardModel) 
+                {
+                    CardRegistry.RegisterCard(cardModel);
+                }
+            }
+        }
+    }
+
+    private static System.Collections.IEnumerable? GetEnumerableProperty(object obj, string propertyName)
+    {
+        return obj.GetType().GetProperty(propertyName)?.GetValue(obj) as System.Collections.IEnumerable;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
 
     public static void TryManualPlayPrefix(CardModel __instance)
     {
@@ -111,7 +126,6 @@ internal static class HookPatches
         {
             if (results != null && cardSource != null && results.UnblockedDamage > 0)
             {
-                // We still call the Damage Service here!
                 DeckDamageService.RecordDamage(cardSource, results.UnblockedDamage);
             }
         }
