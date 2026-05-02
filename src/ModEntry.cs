@@ -31,7 +31,10 @@ public static class ModEntry
         
         // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
-
+        
+        // --- Card Removal Hook ---
+        PatchHook(nameof(Hook.BeforeCardRemoved), nameof(HookPatches.BeforeCardRemovedPostfix));
+        
         // --- Card Event Hooks ---
         PatchHook(nameof(Hook.AfterCardDrawn), nameof(HookPatches.AfterCardDrawnPostfix));
         PatchHook(nameof(Hook.AfterCardChangedPiles), nameof(HookPatches.AfterCardChangedPilesPostfix));
@@ -50,6 +53,12 @@ public static class ModEntry
 internal static class HookPatches
 {
     private static bool _overlayScheduled;
+    
+    public static void BeforeCardRemovedPostfix(IRunState runState, CardModel card)
+    {
+        int currentFloor = ExtractFloorNum(runState);
+        CardRegistry.HandleRemove(card, currentFloor);
+    }
     
     // Catches cards that enter the hand via Generation, Exhaust, or Discard retrieval!
     public static void AfterCardChangedPilesPostfix(IRunState runState, ICombatState? combatState, CardModel card, PileType oldPile, AbstractModel? source)
@@ -75,11 +84,16 @@ internal static class HookPatches
     {
         string seed = ExtractRunSeed(runState);
         CardRegistry.SyncRun(seed);
-
+    
+        int currentFloor = ExtractFloorNum(runState);
         string combatType = GetCombatType(runState);
-        CardRegistry.StartCombat(combatType);
-
-        ScanDeckForCards(runState);
+        
+        // 1. Scan deck first to register cards and get the active list
+        List<string> activeDeckIds = ScanDeckForCards(runState);
+        
+        // 2. Start combat and pass the active list so it can diff against the tracker history
+        CardRegistry.StartCombat(combatType, currentFloor, activeDeckIds);
+        
         CardRegistry.ForcePublish();
 
         if (!_overlayScheduled)
@@ -142,7 +156,12 @@ internal static class HookPatches
     }
 
     // --- HELPERS & EXTRACTORS ---
-
+    private static int ExtractFloorNum(IRunState? runState)
+    {
+        if (runState == null) return 1;
+        return runState.TotalFloor;
+    }
+    
     private static string GetCombatType(IRunState? runState)
     {
         if (runState != null)
@@ -172,20 +191,23 @@ internal static class HookPatches
         catch { return ""; }
     }
 
-    private static void ScanDeckForCards(IRunState? runState)
+    private static List<string> ScanDeckForCards(IRunState? runState)
     {
-        if (runState == null) return;
+        List<string> deckIds = new();
+        
+        if (runState == null) return deckIds;
         try 
         {
             var players = GetEnumerableProperty(runState, "Players");
-            if (players == null) return;
+            if (players == null) return deckIds;
 
-            foreach (var player in players) ScanPlayerPiles(player);
+            foreach (var player in players) ScanPlayerPiles(player, deckIds);
         } 
         catch { }
+        return deckIds;
     }
 
-    private static void ScanPlayerPiles(object player)
+    private static void ScanPlayerPiles(object player, List<string> deckIds)
     {
         var piles = GetEnumerableProperty(player, "Piles");
         if (piles == null) return;
@@ -197,7 +219,11 @@ internal static class HookPatches
 
             foreach (var card in cards) 
             {
-                if (card is CardModel cardModel) CardRegistry.RegisterCard(cardModel);
+                if (card is CardModel cardModel)
+                {
+                    CardRegistry.RegisterCard(cardModel);
+                    deckIds.Add(CardRegistry.GetTrackingId(cardModel));
+                }
             }
         }
     }

@@ -94,7 +94,7 @@ public static class CardRegistry
 
     // --- Fingerprint Generation ---
 
-    private static string GetTrackingId(CardModel card)
+    public static string GetTrackingId(CardModel card)
     {
         CardModel sourceCard = card.DeckVersion ?? card;
 
@@ -118,15 +118,30 @@ public static class CardRegistry
     }
 
     // REPLACES ResetCombat: Called before the deck is scanned for a new fight
-    public static void StartCombat(string combatType)
+    public static void StartCombat(string combatType, int currentFloor, List<string> activeDeckIds)
     {
         lock (SyncRoot)
         {
             _currentCombatType = combatType;
-
+        
+            // Put the newly scanned active IDs into a fast lookup
+            HashSet<string> uniqueActiveIds = new HashSet<string>(activeDeckIds);
+            
             foreach (var stat in Totals.Values)
             {
                 stat.CombatDamage = 0; // Wipe the previous combat's text
+                
+                // DIFF CHECK: If we think the card is in the deck, but the game scan didn't find it
+                // it means it was removed, transformed, or upgraded!
+                if (stat.IsInDeck && !uniqueActiveIds.Contains(stat.CardId))
+                {
+                    stat.IsInDeck = false;
+                    // FloorRemoved is remove specifically, FloorLeft can be from upgrade, transform, remove
+                    if (stat.FloorRemoved == -1) stat.FloorLeftDeck = currentFloor;
+                }
+                
+                // If the card is no longer in the deck (or was generated), skip incrementing encounters
+                if (!stat.IsInDeck) continue;
                 
                 // Increment the "seen" counters right at the start of the fight
                 stat.EncountersSeenTotal++;
@@ -150,7 +165,22 @@ public static class CardRegistry
     }
 
     // --- Data Modifiers ---
-
+    
+    public static void HandleRemove(CardModel card, int floorRemoved)
+    {
+        string uniqueTrackingId = GetTrackingId(card);
+        lock (SyncRoot)
+        {
+            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            {
+                stat.FloorRemoved = floorRemoved;
+                stat.FloorLeftDeck = floorRemoved;
+                stat.IsInDeck = false;
+            }
+        }
+        Publish();
+    }
+    
     public static void RegisterCard(CardModel card)
     {
         string uniqueTrackingId = GetTrackingId(card);
@@ -161,6 +191,8 @@ public static class CardRegistry
             {
                 CardModel sourceCard = card.DeckVersion ?? card;
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
+                
+                bool isGenerated = card.DeckVersion == null;
 
                 stat = new CardStats 
                 { 
@@ -168,6 +200,9 @@ public static class CardRegistry
                     DisplayName = displayName,
                     CardType = sourceCard.Type.ToString(),
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
+                    // NEW: If it has no DeckVersion, it's a generated card, so default it to removed (0).
+                    FloorRemoved = isGenerated ? 0 : -1, 
+                    IsInDeck = !isGenerated, // Normal cards are True, Generated are False
                     CombatDamage = 0,
                     RunDamage = 0
                 };
@@ -254,7 +289,10 @@ public sealed class CardStats
     public string CardId { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string CardType { get; set; } = "";
-    public int FloorAdded { get; set; } 
+    public int FloorAdded { get; set; }
+    public int FloorRemoved { get; set; } = -1;
+    public int FloorLeftDeck { get; set; } = -1;
+    public bool IsInDeck { get; set; } = true;
     
     public int TimesDrawn { get; set; }
     public int TimesPlayed { get; set; }
@@ -281,6 +319,7 @@ public sealed class CardStats
         return new CardStats
         {
             CardId = CardId, DisplayName = DisplayName, CardType = CardType, FloorAdded = FloorAdded, 
+            FloorRemoved = FloorRemoved, FloorLeftDeck = FloorLeftDeck, IsInDeck = IsInDeck,
             TimesDrawn = TimesDrawn, TimesPlayed = TimesPlayed, // Add clones here!
             CombatDamage = CombatDamage, RunDamage = RunDamage,
             DamageHallway = DamageHallway, DamageElite = DamageElite, DamageBoss = DamageBoss,
