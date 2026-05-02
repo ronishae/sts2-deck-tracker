@@ -244,7 +244,8 @@ public static class DeckTrackerOverlay
             
             var allCards = stats
                 .Where(s => s.CardType != "Status") 
-                .OrderByDescending(s => s.RunDamage)
+                .Where(s => _showRunStats ? s.RunDamage > 0 : s.CombatDamage > 0)
+                .OrderByDescending(s => _showRunStats ? s.RunDamage : s.CombatDamage)
                 .ThenBy(s => s.FloorAdded)
                 .ToList();
             
