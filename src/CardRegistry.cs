@@ -18,6 +18,9 @@ public static class CardRegistry
     // NEW: We need to know what fight we are in while dealing damage!
     private static string _currentCombatType = "Unknown";
 
+    // Tracks which cards have already received their +1 encounter this specific combat
+    private static HashSet<string> _incrementedThisCombat = new();
+    
     private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
 
     public static event Action<List<CardStats>>? Changed;
@@ -123,6 +126,7 @@ public static class CardRegistry
         lock (SyncRoot)
         {
             _currentCombatType = combatType;
+            _incrementedThisCombat.Clear();
         
             // Put the newly scanned active IDs into a fast lookup
             HashSet<string> uniqueActiveIds = new HashSet<string>(activeDeckIds);
@@ -149,6 +153,7 @@ public static class CardRegistry
                 if (combatType == "Elite") stat.EncountersSeenElite++;
                 else if (combatType == "Boss") stat.EncountersSeenBoss++;
                 else stat.EncountersSeenHallway++;
+                _incrementedThisCombat.Add(stat.CardId);
             }
         }
     }
@@ -187,13 +192,12 @@ public static class CardRegistry
             
         lock (SyncRoot)
         {
+            bool isGenerated = card.DeckVersion == null;
             if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
                 CardModel sourceCard = card.DeckVersion ?? card;
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
                 
-                bool isGenerated = card.DeckVersion == null;
-
                 stat = new CardStats 
                 { 
                     CardId = uniqueTrackingId, 
@@ -206,18 +210,21 @@ public static class CardRegistry
                     CombatDamage = 0,
                     RunDamage = 0
                 };
-
-                // CRITICAL: If a completely new card is added mid-combat (like a Shiv), 
-                // it needs to count THIS combat as its first encounter so its average doesn't break!
-                if (_currentCombatType != "Unknown")
-                {
-                    stat.EncountersSeenTotal = 1;
-                    if (_currentCombatType == "Elite") stat.EncountersSeenElite = 1;
-                    else if (_currentCombatType == "Boss") stat.EncountersSeenBoss = 1;
-                    else stat.EncountersSeenHallway = 1;
-                }
-
+                
                 Totals[uniqueTrackingId] = stat;
+            }
+            
+            if (_currentCombatType != "Unknown" && isGenerated)
+            {
+                // HashSet.Add returns 'true' ONLY if the item wasn't already in the list.
+                // This ensures 10 Shivs generated in one fight only increment the denominator by 1.
+                if (_incrementedThisCombat.Add(uniqueTrackingId))
+                {
+                    stat.EncountersSeenTotal++;
+                    if (_currentCombatType == "Elite") stat.EncountersSeenElite++;
+                    else if (_currentCombatType == "Boss") stat.EncountersSeenBoss++;
+                    else stat.EncountersSeenHallway++;
+                }
             }
         }
     }
