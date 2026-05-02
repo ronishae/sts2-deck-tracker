@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Godot;
 using MegaCrit.Sts2.Core.Models;
@@ -12,8 +13,10 @@ public static class CardRegistry
     private static readonly object SyncRoot = new();
     
     private static Dictionary<string, CardStats> Totals = new();
-    
     private static string _currentRunSeed = "";
+    
+    // NEW: We need to know what fight we are in while dealing damage!
+    private static string _currentCombatType = "Unknown";
 
     private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
 
@@ -93,7 +96,6 @@ public static class CardRegistry
 
     private static string GetTrackingId(CardModel card)
     {
-        // Always try to use the Master Deck version for the most accurate persistent data
         CardModel sourceCard = card.DeckVersion ?? card;
 
         string baseId = sourceCard.Id.Entry ?? "Unknown";
@@ -101,20 +103,10 @@ public static class CardRegistry
         int upgradeLevel = sourceCard.CurrentUpgradeLevel;
         string enchant = sourceCard.Enchantment?.Id.Entry ?? "None";
 
-        // Creates an unbreakable fingerprint: e.g., "BASH_IRONCLAD_F0_U0_None"
         return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}";
     }
 
-    // ------------------------------
-
-    public static void ResetCombat()
-    {
-        lock (SyncRoot)
-        {
-            foreach (var stat in Totals.Values) stat.CombatDamage = 0;
-        }
-        Publish();
-    }
+    // --- Combat Lifecycle ---
 
     public static void ResetRun()
     {
@@ -125,6 +117,40 @@ public static class CardRegistry
         Publish();
     }
 
+    // REPLACES ResetCombat: Called before the deck is scanned for a new fight
+    public static void StartCombat(string combatType)
+    {
+        lock (SyncRoot)
+        {
+            _currentCombatType = combatType;
+
+            foreach (var stat in Totals.Values)
+            {
+                stat.CombatDamage = 0; // Wipe the previous combat's text
+                
+                // Increment the "seen" counters right at the start of the fight
+                stat.EncountersSeenTotal++;
+                
+                if (combatType == "Elite") stat.EncountersSeenElite++;
+                else if (combatType == "Boss") stat.EncountersSeenBoss++;
+                else stat.EncountersSeenHallway++;
+            }
+        }
+    }
+
+    public static void ProcessCombatEnd()
+    {
+        lock (SyncRoot)
+        {
+            _currentCombatType = "Unknown"; // Clear the state
+        }
+        
+        SaveState(); // Lock the victory into the hard drive
+        Publish();
+    }
+
+    // --- Data Modifiers ---
+
     public static void RegisterCard(CardModel card)
     {
         string uniqueTrackingId = GetTrackingId(card);
@@ -134,8 +160,6 @@ public static class CardRegistry
             if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
                 CardModel sourceCard = card.DeckVersion ?? card;
-                
-                // If it is upgraded, append the '+' so it looks clean in the UI
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
 
                 stat = new CardStats 
@@ -147,6 +171,17 @@ public static class CardRegistry
                     CombatDamage = 0,
                     RunDamage = 0
                 };
+
+                // CRITICAL: If a completely new card is added mid-combat (like a Shiv), 
+                // it needs to count THIS combat as its first encounter so its average doesn't break!
+                if (_currentCombatType != "Unknown")
+                {
+                    stat.EncountersSeenTotal = 1;
+                    if (_currentCombatType == "Elite") stat.EncountersSeenElite = 1;
+                    else if (_currentCombatType == "Boss") stat.EncountersSeenBoss = 1;
+                    else stat.EncountersSeenHallway = 1;
+                }
+
                 Totals[uniqueTrackingId] = stat;
             }
         }
@@ -162,41 +197,17 @@ public static class CardRegistry
             {
                 stat.CombatDamage += damage;
                 stat.RunDamage += damage;
+
+                // NEW: Route the damage in real-time!
+                if (_currentCombatType == "Elite") stat.DamageElite += damage;
+                else if (_currentCombatType == "Boss") stat.DamageBoss += damage;
+                else if (_currentCombatType == "Hallway") stat.DamageHallway += damage;
             }
         }
 
         Publish();
     }
-    
-    public static void ProcessCombatEnd(string combatType)
-    {
-        lock (SyncRoot)
-        {
-            // We iterate through every card currently in the registry
-            foreach (var stat in Totals.Values)
-            {
-                // Increment the "Seen" counters so we can calculate accurate averages
-                stat.EncountersSeenTotal++;
-                
-                if (combatType == "Elite") stat.EncountersSeenElite++;
-                else if (combatType == "Boss") stat.EncountersSeenBoss++;
-                else stat.EncountersSeenHallway++;
 
-                // If the card dealt damage this combat, lock it into the specific category
-                if (stat.CombatDamage > 0)
-                {
-                    if (combatType == "Elite") stat.DamageElite += stat.CombatDamage;
-                    else if (combatType == "Boss") stat.DamageBoss += stat.CombatDamage;
-                    else stat.DamageHallway += stat.CombatDamage;
-                }
-                
-            }
-        }
-        
-        SaveState();
-        Publish();
-    }
-    
     public static void ForcePublish() => Publish();
 
     private static void Publish()
@@ -217,22 +228,17 @@ public sealed class CardStats
     public string CardType { get; set; } = "";
     public int FloorAdded { get; set; } 
     
-    // Volatile (Resets every combat)
     public decimal CombatDamage { get; set; }
-    
-    // Persistent Totals
     public decimal RunDamage { get; set; }
     public decimal DamageHallway { get; set; }
     public decimal DamageElite { get; set; }
     public decimal DamageBoss { get; set; }
 
-    // Persistent Encounter Counters
     public int EncountersSeenTotal { get; set; }
     public int EncountersSeenHallway { get; set; }
     public int EncountersSeenElite { get; set; }
     public int EncountersSeenBoss { get; set; }
 
-    // Helpers for calculating averages safely
     public decimal AvgTotal => EncountersSeenTotal > 0 ? RunDamage / EncountersSeenTotal : 0;
     public decimal AvgHallway => EncountersSeenHallway > 0 ? DamageHallway / EncountersSeenHallway : 0;
     public decimal AvgElite => EncountersSeenElite > 0 ? DamageElite / EncountersSeenElite : 0;

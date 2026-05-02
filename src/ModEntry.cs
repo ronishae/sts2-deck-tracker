@@ -1,14 +1,13 @@
 using System;
 using System.Reflection;
-using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
-using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.ValueProps;
@@ -26,8 +25,8 @@ public static class ModEntry
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
 
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
+        PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
-        PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix));
 
         MethodInfo playOriginal = AccessTools.Method(typeof(CardModel), nameof(CardModel.TryManualPlay))
             ?? throw new MissingMethodException("Could not find TryManualPlay");
@@ -50,19 +49,18 @@ internal static class HookPatches
 
     public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
     {
-        // 1. Sync the Run (Wipes or Resumes based on Seed)
         string seed = ExtractRunSeed(runState);
         CardRegistry.SyncRun(seed);
 
-        // 2. Reset Combat counters
-        CardRegistry.ResetCombat();
+        // Figure out the room type BEFORE combat starts and kick off the real-time tracker
+        string combatType = GetCombatType(runState);
+        CardRegistry.StartCombat(combatType);
 
-        // 3. Scan the Deck
         ScanDeckForCards(runState);
-
-        // 4. Force a hard-save and update the UI
-        CardRegistry.SaveState();
+        
         CardRegistry.ForcePublish();
+
+        // REMOVED: CardRegistry.SaveState() -> Do not save mid-combat state to prevent Save & Quit bugs!
 
         if (!_overlayScheduled)
         {
@@ -71,14 +69,35 @@ internal static class HookPatches
         }
     }
 
-    // --- DECK SCANNER & EXTRACTORS ---
+    public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
+    {
+        // Wrap up the combat and lock the data into the hard drive
+        CardRegistry.ProcessCombatEnd();
+    }
+
+    // --- HELPERS & EXTRACTORS ---
+
+    private static string GetCombatType(IRunState? runState)
+    {
+        if (runState != null)
+        {
+            try
+            {
+                var roomType = runState.BaseRoom?.RoomType;
+                if (roomType == RoomType.Monster) return "Hallway";
+                if (roomType == RoomType.Elite) return "Elite";
+                if (roomType == RoomType.Boss) return "Boss";
+            }
+            catch { /* Fallback below */ }
+        }
+        return "Hallway";
+    }
 
     private static string ExtractRunSeed(IRunState? runState)
     {
         if (runState == null) return "";
         try 
         {
-            // Digs into IRunState -> Rng -> StringSeed
             var rngProp = runState.GetType().GetProperty("Rng");
             var rng = rngProp?.GetValue(runState);
             var seedProp = rng?.GetType().GetProperty("StringSeed");
@@ -97,7 +116,7 @@ internal static class HookPatches
 
             foreach (var player in players) ScanPlayerPiles(player);
         } 
-        catch { /* Fails silently if STS2 changes their API */ }
+        catch { }
     }
 
     private static void ScanPlayerPiles(object player)
@@ -123,29 +142,6 @@ internal static class HookPatches
     }
 
     // --- DAMAGE HOOKS ---
-    
-    public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
-    {
-        string combatType = "Unknown"; 
-        // Extract the encounter type via Reflection
-        if (runState != null)
-        {
-            try
-            {
-                var roomType = runState.BaseRoom?.RoomType;
-                GD.Print($"[DeckTracker] Room Type {roomType}");
-                if (roomType == RoomType.Map) combatType = "Hallway";
-                else if (roomType == RoomType.Elite) combatType = "Elite";
-                else if (roomType == RoomType.Boss) combatType = "Boss";
-                
-            }
-            catch { /* Fallback to Hallway if reflection fails */ }
-        }
-
-        // Process the end of the fight and lock in the data!
-        CardRegistry.ProcessCombatEnd(combatType);
-    }
-    
     public static void TryManualPlayPrefix(CardModel __instance)
     {
         CardRegistry.RegisterCard(__instance);
