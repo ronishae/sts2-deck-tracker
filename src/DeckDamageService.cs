@@ -9,7 +9,6 @@ namespace DeckTracker;
 public static class DeckDamageService
 {
     private static readonly object SyncRoot = new();
-    
     private static readonly Dictionary<string, CardStats> Totals = new();
     private static readonly Dictionary<string, int> TypeCounters = new();
 
@@ -19,10 +18,7 @@ public static class DeckDamageService
     {
         lock (SyncRoot)
         {
-            foreach (var stat in Totals.Values)
-            {
-                stat.CombatDamage = 0;
-            }
+            foreach (var stat in Totals.Values) stat.CombatDamage = 0;
         }
         Publish();
     }
@@ -37,36 +33,23 @@ public static class DeckDamageService
         Publish();
     }
 
-    public static void RecordDamage(CardModel card, decimal damage)
+    // NEW: Standalone registration so we can track cards before they do damage!
+    public static void RegisterCard(CardModel card)
     {
-        if (damage <= 0) return;
-
         string baseId = card.Id.Entry ?? "Unknown_ID";
-        string uniqueTrackingId;
-
-        if (card.DeckVersion != null)
-        {
-            uniqueTrackingId = RuntimeHelpers.GetHashCode(card.DeckVersion).ToString();
-        }
-        else
-        {
-            uniqueTrackingId = RuntimeHelpers.GetHashCode(card).ToString();
-        }
         
+        string uniqueTrackingId = card.DeckVersion != null 
+            ? RuntimeHelpers.GetHashCode(card.DeckVersion).ToString() 
+            : RuntimeHelpers.GetHashCode(card).ToString();
+            
         lock (SyncRoot)
         {
             if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
-                if (!TypeCounters.ContainsKey(baseId)) 
-                {
-                    TypeCounters[baseId] = 0;
-                }
+                if (!TypeCounters.ContainsKey(baseId)) TypeCounters[baseId] = 0;
                 TypeCounters[baseId]++;
 
                 string displayName = $"{card.Title ?? baseId} #{TypeCounters[baseId]}";
-
-                // Grab the floor it was added. If it's null, default to 0 (generated card)
-                // Starter deck is 1
                 int floorAdded = card.DeckVersion != null 
                     ? (card.DeckVersion.FloorAddedToDeck ?? 0) 
                     : (card.FloorAddedToDeck ?? 0);
@@ -75,17 +58,40 @@ public static class DeckDamageService
                 { 
                     CardId = uniqueTrackingId, 
                     DisplayName = displayName,
-                    FloorAdded = floorAdded // Store the floor here!
+                    FloorAdded = floorAdded,
+                    CombatDamage = 0,
+                    RunDamage = 0
                 };
                 Totals[uniqueTrackingId] = stat;
             }
+        }
+        
+        Publish();
+    }
 
-            stat.CombatDamage += damage;
-            stat.RunDamage += damage;
+    public static void RecordDamage(CardModel card, decimal damage)
+    {
+        if (damage <= 0) return;
+        
+        RegisterCard(card); // Ensure it's in the system
+
+        string uniqueTrackingId = card.DeckVersion != null 
+            ? RuntimeHelpers.GetHashCode(card.DeckVersion).ToString() 
+            : RuntimeHelpers.GetHashCode(card).ToString();
+
+        lock (SyncRoot)
+        {
+            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            {
+                stat.CombatDamage += damage;
+                stat.RunDamage += damage;
+            }
         }
 
         Publish();
     }
+
+    public static void ForcePublish() => Publish();
 
     private static void Publish()
     {
@@ -94,7 +100,6 @@ public static class DeckDamageService
         {
             statsCopy = Totals.Values.Select(s => s.Clone()).ToList();
         }
-
         Changed?.Invoke(statsCopy);
     }
 }
@@ -103,7 +108,7 @@ public sealed class CardStats
 {
     public string CardId { get; set; } = "";
     public string DisplayName { get; set; } = "";
-    public int FloorAdded { get; set; } // <--- New Data Field
+    public int FloorAdded { get; set; } 
     public decimal CombatDamage { get; set; }
     public decimal RunDamage { get; set; }
 
@@ -111,11 +116,8 @@ public sealed class CardStats
     {
         return new CardStats
         {
-            CardId = CardId,
-            DisplayName = DisplayName,
-            FloorAdded = FloorAdded, // <--- Clone the new field
-            CombatDamage = CombatDamage,
-            RunDamage = RunDamage
+            CardId = CardId, DisplayName = DisplayName, FloorAdded = FloorAdded, 
+            CombatDamage = CombatDamage, RunDamage = RunDamage
         };
     }
 }

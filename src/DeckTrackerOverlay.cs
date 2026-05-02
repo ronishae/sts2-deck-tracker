@@ -143,13 +143,11 @@ public static class DeckTrackerOverlay
         mainCol.AddChild(header);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
 
-        // --- Table Column Headers ---
         HBoxContainer tableHeaders = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         
         Label colCard = new Label { Text = "CARD NAME", CustomMinimumSize = new Vector2(400, 0) };
         colCard.AddThemeColorOverride("font_color", new Color("687480"));
 
-        // NEW: Floor Added Header
         Label colFloor = new Label { Text = "FLOOR ADDED", CustomMinimumSize = new Vector2(150, 0) };
         colFloor.AddThemeColorOverride("font_color", new Color("687480"));
         
@@ -157,7 +155,7 @@ public static class DeckTrackerOverlay
         colRunDmg.AddThemeColorOverride("font_color", new Color("687480"));
 
         tableHeaders.AddChild(colCard);
-        tableHeaders.AddChild(colFloor); // <--- Inject here
+        tableHeaders.AddChild(colFloor);
         tableHeaders.AddChild(colRunDmg);
         
         mainCol.AddChild(tableHeaders);
@@ -217,7 +215,7 @@ public static class DeckTrackerOverlay
 
     private static void RedrawUI(List<CardStats> stats)
     {
-        // 1. Update Small UI
+        // 1. Update Small UI (Filters out 0 damage cards)
         if (GodotObject.IsInstanceValid(_smallRowsContainer))
         {
             foreach (Node child in _smallRowsContainer.GetChildren())
@@ -244,7 +242,7 @@ public static class DeckTrackerOverlay
             }
         }
 
-        // 2. Update Full Screen UI
+        // 2. Update Full Screen UI (No filters! Shows the entire deck)
         if (GodotObject.IsInstanceValid(_fullScreenPanel) && _fullScreenPanel.Visible && GodotObject.IsInstanceValid(_fullScreenRowsContainer))
         {
             foreach (Node child in _fullScreenRowsContainer.GetChildren())
@@ -253,23 +251,21 @@ public static class DeckTrackerOverlay
                 child.QueueFree();
             }
 
-            var runStats = stats.Where(s => s.RunDamage > 0).OrderByDescending(s => s.RunDamage).ToList();
+            // Notice we removed the `.Where` filter! It just sorts by Run Damage now.
+            var allCards = stats.OrderByDescending(s => s.RunDamage).ThenBy(s => s.FloorAdded).ToList();
 
-            foreach (var stat in runStats)
+            foreach (var stat in allCards)
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
                 Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(400, 0) };
-                
-                // NEW: Floor Added Label
                 Label floorLabel = new Label { Text = stat.FloorAdded.ToString(), CustomMinimumSize = new Vector2(150, 0) };
-                floorLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); // Light gray
-                
+                floorLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
                 Label damageLabel = new Label { Text = stat.RunDamage.ToString("0.##"), CustomMinimumSize = new Vector2(200, 0) };
                 damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80"));
 
                 row.AddChild(nameLabel);
-                row.AddChild(floorLabel); // <--- Inject here
+                row.AddChild(floorLabel);
                 row.AddChild(damageLabel);
                 _fullScreenRowsContainer.AddChild(row);
             }
