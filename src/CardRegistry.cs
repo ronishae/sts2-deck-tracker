@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Godot;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
@@ -10,11 +12,93 @@ public static class CardRegistry
 {
     private static readonly object SyncRoot = new();
     
-    // Central Data Store
-    private static readonly Dictionary<string, CardStats> Totals = new();
-    private static readonly Dictionary<string, int> TypeCounters = new();
+    private static Dictionary<string, CardStats> Totals = new();
+    private static Dictionary<string, int> TypeCounters = new();
+    
+    private static string _currentRunSeed = "";
+
+    // Godot's safe user data path. This translates to the STS2 AppData folder on Windows/Mac!
+    private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
 
     public static event Action<List<CardStats>>? Changed;
+
+    // --- Persistence Logic ---
+
+    public static void SyncRun(string runSeed)
+    {
+        if (string.IsNullOrEmpty(runSeed)) return;
+
+        lock (SyncRoot)
+        {
+            // If we are already tracking this run in memory, do nothing
+            if (_currentRunSeed == runSeed) return;
+
+            _currentRunSeed = runSeed;
+
+            // Try to load from disk
+            if (TryLoadState(runSeed))
+            {
+                GD.Print($"[DeckTracker] Successfully resumed run data for seed: {runSeed}");
+            }
+            else
+            {
+                // New run, or no save file existed
+                GD.Print($"[DeckTracker] Starting fresh tracker for new run seed: {runSeed}");
+                Totals.Clear();
+                TypeCounters.Clear();
+            }
+        }
+        Publish();
+    }
+
+    public static void SaveState()
+    {
+        try
+        {
+            SavedRunState state;
+            lock (SyncRoot)
+            {
+                if (string.IsNullOrEmpty(_currentRunSeed)) return;
+
+                state = new SavedRunState
+                {
+                    RunSeed = _currentRunSeed,
+                    Totals = Totals.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Clone()),
+                    TypeCounters = new Dictionary<string, int>(TypeCounters)
+                };
+            }
+
+            string json = JsonSerializer.Serialize(state, SavedStateCtx.Default.SavedRunState);
+            System.IO.File.WriteAllText(SavePath, json);
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"[DeckTracker] Failed to save state: {e.Message}");
+        }
+    }
+
+    private static bool TryLoadState(string targetSeed)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(SavePath)) return false;
+
+            string json = System.IO.File.ReadAllText(SavePath);
+            SavedRunState? state = JsonSerializer.Deserialize(json, SavedStateCtx.Default.SavedRunState);
+            
+            if (state == null || state.RunSeed != targetSeed) return false;
+
+            Totals = state.Totals;
+            TypeCounters = state.TypeCounters;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // -------------------------
 
     public static void ResetCombat()
     {
@@ -25,17 +109,6 @@ public static class CardRegistry
         Publish();
     }
 
-    public static void ResetRun()
-    {
-        lock (SyncRoot)
-        {
-            Totals.Clear();
-            TypeCounters.Clear(); 
-        }
-        Publish();
-    }
-
-    // Helper to get the unique memory ID
     private static string GetTrackingId(CardModel card)
     {
         return card.DeckVersion != null 
@@ -43,7 +116,6 @@ public static class CardRegistry
             : RuntimeHelpers.GetHashCode(card).ToString();
     }
 
-    // Central Registration
     public static void RegisterCard(CardModel card)
     {
         string baseId = card.Id.Entry ?? "Unknown_ID";
@@ -72,11 +144,8 @@ public static class CardRegistry
                 Totals[uniqueTrackingId] = stat;
             }
         }
-        
-        Publish();
     }
 
-    // Central Data Modifier
     public static void AddDamage(CardModel card, decimal damage)
     {
         string uniqueTrackingId = GetTrackingId(card);
@@ -122,3 +191,14 @@ public sealed class CardStats
         };
     }
 }
+
+// --- JSON Serialization Models ---
+public sealed class SavedRunState
+{
+    public string RunSeed { get; set; } = "";
+    public Dictionary<string, CardStats> Totals { get; set; } = new();
+    public Dictionary<string, int> TypeCounters { get; set; } = new();
+}
+
+[System.Text.Json.Serialization.JsonSerializable(typeof(SavedRunState))]
+internal partial class SavedStateCtx : System.Text.Json.Serialization.JsonSerializerContext { }

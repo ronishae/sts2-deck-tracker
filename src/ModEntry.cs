@@ -24,6 +24,7 @@ public static class ModEntry
 
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
+        PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix));
 
         MethodInfo playOriginal = AccessTools.Method(typeof(CardModel), nameof(CardModel.TryManualPlay))
             ?? throw new MissingMethodException("Could not find TryManualPlay");
@@ -43,22 +44,21 @@ public static class ModEntry
 internal static class HookPatches
 {
     private static bool _overlayScheduled;
-    private static IRunState? _lastRunState;
 
     public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
     {
-        if (runState != null && runState != _lastRunState)
-        {
-            _lastRunState = runState;
-            CardRegistry.ResetRun();
-        }
+        // 1. Sync the Run (Wipes or Resumes based on Seed)
+        string seed = ExtractRunSeed(runState);
+        CardRegistry.SyncRun(seed);
 
+        // 2. Reset Combat counters
         CardRegistry.ResetCombat();
 
-        // --- THE DECK SCANNER ---
+        // 3. Scan the Deck
         ScanDeckForCards(runState);
-        // ------------------------
 
+        // 4. Force a hard-save and update the UI
+        CardRegistry.SaveState();
         CardRegistry.ForcePublish();
 
         if (!_overlayScheduled)
@@ -68,21 +68,31 @@ internal static class HookPatches
         }
     }
 
-    // ─── DECK SCANNER HELPER METHODS ──────────────────────────────────────
+    // --- DECK SCANNER & EXTRACTORS ---
+
+    private static string ExtractRunSeed(IRunState? runState)
+    {
+        if (runState == null) return "";
+        try 
+        {
+            // Digs into IRunState -> Rng -> StringSeed
+            var rngProp = runState.GetType().GetProperty("Rng");
+            var rng = rngProp?.GetValue(runState);
+            var seedProp = rng?.GetType().GetProperty("StringSeed");
+            return seedProp?.GetValue(rng)?.ToString() ?? "";
+        } 
+        catch { return ""; }
+    }
 
     private static void ScanDeckForCards(IRunState? runState)
     {
         if (runState == null) return;
-
         try 
         {
             var players = GetEnumerableProperty(runState, "Players");
             if (players == null) return;
 
-            foreach (var player in players) 
-            {
-                ScanPlayerPiles(player);
-            }
+            foreach (var player in players) ScanPlayerPiles(player);
         } 
         catch { /* Fails silently if STS2 changes their API */ }
     }
@@ -95,14 +105,11 @@ internal static class HookPatches
         foreach (var pile in piles) 
         {
             var cards = GetEnumerableProperty(pile, "Cards");
-            if (cards == null) continue; // Early continue skips empty piles
+            if (cards == null) continue; 
 
             foreach (var card in cards) 
             {
-                if (card is CardModel cardModel) 
-                {
-                    CardRegistry.RegisterCard(cardModel);
-                }
+                if (card is CardModel cardModel) CardRegistry.RegisterCard(cardModel);
             }
         }
     }
@@ -112,8 +119,14 @@ internal static class HookPatches
         return obj.GetType().GetProperty(propertyName)?.GetValue(obj) as System.Collections.IEnumerable;
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-
+    // --- DAMAGE HOOKS ---
+    
+    public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
+    {
+        // When the victory screen pops and combat officially ends, lock in the data!
+        CardRegistry.SaveState();
+    }
+    
     public static void TryManualPlayPrefix(CardModel __instance)
     {
         CardRegistry.RegisterCard(__instance);
