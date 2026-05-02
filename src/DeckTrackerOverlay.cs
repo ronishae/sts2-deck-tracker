@@ -35,7 +35,8 @@ public static class DeckTrackerOverlay
             if (!_isHookedToProcess)
             {
                 tree.ProcessFrame += OnProcessFrame;
-                DeckDamageService.Changed += (stats) => _updateQueue.Enqueue(stats);
+                // CHANGED THIS LINE TO LISTEN TO THE REGISTRY:
+                CardRegistry.Changed += (stats) => _updateQueue.Enqueue(stats);
                 _isHookedToProcess = true;
             }
 

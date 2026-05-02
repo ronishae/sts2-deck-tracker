@@ -22,11 +22,9 @@ public static class ModEntry
         if (_harmony != null) return;
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
 
-        // 1. Hook Game Events
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
 
-        // 2. Hook Card Play (Catches 0 damage cards and mid-combat generated cards)
         MethodInfo playOriginal = AccessTools.Method(typeof(CardModel), nameof(CardModel.TryManualPlay))
             ?? throw new MissingMethodException("Could not find TryManualPlay");
         MethodInfo playPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TryManualPlayPrefix))
@@ -52,13 +50,12 @@ internal static class HookPatches
         if (runState != null && runState != _lastRunState)
         {
             _lastRunState = runState;
-            DeckDamageService.ResetRun();
+            CardRegistry.ResetRun();
         }
 
-        DeckDamageService.ResetCombat();
+        CardRegistry.ResetCombat();
 
         // --- THE DECK SCANNER ---
-        // Uses safe reflection to dig into the player's piles and register every card instantly
         try 
         {
             if (runState != null) 
@@ -80,7 +77,7 @@ internal static class HookPatches
                                     {
                                         if (card is CardModel cardModel) 
                                         {
-                                            DeckDamageService.RegisterCard(cardModel);
+                                            CardRegistry.RegisterCard(cardModel);
                                         }
                                     }
                                 }
@@ -93,8 +90,7 @@ internal static class HookPatches
         catch { /* Fails silently if STS2 changes their API */ }
         // ------------------------
 
-        // Push the freshly scanned deck to the UI
-        DeckDamageService.ForcePublish();
+        CardRegistry.ForcePublish();
 
         if (!_overlayScheduled)
         {
@@ -103,11 +99,10 @@ internal static class HookPatches
         }
     }
 
-    // Catches ALL cards as you play them, ensuring Defends/Skills get onto the list!
     public static void TryManualPlayPrefix(CardModel __instance)
     {
-        DeckDamageService.RegisterCard(__instance);
-        DeckDamageService.ForcePublish();
+        CardRegistry.RegisterCard(__instance);
+        CardRegistry.ForcePublish();
     }
 
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, CombatState? combatState, Creature? dealer, DamageResult? results, ValueProp props, Creature? target, CardModel? cardSource)
@@ -116,6 +111,7 @@ internal static class HookPatches
         {
             if (results != null && cardSource != null && results.UnblockedDamage > 0)
             {
+                // We still call the Damage Service here!
                 DeckDamageService.RecordDamage(cardSource, results.UnblockedDamage);
             }
         }
