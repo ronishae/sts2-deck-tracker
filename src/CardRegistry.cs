@@ -186,7 +186,35 @@ public static class CardRegistry
             }
         }
     }
+    
+    // NEW: Draw Incrementer
+    public static void AddDraw(CardModel card)
+    {
+        string uniqueTrackingId = GetTrackingId(card);
+        lock (SyncRoot)
+        {
+            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            {
+                stat.TimesDrawn++;
+            }
+        }
+        Publish(); // Instantly update UI when drawn
+    }
 
+    // NEW: Play Incrementer
+    public static void AddPlay(CardModel card)
+    {
+        string uniqueTrackingId = GetTrackingId(card);
+        lock (SyncRoot)
+        {
+            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            {
+                stat.TimesPlayed++;
+            }
+        }
+        Publish(); // Instantly update UI when played
+    }
+    
     public static void AddDamage(CardModel card, decimal damage)
     {
         string uniqueTrackingId = GetTrackingId(card);
@@ -228,6 +256,10 @@ public sealed class CardStats
     public string CardType { get; set; } = "";
     public int FloorAdded { get; set; } 
     
+    public int TimesDrawn { get; set; }
+    public int TimesPlayed { get; set; }
+    public decimal PlayRate => TimesDrawn > 0 ? (decimal)TimesPlayed / TimesDrawn : 0;
+    
     public decimal CombatDamage { get; set; }
     public decimal RunDamage { get; set; }
     public decimal DamageHallway { get; set; }
@@ -249,6 +281,7 @@ public sealed class CardStats
         return new CardStats
         {
             CardId = CardId, DisplayName = DisplayName, CardType = CardType, FloorAdded = FloorAdded, 
+            TimesDrawn = TimesDrawn, TimesPlayed = TimesPlayed, // Add clones here!
             CombatDamage = CombatDamage, RunDamage = RunDamage,
             DamageHallway = DamageHallway, DamageElite = DamageElite, DamageBoss = DamageBoss,
             EncountersSeenTotal = EncountersSeenTotal, EncountersSeenHallway = EncountersSeenHallway,

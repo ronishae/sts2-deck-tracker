@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
@@ -24,15 +25,18 @@ public static class ModEntry
         if (_harmony != null) return;
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
 
+        // --- Core Lifecycle Hooks ---
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
         PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
+        
+        // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
 
-        MethodInfo playOriginal = AccessTools.Method(typeof(CardModel), nameof(CardModel.TryManualPlay))
-            ?? throw new MissingMethodException("Could not find TryManualPlay");
-        MethodInfo playPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TryManualPlayPrefix))
-            ?? throw new MissingMethodException("Could not find TryManualPlayPrefix");
-        _harmony.Patch(playOriginal, prefix: new HarmonyMethod(playPrefix));
+        // --- Card Event Hooks ---
+        PatchHook(nameof(Hook.AfterCardDrawn), nameof(HookPatches.AfterCardDrawnPostfix));
+        PatchHook(nameof(Hook.AfterCardChangedPiles), nameof(HookPatches.AfterCardChangedPilesPostfix));
+        PatchHook(nameof(Hook.BeforeCardPlayed), nameof(HookPatches.BeforeCardPlayedPostfix));
+        PatchHook(nameof(Hook.BeforeCardAutoPlayed), nameof(HookPatches.BeforeCardAutoPlayedPostfix));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -46,21 +50,37 @@ public static class ModEntry
 internal static class HookPatches
 {
     private static bool _overlayScheduled;
+    
+    // Catches cards that enter the hand via Generation, Exhaust, or Discard retrieval!
+    public static void AfterCardChangedPilesPostfix(IRunState runState, ICombatState? combatState, CardModel card, PileType oldPile, AbstractModel? source)
+    {
+        // We only care if we are actively in combat
+        if (combatState == null) return;
 
+        try
+        {
+            // If the card is now in the Hand, but it didn't come from the Draw pile 
+            // (because our other AfterCardDrawn hook already handles standard draws)
+            if (card.Pile != null && card.Pile.Type == PileType.Hand && oldPile != PileType.Draw)
+            {
+                CardRegistry.RegisterCard(card);
+                CardRegistry.AddDraw(card);
+                CardRegistry.ForcePublish();
+            }
+        }
+        catch { /* Fails silently if Pile data is missing */ }
+    }
+    
     public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
     {
         string seed = ExtractRunSeed(runState);
         CardRegistry.SyncRun(seed);
 
-        // Figure out the room type BEFORE combat starts and kick off the real-time tracker
         string combatType = GetCombatType(runState);
         CardRegistry.StartCombat(combatType);
 
         ScanDeckForCards(runState);
-        
         CardRegistry.ForcePublish();
-
-        // REMOVED: CardRegistry.SaveState() -> Do not save mid-combat state to prevent Save & Quit bugs!
 
         if (!_overlayScheduled)
         {
@@ -71,8 +91,54 @@ internal static class HookPatches
 
     public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
     {
-        // Wrap up the combat and lock the data into the hard drive
         CardRegistry.ProcessCombatEnd();
+    }
+
+    // --- NEW: CLEAN EVENT HOOKS ---
+
+    // Catches ALL cards entering your hand
+    public static void AfterCardDrawnPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardModel card, bool fromHandDraw)
+    {
+        CardRegistry.RegisterCard(card);
+        CardRegistry.AddDraw(card);
+    }
+
+    // Catches manual plays (spending energy)
+    public static void BeforeCardPlayedPostfix(ICombatState combatState, CardPlay cardPlay)
+    {
+        try
+        {
+            // We use reflection here just in case CardPlay changes in future Early Access builds,
+            // but it reliably holds a reference to the CardModel being played.
+            var cardProp = cardPlay.GetType().GetProperty("Card");
+            if (cardProp?.GetValue(cardPlay) is CardModel card)
+            {
+                CardRegistry.RegisterCard(card);
+                CardRegistry.AddPlay(card);
+                CardRegistry.ForcePublish();
+            }
+        }
+        catch { /* Silently fail if STS2 changes the CardPlay object */ }
+    }
+
+    // Catches automatic plays (Echo Form, Mayhem, Havoc, etc.)
+    public static void BeforeCardAutoPlayedPostfix(ICombatState combatState, CardModel card, Creature? target, AutoPlayType type)
+    {
+        CardRegistry.RegisterCard(card);
+        CardRegistry.AddPlay(card);
+        CardRegistry.ForcePublish();
+    }
+
+    // Catches all damage dealt
+    public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
+    {
+        if (dealer != null && (dealer.IsPlayer || dealer.Side == CombatSide.Player))
+        {
+            if (cardSource != null && results.UnblockedDamage > 0)
+            {
+                DeckDamageService.RecordDamage(cardSource, results.UnblockedDamage);
+            }
+        }
     }
 
     // --- HELPERS & EXTRACTORS ---
@@ -88,7 +154,7 @@ internal static class HookPatches
                 if (roomType == RoomType.Elite) return "Elite";
                 if (roomType == RoomType.Boss) return "Boss";
             }
-            catch { /* Fallback below */ }
+            catch { }
         }
         return "Hallway";
     }
@@ -139,23 +205,5 @@ internal static class HookPatches
     private static System.Collections.IEnumerable? GetEnumerableProperty(object obj, string propertyName)
     {
         return obj.GetType().GetProperty(propertyName)?.GetValue(obj) as System.Collections.IEnumerable;
-    }
-
-    // --- DAMAGE HOOKS ---
-    public static void TryManualPlayPrefix(CardModel __instance)
-    {
-        CardRegistry.RegisterCard(__instance);
-        CardRegistry.ForcePublish();
-    }
-
-    public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, CombatState? combatState, Creature? dealer, DamageResult? results, ValueProp props, Creature? target, CardModel? cardSource)
-    {
-        if (dealer != null && (dealer.IsPlayer || dealer.Side == CombatSide.Player))
-        {
-            if (results != null && cardSource != null && results.UnblockedDamage > 0)
-            {
-                DeckDamageService.RecordDamage(cardSource, results.UnblockedDamage);
-            }
-        }
     }
 }

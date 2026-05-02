@@ -153,6 +153,9 @@ public static class DeckTrackerOverlay
         Label colFloor = new Label { Text = "FLOOR", CustomMinimumSize = new Vector2(80, 0) };
         colFloor.AddThemeColorOverride("font_color", new Color("687480"));
         
+        Label colPlayRate = new Label { Text = "% PLAYED", CustomMinimumSize = new Vector2(150, 0) };
+        colPlayRate.AddThemeColorOverride("font_color", new Color("687480"));
+        
         Label colRunDmg = new Label { Text = "ALL DMG (AVG)", CustomMinimumSize = new Vector2(180, 0) };
         colRunDmg.AddThemeColorOverride("font_color", new Color("687480"));
 
@@ -167,6 +170,7 @@ public static class DeckTrackerOverlay
 
         tableHeaders.AddChild(colCard);
         tableHeaders.AddChild(colFloor);
+        tableHeaders.AddChild(colPlayRate);
         tableHeaders.AddChild(colRunDmg);
         tableHeaders.AddChild(colHallway);
         tableHeaders.AddChild(colElite);
@@ -282,7 +286,9 @@ public static class DeckTrackerOverlay
                 Label floorLabel = new Label { Text = stat.FloorAdded.ToString(), CustomMinimumSize = new Vector2(80, 0) };
                 floorLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
                 
-                // Formats as: "Total (Avg)"
+                Label playRateLabel = new Label { Text = $"{stat.TimesPlayed}/{stat.TimesDrawn} ({stat.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
+                playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+                
                 Label allDmgLabel = new Label { Text = $"{stat.RunDamage:0.##} ({stat.AvgTotal:0.#})", CustomMinimumSize = new Vector2(180, 0) };
                 allDmgLabel.AddThemeColorOverride("font_color", new Color("4ADE80"));
 
@@ -297,6 +303,7 @@ public static class DeckTrackerOverlay
 
                 row.AddChild(nameLabel);
                 row.AddChild(floorLabel);
+                row.AddChild(playRateLabel);
                 row.AddChild(allDmgLabel);
                 row.AddChild(hallwayLabel);
                 row.AddChild(eliteLabel);
