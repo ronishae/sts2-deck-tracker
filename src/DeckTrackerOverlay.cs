@@ -260,7 +260,9 @@ public static class DeckTrackerOverlay
             foreach (var stat in allCards)
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-                Label nameLabel = new Label { Text = stat.DisplayName, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+                string displayTitle = stat.CopiesInDeck > 1 ? $"{stat.DisplayName} x{stat.CopiesInDeck}" : stat.DisplayName;
+                Label nameLabel = new Label { Text = displayTitle, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+                
                 decimal damageToShow = _showRunStats ? stat.RunDamage : stat.CombatDamage;
                 Label damageLabel = new Label { Text = damageToShow.ToString("0.##") };
                 damageLabel.AddThemeColorOverride("font_color", new Color("4ADE80")); 
@@ -290,7 +292,8 @@ public static class DeckTrackerOverlay
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
-                Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(300, 0) };
+                string displayTitle = stat.CopiesInDeck > 1 ? $"{stat.DisplayName} x{stat.CopiesInDeck}" : stat.DisplayName;
+                Label nameLabel = new Label { Text = displayTitle, CustomMinimumSize = new Vector2(300, 0) };
                 
                 Label playRateLabel = new Label { Text = $"{stat.TimesPlayed}/{stat.TimesDrawn} ({stat.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
                 playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));

@@ -4,6 +4,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Modding;
@@ -208,33 +209,23 @@ internal static class HookPatches
         if (runState == null) return deckIds;
         try 
         {
-            var players = GetEnumerableProperty(runState, "Players");
-            if (players == null) return deckIds;
+            var players = runState.Players;
+            if (players.Count == 0) return deckIds;
 
-            foreach (var player in players) ScanPlayerPiles(player, deckIds);
+            ScanPlayerPiles(players[0], deckIds);
         } 
         catch { }
         return deckIds;
     }
 
-    private static void ScanPlayerPiles(object player, List<string> deckIds)
+    private static void ScanPlayerPiles(Player player, List<string> deckIds)
     {
-        var piles = GetEnumerableProperty(player, "Piles");
-        if (piles == null) return;
+        var deck = player.Deck;
 
-        foreach (var pile in piles) 
+        foreach (var card in deck.Cards) 
         {
-            var cards = GetEnumerableProperty(pile, "Cards");
-            if (cards == null) continue; 
-
-            foreach (var card in cards) 
-            {
-                if (card is CardModel cardModel)
-                {
-                    CardRegistry.RegisterCard(cardModel);
-                    deckIds.Add(CardRegistry.GetTrackingId(cardModel));
-                }
-            }
+            CardRegistry.RegisterCard(card);
+            deckIds.Add(CardRegistry.GetTrackingId(card));
         }
     }
 

@@ -125,20 +125,31 @@ public static class CardRegistry
     {
         lock (SyncRoot)
         {
+            var copyCounts = activeDeckIds.GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());
+            
             HashSet<string> uniqueActiveIds = new HashSet<string>(activeDeckIds);
             
+            GD.Print($"[DeckTracker] {activeDeckIds}");
             foreach (var stat in Totals.Values)
             {
                 // DIFF CHECK: If we think the card is in the deck, but the game scan didn't find it
                 if (stat.IsInDeck && !uniqueActiveIds.Contains(stat.CardId))
                 {
+                    GD.Print($"[DeckTracker] {stat.CardId} is gone");
                     stat.IsInDeck = false;
-                    
-                    // Since we are noticing it missing upon entering a NEW room, 
-                    // it actually left the deck on the PREVIOUS floor!
+                    stat.CopiesInDeck = 0;
+                        
                     int floorLeft = Math.Max(1, currentFloor - 1);
-                    
-                    if (stat.FloorRemoved == -1) stat.FloorLeftDeck = floorLeft;
+                    if (stat.FloorRemoved == -1)
+                    {
+                        stat.FloorLeftDeck = floorLeft;
+                        GD.Print($"[DeckTracker] {stat.CardId} FloorLeftDeck updated to {stat.FloorLeftDeck}");
+                    }
+                }
+                else if (copyCounts.TryGetValue(stat.CardId, out int count))
+                {
+                    stat.IsInDeck = true;
+                    stat.CopiesInDeck = count;
                 }
             }
         }
@@ -154,6 +165,7 @@ public static class CardRegistry
         lock (SyncRoot)
         {
             _currentCombatType = combatType;
+            GD.Print($"[DeckTracker] Starting combat state: {_currentCombatType}");
             _incrementedThisCombat.Clear(); 
             
             foreach (var stat in Totals.Values)
@@ -194,9 +206,17 @@ public static class CardRegistry
         {
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
-                stat.FloorRemoved = floorRemoved;
-                stat.FloorLeftDeck = floorRemoved;
-                stat.IsInDeck = false;
+                if (stat.CopiesInDeck > 1)
+                {
+                    stat.CopiesInDeck--;
+                }
+                else
+                {
+                    stat.FloorRemoved = floorRemoved;
+                    stat.FloorLeftDeck = floorRemoved;
+                    stat.IsInDeck = false;
+                    stat.CopiesInDeck = 0;
+                }
             }
         }
         Publish();
@@ -208,7 +228,9 @@ public static class CardRegistry
             
         lock (SyncRoot)
         {
-            bool isGenerated = card.DeckVersion == null;
+            // card.DeckVersion will be null for the master deck cards, so check FloorAddedToDeck for
+            // whether the card is generated
+            bool isGenerated = card.FloorAddedToDeck == null;
             if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
                 CardModel sourceCard = card.DeckVersion ?? card;
@@ -220,9 +242,9 @@ public static class CardRegistry
                     DisplayName = displayName,
                     CardType = sourceCard.Type.ToString(),
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
-                    // NEW: If it has no DeckVersion, it's a generated card, so default it to removed (0).
                     FloorRemoved = isGenerated ? 0 : -1, 
                     IsInDeck = !isGenerated, // Normal cards are True, Generated are False
+                    CopiesInDeck = isGenerated ? 0 : 1,
                     CombatDamage = 0,
                     RunDamage = 0
                 };
@@ -316,6 +338,7 @@ public sealed class CardStats
     public int FloorRemoved { get; set; } = -1;
     public int FloorLeftDeck { get; set; } = -1;
     public bool IsInDeck { get; set; } = true;
+    public int CopiesInDeck { get; set; } = 0;
     
     public int TimesDrawn { get; set; }
     public int TimesPlayed { get; set; }
@@ -342,7 +365,7 @@ public sealed class CardStats
         return new CardStats
         {
             CardId = CardId, DisplayName = DisplayName, CardType = CardType, FloorAdded = FloorAdded, 
-            FloorRemoved = FloorRemoved, FloorLeftDeck = FloorLeftDeck, IsInDeck = IsInDeck,
+            FloorRemoved = FloorRemoved, FloorLeftDeck = FloorLeftDeck, IsInDeck = IsInDeck, CopiesInDeck = CopiesInDeck,
             TimesDrawn = TimesDrawn, TimesPlayed = TimesPlayed, // Add clones here!
             CombatDamage = CombatDamage, RunDamage = RunDamage,
             DamageHallway = DamageHallway, DamageElite = DamageElite, DamageBoss = DamageBoss,
