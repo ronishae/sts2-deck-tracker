@@ -158,9 +158,9 @@ internal static class HookPatches
     {
         if (dealer != null && (dealer.IsPlayer || dealer.Side == CombatSide.Player))
         {
-            if (cardSource != null && results.UnblockedDamage > 0)
+            if (cardSource != null && results.TotalDamage > 0)
             {
-                DeckDamageService.RecordDamage(cardSource, results.UnblockedDamage);
+                DeckDamageService.RecordDamage(cardSource, results.TotalDamage);
             }
         }
     }
