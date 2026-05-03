@@ -235,12 +235,14 @@ public static class CardRegistry
             {
                 CardModel sourceCard = card.DeckVersion ?? card;
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
+                string enchantName = sourceCard.Enchantment?.Id.Entry ?? "";
                 
                 stat = new CardStats 
                 { 
                     CardId = uniqueTrackingId, 
                     DisplayName = displayName,
                     CardType = sourceCard.Type.ToString(),
+                    Enchantment = enchantName,
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
                     FloorRemoved = isGenerated ? 0 : -1, 
                     IsInDeck = !isGenerated, // Normal cards are True, Generated are False
@@ -334,6 +336,7 @@ public sealed class CardStats
     public string CardId { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string CardType { get; set; } = "";
+    public string Enchantment { get; set; } = "";
     public int FloorAdded { get; set; }
     public int FloorRemoved { get; set; } = -1;
     public int FloorLeftDeck { get; set; } = -1;
@@ -365,6 +368,7 @@ public sealed class CardStats
         return new CardStats
         {
             CardId = CardId, DisplayName = DisplayName, CardType = CardType, FloorAdded = FloorAdded, 
+            Enchantment = Enchantment,
             FloorRemoved = FloorRemoved, FloorLeftDeck = FloorLeftDeck, IsInDeck = IsInDeck, CopiesInDeck = CopiesInDeck,
             TimesDrawn = TimesDrawn, TimesPlayed = TimesPlayed, // Add clones here!
             CombatDamage = CombatDamage, RunDamage = RunDamage,

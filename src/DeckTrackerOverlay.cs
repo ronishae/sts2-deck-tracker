@@ -260,7 +260,20 @@ public static class DeckTrackerOverlay
             foreach (var stat in allCards)
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-                string displayTitle = stat.CopiesInDeck > 1 ? $"{stat.DisplayName} x{stat.CopiesInDeck}" : stat.DisplayName;
+                
+                string displayTitle = stat.DisplayName;
+                
+                // Only add brackets if an enchantment exists and isn't "None"
+                if (!string.IsNullOrEmpty(stat.Enchantment) && stat.Enchantment != "None")
+                {
+                    displayTitle += $" [{stat.Enchantment}]";
+                }
+                
+                // Only add the multiplier if we have more than 1 copy
+                if (stat.CopiesInDeck > 1)
+                {
+                    displayTitle += $" x{stat.CopiesInDeck}";
+                }
                 Label nameLabel = new Label { Text = displayTitle, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
                 decimal damageToShow = _showRunStats ? stat.RunDamage : stat.CombatDamage;
@@ -292,7 +305,19 @@ public static class DeckTrackerOverlay
             {
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
-                string displayTitle = stat.CopiesInDeck > 1 ? $"{stat.DisplayName} x{stat.CopiesInDeck}" : stat.DisplayName;
+                string displayTitle = stat.DisplayName;
+                
+                // Only add brackets if an enchantment exists and isn't "None"
+                if (!string.IsNullOrEmpty(stat.Enchantment) && stat.Enchantment != "None")
+                {
+                    displayTitle += $" [{stat.Enchantment}]";
+                }
+                
+                // Only add the multiplier if we have more than 1 copy
+                if (stat.CopiesInDeck > 1)
+                {
+                    displayTitle += $" x{stat.CopiesInDeck}";
+                }
                 Label nameLabel = new Label { Text = displayTitle, CustomMinimumSize = new Vector2(300, 0) };
                 
                 Label playRateLabel = new Label { Text = $"{stat.TimesPlayed}/{stat.TimesDrawn} ({stat.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
