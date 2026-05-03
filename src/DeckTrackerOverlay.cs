@@ -149,9 +149,6 @@ public static class DeckTrackerOverlay
         
         Label colCard = new Label { Text = "CARD NAME", CustomMinimumSize = new Vector2(300, 0) };
         colCard.AddThemeColorOverride("font_color", new Color("687480"));
-
-        Label colFloor = new Label { Text = "FLOOR", CustomMinimumSize = new Vector2(80, 0) };
-        colFloor.AddThemeColorOverride("font_color", new Color("687480"));
         
         Label colPlayRate = new Label { Text = "% PLAYED", CustomMinimumSize = new Vector2(150, 0) };
         colPlayRate.AddThemeColorOverride("font_color", new Color("687480"));
@@ -159,22 +156,33 @@ public static class DeckTrackerOverlay
         Label colRunDmg = new Label { Text = "ALL DMG (AVG) (#FIGHTS)", CustomMinimumSize = new Vector2(220, 0) };
         colRunDmg.AddThemeColorOverride("font_color", new Color("687480"));
 
-        Label colHallway = new Label { Text = "HALLWAY (AVG) (#FIGHTS)", CustomMinimumSize = new Vector2(220, 0) };
+        Label colHallway = new Label { Text = "HALLWAY (AVG) (#)", CustomMinimumSize = new Vector2(200, 0) };
         colHallway.AddThemeColorOverride("font_color", new Color("687480"));
 
-        Label colElite = new Label { Text = "ELITE (AVG) (#FIGHTS)", CustomMinimumSize = new Vector2(220, 0) };
+        Label colElite = new Label { Text = "ELITE (AVG) (#)", CustomMinimumSize = new Vector2(200, 0) };
         colElite.AddThemeColorOverride("font_color", new Color("687480"));
 
-        Label colBoss = new Label { Text = "BOSS (AVG) (#FIGHTS)", CustomMinimumSize = new Vector2(220, 0) };
+        Label colBoss = new Label { Text = "BOSS (AVG) (#)", CustomMinimumSize = new Vector2(200, 0) };
         colBoss.AddThemeColorOverride("font_color", new Color("687480"));
+        
+        Label colAdded = new Label { Text = "ADDED", CustomMinimumSize = new Vector2(80, 0) };
+        colAdded.AddThemeColorOverride("font_color", new Color("687480"));
 
+        Label colRemoved = new Label { Text = "REMOVED", CustomMinimumSize = new Vector2(90, 0) }; 
+        colRemoved.AddThemeColorOverride("font_color", new Color("687480"));
+
+        Label colLeft = new Label { Text = "LEFT", CustomMinimumSize = new Vector2(80, 0) };
+        colLeft.AddThemeColorOverride("font_color", new Color("687480"));
+        
         tableHeaders.AddChild(colCard);
-        tableHeaders.AddChild(colFloor);
         tableHeaders.AddChild(colPlayRate);
         tableHeaders.AddChild(colRunDmg);
         tableHeaders.AddChild(colHallway);
         tableHeaders.AddChild(colElite);
         tableHeaders.AddChild(colBoss);
+        tableHeaders.AddChild(colAdded);
+        tableHeaders.AddChild(colRemoved);
+        tableHeaders.AddChild(colLeft);
         
         mainCol.AddChild(tableHeaders);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 1), Color = new Color(1, 1, 1, 0.1f) });
@@ -284,9 +292,6 @@ public static class DeckTrackerOverlay
                 
                 Label nameLabel = new Label { Text = stat.DisplayName, CustomMinimumSize = new Vector2(300, 0) };
                 
-                Label floorLabel = new Label { Text = stat.FloorAdded.ToString(), CustomMinimumSize = new Vector2(80, 0) };
-                floorLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
-                
                 Label playRateLabel = new Label { Text = $"{stat.TimesPlayed}/{stat.TimesDrawn} ({stat.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
                 playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
                 
@@ -302,13 +307,27 @@ public static class DeckTrackerOverlay
                 Label bossLabel = new Label { Text = $"{stat.DamageBoss:0.##} ({stat.AvgBoss:0.#}) (#{stat.EncountersSeenBoss})", CustomMinimumSize = new Vector2(220, 0) };
                 bossLabel.AddThemeColorOverride("font_color", new Color("F87171"));
                 
+                string addedText = stat.FloorAdded == 0 ? "GEN" : stat.FloorAdded.ToString();
+                Label addedLabel = new Label { Text = addedText, CustomMinimumSize = new Vector2(80, 0) };
+                addedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
+
+                string removedText = stat.FloorRemoved <= 0 ? "N/A" : stat.FloorRemoved.ToString();
+                Label removedLabel = new Label { Text = removedText, CustomMinimumSize = new Vector2(90, 0) };
+                removedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+
+                string leftText = stat.FloorLeftDeck <= 0 ? "N/A" : stat.FloorLeftDeck.ToString();
+                Label leftLabel = new Label { Text = leftText, CustomMinimumSize = new Vector2(80, 0) };
+                leftLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+                
                 row.AddChild(nameLabel);
-                row.AddChild(floorLabel);
                 row.AddChild(playRateLabel);
                 row.AddChild(allDmgLabel);
                 row.AddChild(hallwayLabel);
                 row.AddChild(eliteLabel);
                 row.AddChild(bossLabel);
+                row.AddChild(addedLabel);
+                row.AddChild(removedLabel);
+                row.AddChild(leftLabel);
                 _fullScreenRowsContainer.AddChild(row);
             }
         }
