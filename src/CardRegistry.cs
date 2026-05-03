@@ -119,33 +119,48 @@ public static class CardRegistry
         }
         Publish();
     }
-
-    // REPLACES ResetCombat: Called before the deck is scanned for a new fight
-    public static void StartCombat(string combatType, int currentFloor, List<string> activeDeckIds)
+    
+    // NEW: Handles the diff check for Upgrades, Transforms, and Removes
+    public static void SyncDeckState(int currentFloor, List<string> activeDeckIds)
     {
         lock (SyncRoot)
         {
-            _currentCombatType = combatType;
-            _incrementedThisCombat.Clear();
-        
-            // Put the newly scanned active IDs into a fast lookup
             HashSet<string> uniqueActiveIds = new HashSet<string>(activeDeckIds);
+            
+            foreach (var stat in Totals.Values)
+            {
+                // DIFF CHECK: If we think the card is in the deck, but the game scan didn't find it
+                if (stat.IsInDeck && !uniqueActiveIds.Contains(stat.CardId))
+                {
+                    stat.IsInDeck = false;
+                    
+                    // Since we are noticing it missing upon entering a NEW room, 
+                    // it actually left the deck on the PREVIOUS floor!
+                    int floorLeft = Math.Max(1, currentFloor - 1);
+                    
+                    if (stat.FloorRemoved == -1) stat.FloorLeftDeck = floorLeft;
+                }
+            }
+        }
+        Publish(); // Instantly update the UI, even outside of combat!
+    }
+    
+    // UPDATED: StartCombat is now significantly cleaner
+    public static void StartCombat(string combatType, int currentFloor, List<string> activeDeckIds)
+    {
+        // Diff the deck immediately before processing encounters
+        SyncDeckState(currentFloor, activeDeckIds);
+
+        lock (SyncRoot)
+        {
+            _currentCombatType = combatType;
+            _incrementedThisCombat.Clear(); 
             
             foreach (var stat in Totals.Values)
             {
                 stat.CombatDamage = 0; // Wipe the previous combat's text
                 
-                // DIFF CHECK: If we think the card is in the deck, but the game scan didn't find it
-                // it means it was removed, transformed, or upgraded!
-                if (stat.IsInDeck && !uniqueActiveIds.Contains(stat.CardId))
-                {
-                    stat.IsInDeck = false;
-                    // FloorRemoved is remove specifically, FloorLeft can be from upgrade, transform, remove
-                    if (stat.FloorRemoved == -1) stat.FloorLeftDeck = currentFloor;
-                }
-                
-                // If the card is no longer in the deck (or was generated), skip incrementing encounters
-                if (!stat.IsInDeck) continue;
+                if (!stat.IsInDeck) continue; // Skip cards not in the deck
                 
                 // Increment the "seen" counters right at the start of the fight
                 stat.EncountersSeenTotal++;
@@ -153,11 +168,12 @@ public static class CardRegistry
                 if (combatType == "Elite") stat.EncountersSeenElite++;
                 else if (combatType == "Boss") stat.EncountersSeenBoss++;
                 else stat.EncountersSeenHallway++;
+
                 _incrementedThisCombat.Add(stat.CardId);
             }
         }
     }
-
+    
     public static void ProcessCombatEnd()
     {
         lock (SyncRoot)

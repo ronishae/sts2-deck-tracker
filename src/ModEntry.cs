@@ -26,6 +26,7 @@ public static class ModEntry
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
 
         // --- Core Lifecycle Hooks ---
+        PatchHook(nameof(Hook.AfterRoomEntered), nameof(HookPatches.AfterRoomEnteredPostfix));
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
         PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
         
@@ -53,6 +54,15 @@ public static class ModEntry
 internal static class HookPatches
 {
     private static bool _overlayScheduled;
+    
+    public static void AfterRoomEnteredPostfix(IRunState runState, AbstractRoom room)
+    {
+        int currentFloor = ExtractFloorNum(runState);
+        List<string> activeDeckIds = ScanDeckForCards(runState);
+        
+        // Sync the deck the moment we step into a new room to catch Upgrades/Transforms immediately
+        CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
+    }
     
     public static void BeforeCardRemovedPostfix(IRunState runState, CardModel card)
     {
