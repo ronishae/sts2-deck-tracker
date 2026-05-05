@@ -181,6 +181,7 @@ public static class CardRegistry
             foreach (var stat in Totals.Values)
             {
                 stat.CombatDamage = 0; // Wipe the previous combat's text
+                stat.RawForgeCombat = 0;
                 stat.ConnectedForgeCombat = 0;
                 stat.ReceivedForgeCombat = 0;
                 
@@ -317,7 +318,14 @@ public static class CardRegistry
         {
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
-                stat.RawForge += amount;
+                stat.RawForgeTotal += amount;
+                stat.RawForgeCombat += amount;
+                
+                // Route into specific encounter buckets
+                if (_currentCombatType == "Elite") stat.RawForgeElite += amount;
+                else if (_currentCombatType == "Boss") stat.RawForgeBoss += amount;
+                else if (_currentCombatType == "Hallway") stat.RawForgeHallway += amount;
+                
                 _forgeHistory.Add(new ForgeInstance { TrackingId = uniqueTrackingId, Amount = amount });
             }
         }
@@ -427,7 +435,11 @@ public sealed class CardStats
     public decimal DamageElite { get; set; }
     public decimal DamageBoss { get; set; }
     
-    public decimal RawForge { get; set; }
+    public decimal RawForgeTotal { get; set; }
+    public decimal RawForgeCombat { get; set; }
+    public decimal RawForgeHallway { get; set; }
+    public decimal RawForgeElite { get; set; }
+    public decimal RawForgeBoss { get; set; }
     public decimal ConnectedForgeCombat { get; set; }
     public decimal ConnectedForgeTotal { get; set; }
     public decimal ConnectedForgeHallway { get; set; }
@@ -460,7 +472,9 @@ public sealed class CardStats
             TimesDrawn = TimesDrawn, TimesPlayed = TimesPlayed, // Add clones here!
             CombatDamage = CombatDamage, RunDamage = RunDamage,
             DamageHallway = DamageHallway, DamageElite = DamageElite, DamageBoss = DamageBoss,
-            RawForge = RawForge, ConnectedForgeCombat = ConnectedForgeCombat, ConnectedForgeTotal = ConnectedForgeTotal,
+            RawForgeTotal = RawForgeTotal, RawForgeCombat = RawForgeCombat, RawForgeHallway = RawForgeHallway,
+            RawForgeElite = RawForgeElite, RawForgeBoss = RawForgeBoss,
+            ConnectedForgeCombat = ConnectedForgeCombat, ConnectedForgeTotal = ConnectedForgeTotal,
             ConnectedForgeHallway = ConnectedForgeHallway, ConnectedForgeElite = ConnectedForgeElite, ConnectedForgeBoss = ConnectedForgeBoss,
             ReceivedForgeCombat = ReceivedForgeCombat, ReceivedForgeTotal = ReceivedForgeTotal,
             ReceivedForgeHallway = ReceivedForgeHallway, ReceivedForgeElite = ReceivedForgeElite, ReceivedForgeBoss = ReceivedForgeBoss,
