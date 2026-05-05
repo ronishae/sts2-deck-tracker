@@ -8,12 +8,20 @@ using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
+public class ForgeInstance
+{
+    public string TrackingId { get; set; } = "";
+    public decimal Amount { get; set; }
+}
+
 public static class CardRegistry
 {
     private static readonly object SyncRoot = new();
     
     private static Dictionary<string, CardStats> Totals = new();
     private static string _currentRunSeed = "";
+    
+    private static List<ForgeInstance> _forgeHistory = new();
     
     // NEW: We need to know what fight we are in while dealing damage!
     private static string _currentCombatType = "Unknown";
@@ -116,6 +124,7 @@ public static class CardRegistry
         lock (SyncRoot)
         {
             Totals.Clear();
+            _forgeHistory.Clear();
         }
         Publish();
     }
@@ -167,10 +176,13 @@ public static class CardRegistry
             _currentCombatType = combatType;
             GD.Print($"[DeckTracker] Starting combat state: {_currentCombatType}");
             _incrementedThisCombat.Clear(); 
+            _forgeHistory.Clear();
             
             foreach (var stat in Totals.Values)
             {
                 stat.CombatDamage = 0; // Wipe the previous combat's text
+                stat.ConnectedForgeCombat = 0;
+                stat.ReceivedForgeCombat = 0;
                 
                 if (!stat.IsInDeck) continue; // Skip cards not in the deck
                 
@@ -191,6 +203,7 @@ public static class CardRegistry
         lock (SyncRoot)
         {
             _currentCombatType = "Unknown"; // Clear the state
+            _forgeHistory.Clear();
         }
         
         SaveState(); // Lock the victory into the hard drive
@@ -297,6 +310,20 @@ public static class CardRegistry
         Publish(); // Instantly update UI when played
     }
     
+    public static void AddForge(CardModel card, decimal amount)
+    {
+        string uniqueTrackingId = GetTrackingId(card);
+        lock (SyncRoot)
+        {
+            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            {
+                stat.RawForge += amount;
+                _forgeHistory.Add(new ForgeInstance { TrackingId = uniqueTrackingId, Amount = amount });
+            }
+        }
+        Publish();
+    }
+    
     public static void AddDamage(CardModel card, decimal damage)
     {
         string uniqueTrackingId = GetTrackingId(card);
@@ -317,7 +344,54 @@ public static class CardRegistry
 
         Publish();
     }
+    
+    public static void ProcessSovereignBladeDamage(CardModel bladeCard, decimal totalDamage)
+    {
+        lock (SyncRoot)
+        {
+            // First 10 damage belongs to the blade. We only distribute the excess.
+            decimal remainingDamage = Math.Max(0, totalDamage - 10);
+            decimal totalDistributed = 0;
+            
+            // Walk down the history. Do NOT remove items, as the blade keeps its forged power for future swings!
+            foreach (var instance in _forgeHistory)
+            {
+                if (remainingDamage <= 0) break;
 
+                // Cap the attribution to what the card actually forged
+                decimal amountToAttribute = Math.Min(remainingDamage, instance.Amount);
+
+                if (Totals.TryGetValue(instance.TrackingId, out CardStats? stat))
+                {
+                    stat.ConnectedForgeCombat += amountToAttribute;
+                    stat.ConnectedForgeTotal += amountToAttribute;
+
+                    if (_currentCombatType == "Elite") stat.ConnectedForgeElite += amountToAttribute;
+                    else if (_currentCombatType == "Boss") stat.ConnectedForgeBoss += amountToAttribute;
+                    else if (_currentCombatType == "Hallway") stat.ConnectedForgeHallway += amountToAttribute;
+                }
+
+                remainingDamage -= amountToAttribute;
+                totalDistributed += amountToAttribute;
+            }
+            
+            if (totalDistributed > 0)
+            {
+                string bladeTrackingId = GetTrackingId(bladeCard);
+                if (Totals.TryGetValue(bladeTrackingId, out CardStats? bladeStat))
+                {
+                    bladeStat.ReceivedForgeCombat += totalDistributed;
+                    bladeStat.ReceivedForgeTotal += totalDistributed;
+                    
+                    if (_currentCombatType == "Elite") bladeStat.ReceivedForgeElite += totalDistributed;
+                    else if (_currentCombatType == "Boss") bladeStat.ReceivedForgeBoss += totalDistributed;
+                    else if (_currentCombatType == "Hallway") bladeStat.ReceivedForgeHallway += totalDistributed;
+                }
+            }
+        }
+        Publish();
+    }
+    
     public static void ForcePublish() => Publish();
 
     private static void Publish()
@@ -352,6 +426,19 @@ public sealed class CardStats
     public decimal DamageHallway { get; set; }
     public decimal DamageElite { get; set; }
     public decimal DamageBoss { get; set; }
+    
+    public decimal RawForge { get; set; }
+    public decimal ConnectedForgeCombat { get; set; }
+    public decimal ConnectedForgeTotal { get; set; }
+    public decimal ConnectedForgeHallway { get; set; }
+    public decimal ConnectedForgeElite { get; set; }
+    public decimal ConnectedForgeBoss { get; set; }
+    
+    public decimal ReceivedForgeCombat { get; set; }
+    public decimal ReceivedForgeTotal { get; set; }
+    public decimal ReceivedForgeHallway { get; set; }
+    public decimal ReceivedForgeElite { get; set; }
+    public decimal ReceivedForgeBoss { get; set; }
 
     public int EncountersSeenTotal { get; set; }
     public int EncountersSeenHallway { get; set; }
@@ -373,6 +460,10 @@ public sealed class CardStats
             TimesDrawn = TimesDrawn, TimesPlayed = TimesPlayed, // Add clones here!
             CombatDamage = CombatDamage, RunDamage = RunDamage,
             DamageHallway = DamageHallway, DamageElite = DamageElite, DamageBoss = DamageBoss,
+            RawForge = RawForge, ConnectedForgeCombat = ConnectedForgeCombat, ConnectedForgeTotal = ConnectedForgeTotal,
+            ConnectedForgeHallway = ConnectedForgeHallway, ConnectedForgeElite = ConnectedForgeElite, ConnectedForgeBoss = ConnectedForgeBoss,
+            ReceivedForgeCombat = ReceivedForgeCombat, ReceivedForgeTotal = ReceivedForgeTotal,
+            ReceivedForgeHallway = ReceivedForgeHallway, ReceivedForgeElite = ReceivedForgeElite, ReceivedForgeBoss = ReceivedForgeBoss,
             EncountersSeenTotal = EncountersSeenTotal, EncountersSeenHallway = EncountersSeenHallway,
             EncountersSeenElite = EncountersSeenElite, EncountersSeenBoss = EncountersSeenBoss
         };

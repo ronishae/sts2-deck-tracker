@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -33,6 +34,7 @@ public static class ModEntry
         
         // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
+        PatchHook(nameof(Hook.AfterForge), nameof(HookPatches.AfterForgePostfix));
         
         // --- Card Removal Hook ---
         PatchHook(nameof(Hook.BeforeCardRemoved), nameof(HookPatches.BeforeCardRemovedPostfix));
@@ -153,16 +155,29 @@ internal static class HookPatches
         CardRegistry.AddPlay(card);
         CardRegistry.ForcePublish();
     }
-
+    
+    public static void AfterForgePostfix(ICombatState combatState, decimal amount, Player forger, AbstractModel? source)
+    {
+        if (source is CardModel card)
+        {
+            CardRegistry.AddForge(card, amount);
+        }
+    }
+    
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
-        if (dealer != null && (dealer.IsPlayer || dealer.Side == CombatSide.Player))
+        if (cardSource == null) return;
+        
+        // Standard damage tracking (Sovereign Blade will still get its full total here too)
+        CardRegistry.AddDamage(cardSource, results.TotalDamage); 
+
+        // If the card is Sovereign Blade, process the forge distribution!
+        GD.Print($"Card {cardSource.Id.Entry} did damage");
+        if (cardSource.Id.Entry.Contains("SOVEREIGN_BLADE")) 
         {
-            if (cardSource != null && results.TotalDamage > 0)
-            {
-                DeckDamageService.RecordDamage(cardSource, results.TotalDamage);
-            }
+            GD.Print("Sovereign Blade");
+            CardRegistry.ProcessSovereignBladeDamage(cardSource, results.TotalDamage);
         }
     }
 
