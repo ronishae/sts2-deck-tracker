@@ -12,6 +12,7 @@ public static partial class CardRegistry
     private static readonly Dictionary<Creature, Queue<string>> ConquerorTracker = [];
     private static CardModel? _activeSeekingEdgeCard = null;
     private static readonly List<CardModel?> BladeReplayModifierTracker = [];
+    private static List<FurnaceContribution> _furnaceContributions = [];
     
     public static void AddForge(CardModel card, decimal amount)
     {
@@ -32,6 +33,59 @@ public static partial class CardRegistry
             }
         }
         Publish();
+    }
+
+    public static void UpdateFurnaceHistory(decimal amount, CardModel? cardSource)
+    {
+        if (cardSource == null) return;
+        
+        lock (SyncRoot)
+        {
+            // Since Furnace power generally doesn't decrease, we only track the additions
+            // in the exact order they are played.
+            if (amount > 0)
+            {
+                _furnaceContributions.Add(new FurnaceContribution {
+                    CardSource = cardSource,
+                    PowerAmount = amount
+                });
+                GD.Print($"[DeckTracker] Furnace contribution added: {GetTrackingId(cardSource)} for {amount} power.");
+            }
+        }
+        Publish();
+    }
+
+    public static void HandleFurnaceForge(decimal forgeAmount)
+    {
+        if (forgeAmount <= 0) return;
+        
+        List<(CardModel card, decimal amount)> attributions = new();
+
+        lock (SyncRoot)
+        {
+            decimal remainingForge = forgeAmount;
+
+            foreach (var contribution in _furnaceContributions)
+            {
+                if (remainingForge <= 0) break;
+
+                decimal amountToAttribute = Math.Min(remainingForge, contribution.PowerAmount);
+                attributions.Add((contribution.CardSource, amountToAttribute));
+
+                remainingForge -= amountToAttribute;
+            }
+
+            if (remainingForge > 0)
+            {
+                GD.Print($"[DeckTracker] Warning: Furnace forge triggered with {remainingForge} unaccounted for by card history.");
+            }
+        }
+        
+        foreach (var attr in attributions)
+        {
+            GD.Print($"[DeckTracker] Attributing {attr.amount} forge to Furnace source {GetTrackingId(attr.card)}.");
+            AddForge(attr.card, attr.amount); 
+        }
     }
     
     public static void AddSovereignBladeDamageHistoryItem(DamageHistoryItem damageHistoryItem)
@@ -277,4 +331,10 @@ public static partial class CardRegistry
         SovereignBladeDamageHistory.Clear();
     }
     
+}
+
+public class FurnaceContribution
+{
+    public CardModel CardSource { get; set; } = null!;
+    public decimal PowerAmount { get; set; }
 }

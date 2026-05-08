@@ -173,6 +173,9 @@ internal static class HookPatches
                 CardRegistry.UpdateSovereignBladeReplayModifierTracker(amount, cardSource);
                 break;
             }
+            case FurnacePower:
+                CardRegistry.UpdateFurnaceHistory(amount, cardSource);
+                break;
         }
     }
     
@@ -193,9 +196,17 @@ internal static class HookPatches
     
     public static void AfterForgePostfix(ICombatState combatState, decimal amount, Player forger, AbstractModel? source)
     {
+        GD.Print($"[DeckTracker] Card {source?.Id.Entry} did {amount} forge.");
         if (source is CardModel card)
         {
             CardRegistry.AddForge(card, amount);
+        }
+        else if (source is PowerModel power)
+        {
+            if (power is FurnacePower)
+            {
+                CardRegistry.HandleFurnaceForge(amount);
+            }
         }
     }
     
