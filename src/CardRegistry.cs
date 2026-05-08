@@ -23,10 +23,8 @@ public static partial class CardRegistry
     private static Dictionary<string, CardStats> Totals = new();
     private static string _currentRunSeed = "";
     
-    // NEW: We need to know what fight we are in while dealing damage!
     private static string _currentCombatType = "Unknown";
     
-    // Tracks which cards have already received their +1 encounter this specific combat
     private static HashSet<string> _incrementedThisCombat = new();
     
     private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
@@ -102,9 +100,7 @@ public static partial class CardRegistry
             return false;
         }
     }
-
-    // --- Fingerprint Generation ---
-
+    
     public static string GetTrackingId(CardModel card)
     {
         CardModel sourceCard = card.DeckVersion ?? card;
@@ -116,9 +112,7 @@ public static partial class CardRegistry
 
         return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}";
     }
-
-    // --- Combat Lifecycle ---
-
+    
     public static void ResetRun()
     {
         lock (SyncRoot)
@@ -129,7 +123,6 @@ public static partial class CardRegistry
         Publish();
     }
     
-    // NEW: Handles the diff check for Upgrades, Transforms, and Removes
     public static void SyncDeckState(int currentFloor, List<string> activeDeckIds)
     {
         lock (SyncRoot)
@@ -165,7 +158,6 @@ public static partial class CardRegistry
         Publish(); // Instantly update the UI, even outside of combat!
     }
     
-    // UPDATED: StartCombat is now significantly cleaner
     public static void StartCombat(string combatType, int currentFloor, List<string> activeDeckIds)
     {
         // Diff the deck immediately before processing encounters
@@ -212,8 +204,6 @@ public static partial class CardRegistry
         SaveState(); // Lock the victory into the hard drive
         Publish();
     }
-
-    // --- Data Modifiers ---
     
     public static void HandleRemove(CardModel card, int floorRemoved)
     {
@@ -285,7 +275,6 @@ public static partial class CardRegistry
         }
     }
     
-    // NEW: Draw Incrementer
     public static void AddDraw(CardModel card)
     {
         string uniqueTrackingId = GetTrackingId(card);
@@ -299,7 +288,6 @@ public static partial class CardRegistry
         Publish(); // Instantly update UI when drawn
     }
     
-    // NEW: Play Incrementer
     public static void AddPlay(CardModel card)
     {
         string uniqueTrackingId = GetTrackingId(card);
@@ -310,7 +298,7 @@ public static partial class CardRegistry
                 stat.TimesPlayed++;
             }
         }
-        Publish(); // Instantly update UI when played
+        Publish();
     }
     
     public static void AddDamage(CardModel card, decimal damage)
