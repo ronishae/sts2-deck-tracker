@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Godot;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 
@@ -26,6 +27,7 @@ public static class CardRegistry
     private static List<DamageHistoryItem> _sovereignBladedamageHistory = [];
     private static Dictionary<Creature, Queue<string>> _conquerorTracker = [];
     private static CardModel? _activeSeekingEdgeCard = null;
+    private static List<CardModel?> _bladeReplayModifierTracker = [];
     
     // NEW: We need to know what fight we are in while dealing damage!
     private static string _currentCombatType = "Unknown";
@@ -181,6 +183,8 @@ public static class CardRegistry
             GD.Print($"[DeckTracker] Starting combat state: {_currentCombatType}");
             _incrementedThisCombat.Clear(); 
             _forgeHistory.Clear();
+            _conquerorTracker.Clear();
+            _bladeReplayModifierTracker.Clear();
             
             foreach (var stat in Totals.Values)
             {
@@ -329,7 +333,22 @@ public static class CardRegistry
         
         Publish();
     }
-
+    
+    // For SwordSage, replayCountAdded would be 1. Later when supporting Hidden Gem hitting this, it may be 2 or 3
+    public static void UpdateSovereignBladeReplayModifierTracker(decimal replayCountAdded, CardModel? cardSource)
+    {
+        if (cardSource != null && replayCountAdded > 0)
+        {
+            var uniqueTrackingId = GetTrackingId(cardSource);
+            for (var i = 0; i < (int)replayCountAdded; i++)
+            {
+                GD.Print($"[DeckTracker] Adding replay modifier to history with ID {uniqueTrackingId}.");
+                _bladeReplayModifierTracker.Add(cardSource);
+            }
+        }
+        Publish();
+    }
+    
     private static string? GetEarliestActiveConqueror(Creature target)
     {
         return _conquerorTracker.TryGetValue(target, out var conquerorQueue) ? conquerorQueue.Peek() : null;
@@ -396,11 +415,12 @@ public static class CardRegistry
         Publish();
     }
 
-    private static void SplitForgeDamage(CardModel bladeCard, DamageResult results, Creature target, CardModel? seekingEdge)
+    private static void SplitForgeDamage(CardModel bladeCard, DamageResult results, Creature target, CardModel? seekingEdge, CardModel? replayModifyingCard)
     {
-        const int sovereignBladeBaseDamage = 10;
         lock (SyncRoot)
         {
+            const int sovereignBladeBaseDamage = 10;
+             
             var conquerorId = GetEarliestActiveConqueror(target);
             GD.Print($"[DeckTracker] ConquerorID requested: {conquerorId}.");
             var damageToAttribute = results.TotalDamage;
@@ -425,16 +445,28 @@ public static class CardRegistry
                 damageToAttribute -= damageToAttributeToConqueror;
             }
             
-            if (seekingEdge != null) 
+            // Conqueror damage is skimmed off the top before everything else, then the natural damage is processed
+            // Order to be Sword Sage favored (vs Seeking Edge) in damage evaluation order
+            if (replayModifyingCard != null)
             {
-                // --- SPILLOVER HIT ---
-                // Seeking Edge magically copied the final damage to another target. 
-                // It gets 100% of the credit for this extra body. No forge distribution happens here!
+                // REPLAY HIT (Both Max and Spillover)
+                // The modifier card caused this entirely new swing to happen.
+                // It gets damage on the max hit and all AOE hits,
+                // even though the AOE would not be possible without Seeking Edge.
+                // This could be changed later to split damage between both if both are present,
+                // but to me, Sword Sage feels like it should get all the credit (the number looks very small without this)
+                GD.Print($"[DeckTracker] Replay Hit: Attributing {damageToAttribute} to {GetTrackingId(replayModifyingCard)}");
+                AddDamage(replayModifyingCard, damageToAttribute);
+            }
+            else if (seekingEdge != null) 
+            {
+                // SPILLOVER HIT
+                // Damage goes to Seeking Edge, not the blade or forgers
                 AddDamage(seekingEdge, damageToAttribute);
             }
             else
             {
-                // --- MAX HIT (The Physical Swing) ---
+                // MAX HIT
                 // Base damage goes to the blade.
                 AddDamage(bladeCard, sovereignBladeBaseDamage);
                 damageToAttribute -= sovereignBladeBaseDamage;
@@ -495,10 +527,22 @@ public static class CardRegistry
         Publish();
     }
 
-    public static void ProcessSovereignBladeHistory()
+    public static void ProcessSovereignBladeHistory(CardPlay cardPlay)
     {
         if (_sovereignBladedamageHistory.Count == 0) return;
+        var bladeCardModel = _sovereignBladedamageHistory[0].CardModel;
+        if (bladeCardModel == null)
+        {
+            GD.Print("[DeckTracker] Warning: bladeCardModel is null in ProcessSovereignBladeHistory");
+            return;
+        }
+        var expectedReplayCount = bladeCardModel.BaseReplayCount;
+        
         GD.Print($"[DeckTracker] Processing sovereign blade history with count: {_sovereignBladedamageHistory.Count}");
+        // 0 is primary play, 1+ means replayed
+        var isReplay = cardPlay.PlayIndex > 0;
+        GD.Print($"[DeckTracker] isReplay: {isReplay} (PlayIndex: {cardPlay.PlayIndex})");
+        
         var maxTotalDamageInstance = _sovereignBladedamageHistory[0];
         foreach (var damageHistoryItem in _sovereignBladedamageHistory)
         {
@@ -515,17 +559,34 @@ public static class CardRegistry
                 GD.Print("[DeckTracker] Warning: damageHistoryItem.CardModel is null in ProcessSovereignBladeHistory");
                 continue;
             }
-            
+
+            CardModel? replayModifyingCard = null;
+            if (isReplay)
+            {
+                // E.g. the first replay is caused by the modifier at index 0 in _bladeReplayModifierTracker
+                var trackerIndex = cardPlay.PlayIndex - 1;
+                
+                // In case a potion/relic caused a replay that we didn't track, it will default to giving
+                // the extra replay damage to the blade and its forgers
+                if (trackerIndex < _bladeReplayModifierTracker.Count)
+                {
+                    replayModifyingCard = _bladeReplayModifierTracker[trackerIndex];
+                }
+                else
+                {
+                    GD.Print("[DeckTracker] Warning: trackerIndex was out of bounds. A replay modifier was likely not tracked");
+                }
+            }
             // Biggest damage goes to the blade and its forgers, all other hits if AOE are attributed to Seeking Edge
             if (damageHistoryItem == maxTotalDamageInstance)
             {
                 GD.Print($"[DeckTracker] Max damage item. Sending with seeking edge null");
-                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, null);
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, null, replayModifyingCard);
             }
             else
             {
                 GD.Print($"[DeckTracker] Attributing to seeking, with {_activeSeekingEdgeCard} as seeking edge ID");
-                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, _activeSeekingEdgeCard);
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, _activeSeekingEdgeCard, replayModifyingCard);
             }
         }
         

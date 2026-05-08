@@ -44,7 +44,6 @@ public static class ModEntry
         PatchHook(nameof(Hook.AfterCardDrawn), nameof(HookPatches.AfterCardDrawnPostfix));
         PatchHook(nameof(Hook.AfterCardChangedPiles), nameof(HookPatches.AfterCardChangedPilesPostfix));
         PatchHook(nameof(Hook.BeforeCardPlayed), nameof(HookPatches.BeforeCardPlayedPostfix));
-        PatchHook(nameof(Hook.BeforeCardAutoPlayed), nameof(HookPatches.BeforeCardAutoPlayedPostfix));
         PatchHook(nameof(Hook.AfterCardPlayed), nameof(HookPatches.AfterCardPlayedPostfix));
         PatchHook(nameof(Hook.BeforePowerAmountChanged), nameof(HookPatches.BeforePowerAmountChangedPostfix));
     }
@@ -144,19 +143,15 @@ internal static class HookPatches
             if (cardProp?.GetValue(cardPlay) is CardModel card)
             {
                 CardRegistry.RegisterCard(card);
-                CardRegistry.AddPlay(card);
+                // Do not count Replay in the times play tracker
+                if (cardPlay.PlayIndex == 0)
+                {
+                    CardRegistry.AddPlay(card);
+                }
                 CardRegistry.ForcePublish();
             }
         }
         catch { /* Silently fail if STS2 changes the CardPlay object */ }
-    }
-
-    // Catches automatic plays (Echo Form, Mayhem, Havoc, etc.)
-    public static void BeforeCardAutoPlayedPostfix(ICombatState combatState, CardModel card, Creature? target, AutoPlayType type)
-    {
-        CardRegistry.RegisterCard(card);
-        CardRegistry.AddPlay(card);
-        CardRegistry.ForcePublish();
     }
     
     public static void BeforePowerAmountChangedPostfix(
@@ -168,33 +163,31 @@ internal static class HookPatches
         CardModel? cardSource)
     {
         GD.Print($"[DeckTracker] Card {cardSource?.Id.Entry} did {power} power with amount {amount} {target.Name}.");
-        if (power is ConquerorPower)
+        switch (power)
         {
-            CardRegistry.UpdateConquerorTracker(target, amount, cardSource);
+            case ConquerorPower:
+                CardRegistry.UpdateConquerorTracker(target, amount, cardSource);
+                break;
+            case SwordSagePower:
+            {
+                CardRegistry.UpdateSovereignBladeReplayModifierTracker(amount, cardSource);
+                break;
+            }
         }
     }
     
     public static void AfterCardPlayedPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         string cardId = cardPlay.Card.Id.Entry ?? "";
-        GD.Print($"[DeckTracker] Card {cardId} played");
-        GD.Print($"[DeckTracker] {combatState.Enemies.Count} enemies in the combat via after card played");
+        GD.Print($"[DeckTracker] Card {cardId} played with PlayCount: {cardPlay.PlayCount} and PlayIndex: {cardPlay.PlayIndex}.");
 
-        if (cardId.Equals("CONQUEROR")) 
-        {
-        
-        }
-        else if (cardId.Equals("SEEKING_EDGE")) 
+        if (cardId.Equals("SEEKING_EDGE")) 
         {
             CardRegistry.UpdateSeekingEdge(cardPlay.Card);
         }
-        else if (cardId.Equals("SWORD_SAGE")) 
-        {
-
-        }
         else if (cardId.Equals("SOVEREIGN_BLADE"))
         {
-            CardRegistry.ProcessSovereignBladeHistory();
+            CardRegistry.ProcessSovereignBladeHistory(cardPlay);
         }
     }
     
