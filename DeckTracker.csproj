@@ -33,9 +33,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Alchyr.Sts2.BaseLib" Version="*" PrivateAssets="All"/>
-        <PackageReference Include="Krafs.Publicizer" Version="2.3.0" PrivateAssets="All"/>
-        <PackageReference Include="Alchyr.Sts2.ModAnalyzers" Version="*"/>
+<!--        <PackageReference Include="Alchyr.Sts2.BaseLib" Version="*" PrivateAssets="All"/>-->
+<!--        <PackageReference Include="Krafs.Publicizer" Version="2.3.0" PrivateAssets="All"/>-->
+<!--        <PackageReference Include="Alchyr.Sts2.ModAnalyzers" Version="*"/>-->
         <!-- Generates a .pck file when building if only using simple assets. May not work on all setups. Uncomment to test. -->
         <!-- <PackageReference Include="BSchneppe.StS2.PckPacker" Version="0.1.1" PrivateAssets="All" /> -->
         <AdditionalFiles Include="DeckTracker/localization/**/*.json"/> <!-- Used by analyzer -->
@@ -85,6 +85,10 @@
 
     <ItemGroup>
         <GodotResourceFiles Include="DeckTracker/**"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="DeckTrackerCode\Cards\" />
     </ItemGroup>
 
     <Target Name="GodotPublish" AfterTargets="Publish" Condition="'$(GodotPath)' != '' and Exists('$(GodotPath)') and '$(IsInnerGodotExport)' != 'true'" Inputs="@(GodotResourceFiles)" Outputs="$(ModsPath)$(MSBuildProjectName)/$(MSBuildProjectName).pck">
