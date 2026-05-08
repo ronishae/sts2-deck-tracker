@@ -217,11 +217,13 @@ public static class DeckTrackerOverlay
             var allCards = stats
                 .Where(s => s.CardType != "Status") 
                 .Where(s => {
-                    decimal effCombat = s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0);
-                    decimal effRun = s.RunDamage + (_includeConnectedForge ? s.ConnectedForgeTotal : 0);
+                    decimal effCombat = _showRawForge ? s.RawForgeCombat : s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0);
+                    decimal effRun = _showRawForge ? s.RawForgeTotal : s.RunDamage + (_includeConnectedForge ? s.ConnectedForgeTotal - s.ReceivedForgeTotal : 0);
                     return _showRunStats ? effRun > 0 : effCombat > 0;
                 })
-                .OrderByDescending(s => _showRunStats ? (s.RunDamage + (_includeConnectedForge ? s.ConnectedForgeTotal : 0)) : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat : 0)))
+                .OrderByDescending(s => _showRunStats ? 
+                    (_showRawForge ? s.RawForgeTotal : (s.RunDamage + (_includeConnectedForge ? s.ConnectedForgeTotal - s.ReceivedForgeTotal : 0))) : 
+                    (_showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0))))
                 .ThenBy(s => s.FloorAdded)
                 .ToList();
             
