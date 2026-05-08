@@ -468,6 +468,15 @@ public static class CardRegistry
             {
                 // MAX HIT
                 // Base damage goes to the blade.
+                // Note: In the future, may want to change how this handles weak / shrunk.
+                // The current implementation gives damage to base blade first before all forgers,
+                // so when weak, the blade will eat all the damage from the forgers, even though
+                // forgers actually added damage to the blade.
+                // The issue with proportional rounding (e.g. blade and forgers get 0.75%) penalty
+                // is 1) because of a lot of messy interactions with flooring in STS, 2) it would mess up
+                // interactions with truncated damage caps (e.g. intangible, Exoskeletons, maybe Skulking Colony),
+                // 3) detecting the specific debuff (weak vs shrunk) on the player is annoying (but possible, I guess)
+                // For now, just leave it at this compromise to penalize forgers when the player is weak / small.
                 AddDamage(bladeCard, Math.Min(damageToAttribute, sovereignBladeBaseDamage));
                 damageToAttribute -= sovereignBladeBaseDamage;
 
