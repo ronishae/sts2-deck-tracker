@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Godot;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
@@ -22,10 +23,13 @@ public static class CardRegistry
     private static string _currentRunSeed = "";
     
     private static List<ForgeInstance> _forgeHistory = new();
+    private static List<DamageHistoryItem> _sovereignBladedamageHistory = [];
+    private static Dictionary<Creature, Queue<string>> _conquerorTracker = [];
+    private static CardModel? _activeSeekingEdgeCard = null;
     
     // NEW: We need to know what fight we are in while dealing damage!
     private static string _currentCombatType = "Unknown";
-
+    
     // Tracks which cards have already received their +1 encounter this specific combat
     private static HashSet<string> _incrementedThisCombat = new();
     
@@ -297,6 +301,40 @@ public static class CardRegistry
         Publish(); // Instantly update UI when drawn
     }
 
+    public static void UpdateSeekingEdge(CardModel seekingEdgeCard)
+    {
+        _activeSeekingEdgeCard ??= seekingEdgeCard;
+        GD.Print($"[DeckTracker] Updated active seeking edge: {GetTrackingId(_activeSeekingEdgeCard)}.");
+    }
+    
+    public static void UpdateConquerorTracker(Creature target, decimal powerChangeAmount, CardModel? cardSource)
+    {
+        if (!_conquerorTracker.ContainsKey(target)) _conquerorTracker[target] = new Queue<string>();
+        var conquerorQueue = _conquerorTracker[target];
+        switch (powerChangeAmount)
+        {
+            case > 0:
+                if (cardSource != null)
+                {
+                    var uniqueTrackingId = GetTrackingId(cardSource);
+                    conquerorQueue.Enqueue(uniqueTrackingId);
+                    GD.Print($"[DeckTracker] Conqueror card queued with id {uniqueTrackingId}");
+                }
+                break;
+            case < 0:
+                var dequeued = conquerorQueue.Dequeue();
+                GD.Print($"[DeckTracker] Conqueror card dequeued with id {dequeued}");
+                break;
+        }
+        
+        Publish();
+    }
+
+    private static string? GetEarliestActiveConqueror(Creature target)
+    {
+        return _conquerorTracker.TryGetValue(target, out var conquerorQueue) ? conquerorQueue.Peek() : null;
+    }
+    
     // NEW: Play Incrementer
     public static void AddPlay(CardModel card)
     {
@@ -331,6 +369,11 @@ public static class CardRegistry
         }
         Publish();
     }
+
+    public static void AddSovereignBladeDamageHistoryItem(DamageHistoryItem damageHistoryItem)
+    {
+        _sovereignBladedamageHistory.Add(damageHistoryItem);
+    }
     
     public static void AddDamage(CardModel card, decimal damage)
     {
@@ -352,52 +395,142 @@ public static class CardRegistry
 
         Publish();
     }
-    
-    public static void ProcessSovereignBladeDamage(CardModel bladeCard, decimal totalDamage)
+
+    private static void SplitForgeDamage(CardModel bladeCard, DamageResult results, Creature target, CardModel? seekingEdge)
     {
+        const int sovereignBladeBaseDamage = 10;
         lock (SyncRoot)
         {
-            // First 10 damage belongs to the blade. We only distribute the excess.
-            decimal remainingDamage = Math.Max(0, totalDamage - 10);
-            decimal totalDistributed = 0;
-            
-            // Walk down the history. Do NOT remove items, as the blade keeps its forged power for future swings!
-            foreach (var instance in _forgeHistory)
+            var conquerorId = GetEarliestActiveConqueror(target);
+            GD.Print($"[DeckTracker] ConquerorID requested: {conquerorId}.");
+            var damageToAttribute = results.TotalDamage;
+            GD.Print($"[DeckTracker] Damage to attribute: {damageToAttribute}.");
+            if (conquerorId != null)
             {
-                if (remainingDamage <= 0) break;
-
-                // Cap the attribution to what the card actually forged
-                decimal amountToAttribute = Math.Min(remainingDamage, instance.Amount);
-
-                if (Totals.TryGetValue(instance.TrackingId, out CardStats? stat))
+                var completeDamage = results.TotalDamage + results.OverkillDamage;
+                var beforeMultiplicationDamage = completeDamage / 2;
+                var damageToAttributeToConqueror = results.TotalDamage - beforeMultiplicationDamage;
+                
+                if (Totals.TryGetValue(conquerorId, out var stat))
                 {
-                    stat.ConnectedForgeCombat += amountToAttribute;
-                    stat.ConnectedForgeTotal += amountToAttribute;
+                    GD.Print($"[DeckTracker] Attributing damage to {conquerorId}");
+                    stat.CombatDamage += damageToAttributeToConqueror;
+                    stat.RunDamage += damageToAttributeToConqueror;
 
-                    if (_currentCombatType == "Elite") stat.ConnectedForgeElite += amountToAttribute;
-                    else if (_currentCombatType == "Boss") stat.ConnectedForgeBoss += amountToAttribute;
-                    else if (_currentCombatType == "Hallway") stat.ConnectedForgeHallway += amountToAttribute;
+                    if (_currentCombatType == "Elite") stat.DamageElite += damageToAttributeToConqueror;
+                    else if (_currentCombatType == "Boss") stat.DamageBoss += damageToAttributeToConqueror;
+                    else if (_currentCombatType == "Hallway") stat.DamageHallway += damageToAttributeToConqueror;
                 }
-
-                remainingDamage -= amountToAttribute;
-                totalDistributed += amountToAttribute;
+                
+                damageToAttribute -= damageToAttributeToConqueror;
             }
             
-            if (totalDistributed > 0)
+            if (seekingEdge != null) 
             {
-                string bladeTrackingId = GetTrackingId(bladeCard);
-                if (Totals.TryGetValue(bladeTrackingId, out CardStats? bladeStat))
+                // --- SPILLOVER HIT ---
+                // Seeking Edge magically copied the final damage to another target. 
+                // It gets 100% of the credit for this extra body. No forge distribution happens here!
+                AddDamage(seekingEdge, damageToAttribute);
+            }
+            else
+            {
+                // --- MAX HIT (The Physical Swing) ---
+                // Base damage goes to the blade.
+                AddDamage(bladeCard, sovereignBladeBaseDamage);
+                damageToAttribute -= sovereignBladeBaseDamage;
+
+                decimal damageToDistribute = Math.Max(0, damageToAttribute);
+                decimal totalDistributed = 0;
+
+                foreach (var forgeInstance in _forgeHistory)
                 {
-                    bladeStat.ReceivedForgeCombat += totalDistributed;
-                    bladeStat.ReceivedForgeTotal += totalDistributed;
-                    
-                    if (_currentCombatType == "Elite") bladeStat.ReceivedForgeElite += totalDistributed;
-                    else if (_currentCombatType == "Boss") bladeStat.ReceivedForgeBoss += totalDistributed;
-                    else if (_currentCombatType == "Hallway") bladeStat.ReceivedForgeHallway += totalDistributed;
+                    if (damageToDistribute <= 0) break;
+
+                    var amountToAttribute = Math.Min(damageToDistribute, forgeInstance.Amount);
+                    var idToAttribute = forgeInstance.TrackingId;
+
+                    if (Totals.TryGetValue(idToAttribute, out var stat))
+                    {
+                        GD.Print($"adding connected forge to {idToAttribute} with amount {amountToAttribute}");
+                        stat.ConnectedForgeCombat += amountToAttribute;
+                        stat.ConnectedForgeTotal += amountToAttribute;
+
+                        if (_currentCombatType == "Elite") stat.ConnectedForgeElite += amountToAttribute;
+                        else if (_currentCombatType == "Boss") stat.ConnectedForgeBoss += amountToAttribute;
+                        else if (_currentCombatType == "Hallway") stat.ConnectedForgeHallway += amountToAttribute;
+                    }
+
+                    damageToDistribute -= amountToAttribute;
+                    totalDistributed += amountToAttribute;
+                }
+                
+                // Fallback for forges from unknown sources (e.g. Fencing Manual before relic support is added)
+                if (damageToDistribute > 0)
+                {
+                    AddDamage(bladeCard, damageToDistribute);
+                    GD.Print(
+                        $"[DeckTracker] Warning: Went through all forgers and had remaining damage: {damageToDistribute}.");
+                }
+
+                // Although we distribute forge amounts to forgers, the damage goes to the blade initially
+                // Then this damage can be subtracted by the forge received when using the forge view.
+                AddDamage(bladeCard, totalDistributed);
+                GD.Print(
+                    $"[DeckTracker] Adding total distributed forge damage amount {totalDistributed} to Blade.");
+                if (totalDistributed > 0)
+                {
+                    string bladeTrackingId = GetTrackingId(bladeCard);
+                    if (Totals.TryGetValue(bladeTrackingId, out CardStats? bladeStat))
+                    {
+                        bladeStat.ReceivedForgeCombat += totalDistributed;
+                        bladeStat.ReceivedForgeTotal += totalDistributed;
+
+                        if (_currentCombatType == "Elite") bladeStat.ReceivedForgeElite += totalDistributed;
+                        else if (_currentCombatType == "Boss") bladeStat.ReceivedForgeBoss += totalDistributed;
+                        else if (_currentCombatType == "Hallway") bladeStat.ReceivedForgeHallway += totalDistributed;
+                    }
                 }
             }
         }
         Publish();
+    }
+
+    public static void ProcessSovereignBladeHistory()
+    {
+        if (_sovereignBladedamageHistory.Count == 0) return;
+        GD.Print($"[DeckTracker] Processing sovereign blade history with count: {_sovereignBladedamageHistory.Count}");
+        var maxTotalDamageInstance = _sovereignBladedamageHistory[0];
+        foreach (var damageHistoryItem in _sovereignBladedamageHistory)
+        {
+            if (damageHistoryItem.Results.TotalDamage > maxTotalDamageInstance.Results.TotalDamage)
+            {
+                maxTotalDamageInstance = damageHistoryItem;
+            }
+        }
+
+        foreach (var damageHistoryItem in _sovereignBladedamageHistory)
+        {
+            if (damageHistoryItem.CardModel == null)
+            {
+                GD.Print("[DeckTracker] Warning: damageHistoryItem.CardModel is null in ProcessSovereignBladeHistory");
+                continue;
+            }
+            
+            // Biggest damage goes to the blade and its forgers, all other hits if AOE are attributed to Seeking Edge
+            if (damageHistoryItem == maxTotalDamageInstance)
+            {
+                GD.Print($"[DeckTracker] Max damage item. Sending with seeking edge null");
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, null);
+            }
+            else
+            {
+                GD.Print($"[DeckTracker] Attributing to seeking, with {_activeSeekingEdgeCard} as seeking edge ID");
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, _activeSeekingEdgeCard);
+            }
+        }
+        
+        // Clear after processing all active hits
+        _sovereignBladedamageHistory.Clear();
     }
     
     public static void ForcePublish() => Publish();

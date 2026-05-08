@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
@@ -44,6 +45,8 @@ public static class ModEntry
         PatchHook(nameof(Hook.AfterCardChangedPiles), nameof(HookPatches.AfterCardChangedPilesPostfix));
         PatchHook(nameof(Hook.BeforeCardPlayed), nameof(HookPatches.BeforeCardPlayedPostfix));
         PatchHook(nameof(Hook.BeforeCardAutoPlayed), nameof(HookPatches.BeforeCardAutoPlayedPostfix));
+        PatchHook(nameof(Hook.AfterCardPlayed), nameof(HookPatches.AfterCardPlayedPostfix));
+        PatchHook(nameof(Hook.BeforePowerAmountChanged), nameof(HookPatches.BeforePowerAmountChangedPostfix));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -156,6 +159,45 @@ internal static class HookPatches
         CardRegistry.ForcePublish();
     }
     
+    public static void BeforePowerAmountChangedPostfix(
+        ICombatState combatState,
+        PowerModel power,
+        Decimal amount,
+        Creature target,
+        Creature? applier,
+        CardModel? cardSource)
+    {
+        GD.Print($"[DeckTracker] Card {cardSource?.Id.Entry} did {power} power with amount {amount} {target.Name}.");
+        if (power is ConquerorPower)
+        {
+            CardRegistry.UpdateConquerorTracker(target, amount, cardSource);
+        }
+    }
+    
+    public static void AfterCardPlayedPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardPlay cardPlay)
+    {
+        string cardId = cardPlay.Card.Id.Entry ?? "";
+        GD.Print($"[DeckTracker] Card {cardId} played");
+        GD.Print($"[DeckTracker] {combatState.Enemies.Count} enemies in the combat via after card played");
+
+        if (cardId.Equals("CONQUEROR")) 
+        {
+        
+        }
+        else if (cardId.Equals("SEEKING_EDGE")) 
+        {
+            CardRegistry.UpdateSeekingEdge(cardPlay.Card);
+        }
+        else if (cardId.Equals("SWORD_SAGE")) 
+        {
+
+        }
+        else if (cardId.Equals("SOVEREIGN_BLADE"))
+        {
+            CardRegistry.ProcessSovereignBladeHistory();
+        }
+    }
+    
     public static void AfterForgePostfix(ICombatState combatState, decimal amount, Player forger, AbstractModel? source)
     {
         if (source is CardModel card)
@@ -169,15 +211,17 @@ internal static class HookPatches
     {
         if (cardSource == null) return;
         
-        // Standard damage tracking (Sovereign Blade will still get its full total here too)
-        CardRegistry.AddDamage(cardSource, results.TotalDamage); 
-
         // If the card is Sovereign Blade, process the forge distribution!
-        GD.Print($"Card {cardSource.Id.Entry} did damage");
-        if (cardSource.Id.Entry.Contains("SOVEREIGN_BLADE")) 
+        GD.Print($"[DeckTracker] Card {cardSource.Id.Entry} did {results.TotalDamage} damage to {target.Name} with target type {cardSource.TargetType}");
+        GD.Print($"[DeckTracker] {combatState.Enemies.Count} enemies in the combat via after damage");
+        if (cardSource.Id.Entry.Equals("SOVEREIGN_BLADE")) 
         {
-            GD.Print("Sovereign Blade");
-            CardRegistry.ProcessSovereignBladeDamage(cardSource, results.TotalDamage);
+            var damageHistoryItem = new DamageHistoryItem(combatState, dealer, results, target, cardSource);
+            CardRegistry.AddSovereignBladeDamageHistoryItem(damageHistoryItem);
+        }
+        else
+        {
+            CardRegistry.AddDamage(cardSource, results.TotalDamage); 
         }
     }
 
