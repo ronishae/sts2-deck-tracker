@@ -468,7 +468,7 @@ public static class CardRegistry
             {
                 // MAX HIT
                 // Base damage goes to the blade.
-                AddDamage(bladeCard, sovereignBladeBaseDamage);
+                AddDamage(bladeCard, Math.Min(damageToAttribute, sovereignBladeBaseDamage));
                 damageToAttribute -= sovereignBladeBaseDamage;
 
                 decimal damageToDistribute = Math.Max(0, damageToAttribute);
