@@ -46,6 +46,14 @@ public static class ModEntry
         PatchHook(nameof(Hook.BeforeCardPlayed), nameof(HookPatches.BeforeCardPlayedPostfix));
         PatchHook(nameof(Hook.AfterCardPlayed), nameof(HookPatches.AfterCardPlayedPostfix));
         PatchHook(nameof(Hook.BeforePowerAmountChanged), nameof(HookPatches.BeforePowerAmountChangedPostfix));
+        
+        MethodInfo poisonOriginal = AccessTools.Method(typeof(PoisonPower), nameof(PoisonPower.AfterSideTurnStart));
+        MethodInfo poisonPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PoisonAfterSideTurnStartPrefix));
+        MethodInfo poisonPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PoisonAfterSideTurnStartPostfix));
+        
+        _harmony!.Patch(poisonOriginal, 
+            prefix: new HarmonyMethod(poisonPrefix), 
+            postfix: new HarmonyMethod(poisonPostfix));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -176,6 +184,15 @@ internal static class HookPatches
             case FurnacePower:
                 CardRegistry.UpdateFurnaceHistory(amount, cardSource);
                 break;
+            case PoisonPower:
+                // When poison decrements, we do not need to remove shares.
+                // Only add shares when it is positive.
+                if (amount > 0)
+                {
+                    GD.Print($"[DeckTracker] Adding poison power {amount} from card {cardSource?.Id.Entry}.");
+                    CardRegistry.AddPoisonShares(target, amount, cardSource);
+                }
+                break;
         }
     }
     
@@ -210,10 +227,44 @@ internal static class HookPatches
         }
     }
     
+    // The parameters MUST be named this way, with double underscores or Harmony will have errors. Do not change.
+    public static void PoisonAfterSideTurnStartPrefix(PoisonPower __instance)
+    {
+        if (!__instance.Owner.IsPlayer)
+        {
+            GD.Print($"[DeckTracker] Setting Poison context for {__instance.Owner.Name} in PREFIX");
+            CardRegistry.CurrentPoisonTarget.Value = __instance.Owner;
+        }
+    }
+    
+    public static void PoisonAfterSideTurnStartPostfix(PoisonPower __instance, ref Task __result)
+    {
+        if (!__instance.Owner.IsPlayer)
+        {
+            __result = CardRegistry.AwaitPoisonTaskAsync(__result);
+        }
+    }
+    
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
-        if (cardSource == null) return;
+        GD.Print($"[DeckTracker] AfterDamageGivePostfix triggered");
+        if (CardRegistry.CurrentPoisonTarget.Value == target && results.TotalDamage > 0)
+        {
+            GD.Print($"[DeckTracker] Poison detected");
+            CardRegistry.DistributePoisonDamage(target, results.TotalDamage);
+            
+            if (!target.IsAlive) 
+                CardRegistry.ClearStateForTarget(target);
+                
+            return;
+        }
+        
+        if (cardSource == null)
+        {
+            GD.Print($"[DeckTracker] CardSource is null and not poison. Returning...");
+            return;
+        }
         
         // If the card is Sovereign Blade, process the forge distribution!
         GD.Print($"[DeckTracker] Card {cardSource.Id.Entry} did {results.TotalDamage} damage to {target.Name} with target type {cardSource.TargetType}");

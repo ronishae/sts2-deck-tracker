@@ -171,6 +171,7 @@ public static partial class CardRegistry
             ForgeHistory.Clear();
             ConquerorTracker.Clear();
             BladeReplayModifierTracker.Clear();
+            ResetPoisonState();
             
             foreach (var stat in Totals.Values)
             {
@@ -301,24 +302,35 @@ public static partial class CardRegistry
         Publish();
     }
     
-    public static void AddDamage(CardModel card, decimal damage)
+    public static void AddDamage(CardModel card, decimal amount)
     {
-        string uniqueTrackingId = GetTrackingId(card);
-        
+        var uniqueTrackingId = GetTrackingId(card);
+        AddDamageById(uniqueTrackingId, amount);
+    }
+    
+    public static void AddDamageById(string trackingId, decimal amount)
+    {
         lock (SyncRoot)
         {
-            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            if (Totals.TryGetValue(trackingId, out var stat))
             {
-                stat.CombatDamage += damage;
-                stat.RunDamage += damage;
-
-                // NEW: Route the damage in real-time!
-                if (_currentCombatType == "Elite") stat.DamageElite += damage;
-                else if (_currentCombatType == "Boss") stat.DamageBoss += damage;
-                else if (_currentCombatType == "Hallway") stat.DamageHallway += damage;
+                stat.CombatDamage += amount;
+                stat.RunDamage += amount;
+                
+                switch (_currentCombatType)
+                {
+                    case "Elite":
+                        stat.DamageElite += amount;
+                        break;
+                    case "Boss":
+                        stat.DamageBoss += amount;
+                        break;
+                    case "Hallway":
+                        stat.DamageHallway += amount;
+                        break;
+                }
             }
         }
-
         Publish();
     }
     
