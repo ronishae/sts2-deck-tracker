@@ -63,6 +63,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(fumesPrefix), 
             postfix: new HarmonyMethod(fumesPostfix));
         
+        MethodInfo waveOriginal = AccessTools.Method(typeof(CorrosiveWavePower), nameof(CorrosiveWavePower.AfterCardDrawn));
+        MethodInfo wavePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.WaveAfterCardDrawnPrefix));
+        MethodInfo wavePostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.WaveAfterCardDrawnPostfix));
+        
+        _harmony!.Patch(waveOriginal, 
+            prefix: new HarmonyMethod(wavePrefix), 
+            postfix: new HarmonyMethod(wavePostfix));
+        
         PatchHook(nameof(Hook.AfterDiedToDoom), nameof(HookPatches.AfterDiedToDoomPostfix));
         
         MethodInfo doomKillOriginal = AccessTools.Method(typeof(DoomPower), nameof(DoomPower.DoomKill));
@@ -209,6 +217,17 @@ internal static class HookPatches
             case NoxiousFumesPower:
                 if (amount > 0) CardRegistry.AddFumesShares(amount, cardSource);
                 break;
+            case CorrosiveWavePower:
+                if (amount > 0) 
+                {
+                    CardRegistry.AddCorrosiveWaveShares(amount, cardSource);
+                }
+                else if (amount < 0) 
+                {
+                    // The power is removed at end of turn. Just dump the bucket!
+                    CardRegistry.ClearCorrosiveWaveShares();
+                }
+                break;
             case PoisonPower:
                 if (amount > 0)
                 {
@@ -224,6 +243,21 @@ internal static class HookPatches
                                 foreach (var share in CardRegistry.FumesShares)
                                 {
                                     decimal proportion = share.Shares / totalFumes;
+                                    CardRegistry.AddPoisonSharesById(target, amount * proportion, share.TrackingId);
+                                }
+                            }
+                        }
+                    }
+                    else if (CardRegistry.IsCorrosiveWaveExecuting.Value)
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            decimal totalWave = CardRegistry.CorrosiveWaveShares.Sum(x => x.Shares);
+                            if (totalWave > 0)
+                            {
+                                foreach (var share in CardRegistry.CorrosiveWaveShares)
+                                {
+                                    decimal proportion = share.Shares / totalWave;
                                     CardRegistry.AddPoisonSharesById(target, amount * proportion, share.TrackingId);
                                 }
                             }
@@ -331,6 +365,16 @@ internal static class HookPatches
     public static void FumesAfterSideTurnStartPostfix(NoxiousFumesPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitFumesTaskAsync(__result);
+    }
+    
+    public static void WaveAfterCardDrawnPrefix(CorrosiveWavePower __instance)
+    {
+        CardRegistry.IsCorrosiveWaveExecuting.Value = true;
+    }
+
+    public static void WaveAfterCardDrawnPostfix(CorrosiveWavePower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitCorrosiveWaveTaskAsync(__result);
     }
     
     public static void DoomKillPrefix(IReadOnlyList<Creature> creatures)
