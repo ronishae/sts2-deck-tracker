@@ -62,6 +62,13 @@ public static class ModEntry
         _harmony!.Patch(fumesOriginal, 
             prefix: new HarmonyMethod(fumesPrefix), 
             postfix: new HarmonyMethod(fumesPostfix));
+        
+        PatchHook(nameof(Hook.AfterDiedToDoom), nameof(HookPatches.AfterDiedToDoomPostfix));
+        
+        // NEW: DoomKill Prefix (To capture the HP)
+        MethodInfo doomKillOriginal = AccessTools.Method(typeof(DoomPower), nameof(DoomPower.DoomKill));
+        MethodInfo doomKillPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DoomKillPrefix));
+        _harmony!.Patch(doomKillOriginal, prefix: new HarmonyMethod(doomKillPrefix));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -227,6 +234,12 @@ internal static class HookPatches
                     CardRegistry.RemovePoisonSharesProportionally(target, Math.Abs(amount));
                 }
                 break;
+            case DoomPower:
+                if (amount > 0)
+                {
+                    CardRegistry.AddDoomHistory(target, amount, cardSource);
+                }
+                break;
         }
     }
     
@@ -287,6 +300,16 @@ internal static class HookPatches
     public static void FumesAfterSideTurnStartPostfix(NoxiousFumesPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitFumesTaskAsync(__result);
+    }
+    
+    public static void DoomKillPrefix(IReadOnlyList<Creature> creatures)
+    {
+        CardRegistry.CapturePendingDoomHp(creatures);
+    }
+
+    public static void AfterDiedToDoomPostfix(ICombatState combatState, IReadOnlyList<Creature> creatures)
+    {
+        CardRegistry.DistributeDoomDamage(creatures);
     }
     
     // Catches all damage dealt

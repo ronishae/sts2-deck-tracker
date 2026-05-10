@@ -174,6 +174,7 @@ public static partial class CardRegistry
             BladeReplayModifierTracker.Clear();
             ResetPoisonState();
             ResetFumesState();
+            ResetDoomState();
             
             foreach (var stat in Totals.Values)
             {

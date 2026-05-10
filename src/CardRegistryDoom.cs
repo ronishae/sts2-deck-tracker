@@ -1,0 +1,107 @@
+using Godot;
+using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Creatures;
+using System;
+using System.Collections.Generic;
+using MegaCrit.Sts2.Core.Models;
+
+namespace DeckTracker;
+
+public static partial class CardRegistry
+{
+    public class DoomContribution
+    {
+        public string TrackingId { get; set; } = "";
+        public decimal Amount { get; set; }
+    }
+
+    // Tracks exactly who applied doom, in exact order
+    private static readonly Dictionary<Creature, List<DoomContribution>> DoomHistory = new();
+    
+    // Captures HP right before CreatureCmd.Kill happens
+    private static readonly Dictionary<Creature, decimal> PendingDoomHp = new();
+
+    public static void ResetDoomState()
+    {
+        lock (SyncRoot)
+        {
+            DoomHistory.Clear();
+            PendingDoomHp.Clear();
+        }
+    }
+
+    public static void AddDoomHistory(Creature target, decimal amount, CardModel? cardSource)
+    {
+        if (cardSource == null || amount <= 0) return;
+
+        lock (SyncRoot)
+        {
+            if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<DoomContribution>();
+
+            string uniqueId = GetTrackingId(cardSource);
+            DoomHistory[target].Add(new DoomContribution { TrackingId = uniqueId, Amount = amount });
+            GD.Print($"[DeckTracker] Added {amount} Doom to FIFO queue for {uniqueId}.");
+        }
+        Publish();
+    }
+
+    // Runs in the Prefix to grab the HP before it becomes 0
+    public static void CapturePendingDoomHp(IReadOnlyList<Creature> creatures)
+    {
+        lock (SyncRoot)
+        {
+            foreach (var creature in creatures)
+            {
+                if (creature.CurrentHp > 0)
+                {
+                    PendingDoomHp[creature] = creature.CurrentHp;
+                    GD.Print($"[DeckTracker] Captured {creature.CurrentHp} HP for {creature.Name} before Doom execution.");
+                }
+            }
+        }
+    }
+
+    // Runs in the AfterDiedToDoom hook to pay out the damage
+    public static void DistributeDoomDamage(IReadOnlyList<Creature> creatures)
+    {
+        lock (SyncRoot)
+        {
+            foreach (var creature in creatures)
+            {
+                if (!PendingDoomHp.TryGetValue(creature, out decimal hpToDistribute) || hpToDistribute <= 0)
+                {
+                    continue;
+                }
+                PendingDoomHp.Remove(creature);
+                
+                if (!DoomHistory.TryGetValue(creature, out var history) || history.Count == 0)
+                {
+                    continue;
+                }
+
+                decimal remainingHp = hpToDistribute;
+                
+                foreach (var contribution in history)
+                {
+                    if (remainingHp <= 0) break;
+
+                    decimal amountToAttribute = Math.Min(remainingHp, contribution.Amount);
+                    
+                    GD.Print($"[DeckTracker] Attributing {amountToAttribute} Doom damage to {contribution.TrackingId}");
+                    
+                    AddDamageById(contribution.TrackingId, amountToAttribute);
+                    
+                    remainingHp -= amountToAttribute;
+                }
+
+                if (remainingHp > 0)
+                {
+                    GD.Print($"[DeckTracker] Warning: {remainingHp} Doom damage unaccounted for by card history.");
+                }
+
+                DoomHistory.Remove(creature);
+            }
+        }
+        Publish();
+    }
+}
