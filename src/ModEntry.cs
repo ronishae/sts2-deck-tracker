@@ -65,10 +65,17 @@ public static class ModEntry
         
         PatchHook(nameof(Hook.AfterDiedToDoom), nameof(HookPatches.AfterDiedToDoomPostfix));
         
-        // NEW: DoomKill Prefix (To capture the HP)
         MethodInfo doomKillOriginal = AccessTools.Method(typeof(DoomPower), nameof(DoomPower.DoomKill));
         MethodInfo doomKillPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DoomKillPrefix));
         _harmony!.Patch(doomKillOriginal, prefix: new HarmonyMethod(doomKillPrefix));
+        
+        MethodInfo countdownOriginal = AccessTools.Method(typeof(CountdownPower), nameof(CountdownPower.AfterSideTurnStart));
+        MethodInfo countdownPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CountdownAfterSideTurnStartPrefix));
+        MethodInfo countdownPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CountdownAfterSideTurnStartPostfix));
+        
+        _harmony!.Patch(countdownOriginal, 
+            prefix: new HarmonyMethod(countdownPrefix), 
+            postfix: new HarmonyMethod(countdownPostfix));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -234,10 +241,34 @@ internal static class HookPatches
                     CardRegistry.RemovePoisonSharesProportionally(target, Math.Abs(amount));
                 }
                 break;
+            case CountdownPower:
+                if (amount > 0) CardRegistry.AddCountdownHistory(amount, cardSource);
+                break;
             case DoomPower:
                 if (amount > 0)
                 {
-                    CardRegistry.AddDoomHistory(target, amount, cardSource);
+                    // Is Countdown currently applying this Doom?
+                    if (CardRegistry.IsCountdownExecuting.Value)
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            decimal remainingDoom = amount;
+
+                            // Read the Countdown history top-to-bottom and assign the Doom
+                            foreach (var contribution in CardRegistry.CountdownHistory)
+                            {
+                                if (remainingDoom <= 0) break;
+
+                                decimal amountToAttribute = Math.Min(remainingDoom, contribution.Amount);
+                                CardRegistry.AddDoomHistoryById(target, amountToAttribute, contribution.TrackingId);
+
+                                remainingDoom -= amountToAttribute;
+                            }
+                        }
+                    }
+                    else {
+                        CardRegistry.AddDoomHistory(target, amount, cardSource);
+                    }
                 }
                 break;
         }
@@ -310,6 +341,16 @@ internal static class HookPatches
     public static void AfterDiedToDoomPostfix(ICombatState combatState, IReadOnlyList<Creature> creatures)
     {
         CardRegistry.DistributeDoomDamage(creatures);
+    }
+    
+    public static void CountdownAfterSideTurnStartPrefix(CountdownPower __instance)
+    {
+        CardRegistry.IsCountdownExecuting.Value = true;
+    }
+
+    public static void CountdownAfterSideTurnStartPostfix(CountdownPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitCountdownTaskAsync(__result);
     }
     
     // Catches all damage dealt

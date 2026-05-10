@@ -175,6 +175,7 @@ public static partial class CardRegistry
             ResetPoisonState();
             ResetFumesState();
             ResetDoomState();
+            ResetCountdownState();
             
             foreach (var stat in Totals.Values)
             {

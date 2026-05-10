@@ -44,6 +44,20 @@ public static partial class CardRegistry
         }
         Publish();
     }
+    
+    public static void AddDoomHistoryById(Creature target, decimal amount, string uniqueId)
+    {
+        if (amount <= 0 || string.IsNullOrEmpty(uniqueId)) return;
+
+        lock (SyncRoot)
+        {
+            if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<DoomContribution>();
+
+            DoomHistory[target].Add(new DoomContribution { TrackingId = uniqueId, Amount = amount });
+            GD.Print($"[DeckTracker] Chained {amount} Doom to FIFO queue for {uniqueId}.");
+        }
+        Publish();
+    }
 
     // Runs in the Prefix to grab the HP before it becomes 0
     public static void CapturePendingDoomHp(IReadOnlyList<Creature> creatures)
