@@ -54,6 +54,14 @@ public static class ModEntry
         _harmony!.Patch(poisonOriginal, 
             prefix: new HarmonyMethod(poisonPrefix), 
             postfix: new HarmonyMethod(poisonPostfix));
+        
+        MethodInfo fumesOriginal = AccessTools.Method(typeof(NoxiousFumesPower), nameof(NoxiousFumesPower.AfterSideTurnStart));
+        MethodInfo fumesPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FumesAfterSideTurnStartPrefix));
+        MethodInfo fumesPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FumesAfterSideTurnStartPostfix));
+        
+        _harmony!.Patch(fumesOriginal, 
+            prefix: new HarmonyMethod(fumesPrefix), 
+            postfix: new HarmonyMethod(fumesPostfix));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -184,13 +192,34 @@ internal static class HookPatches
             case FurnacePower:
                 CardRegistry.UpdateFurnaceHistory(amount, cardSource);
                 break;
+            case NoxiousFumesPower:
+                if (amount > 0) CardRegistry.AddFumesShares(amount, cardSource);
+                break;
             case PoisonPower:
-                // When poison decrements, we do not need to remove shares.
-                // Only add shares when it is positive.
                 if (amount > 0)
                 {
-                    GD.Print($"[DeckTracker] Adding poison power {amount} from card {cardSource?.Id.Entry}.");
-                    CardRegistry.AddPoisonShares(target, amount, cardSource);
+                    // Is Fumes currently the thing applying this Poison?
+                    if (CardRegistry.IsNoxiousFumesExecuting.Value)
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            decimal totalFumes = CardRegistry.FumesShares.Sum(x => x.Shares);
+                            if (totalFumes > 0)
+                            {
+                                // Distribute the new Poison proportionally based on who applied the Fumes
+                                foreach (var share in CardRegistry.FumesShares)
+                                {
+                                    decimal proportion = share.Shares / totalFumes;
+                                    CardRegistry.AddPoisonSharesById(target, amount * proportion, share.TrackingId);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        GD.Print($"[DeckTracker] Adding poison power {amount} from card {cardSource?.Id.Entry}.");
+                        CardRegistry.AddPoisonShares(target, amount, cardSource);
+                    }
                 }
                 break;
         }
@@ -243,6 +272,16 @@ internal static class HookPatches
         {
             __result = CardRegistry.AwaitPoisonTaskAsync(__result);
         }
+    }
+    
+    public static void FumesAfterSideTurnStartPrefix(NoxiousFumesPower __instance)
+    {
+        CardRegistry.IsNoxiousFumesExecuting.Value = true;
+    }
+
+    public static void FumesAfterSideTurnStartPostfix(NoxiousFumesPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitFumesTaskAsync(__result);
     }
     
     // Catches all damage dealt

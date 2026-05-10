@@ -32,18 +32,17 @@ public static partial class CardRegistry
             PoisonShares.Remove(target);
         }
     }
-
-    // Called by BeforePowerAmountChanged when Poison goes UP
-    public static void AddPoisonShares(Creature target, decimal amount, CardModel? cardSource)
+    
+    public static void AddPoisonSharesById(Creature target, decimal amount, string? uniqueId)
     {
-        GD.Print($"[DeckTracker] AddPoisonShares called with cardSource {cardSource?.Id.Entry}");
-        if (cardSource == null || amount <= 0) return;
+        GD.Print($"[DeckTracker] AddPoisonShares called with cardSource {uniqueId}");
+        if (amount <= 0 || string.IsNullOrEmpty(uniqueId)) return;
         GD.Print($"[DeckTracker] AddPoisonShares null and amount check passed -- poison applied by card!");
+        
         lock (SyncRoot)
         {
             if (!PoisonShares.ContainsKey(target)) PoisonShares[target] = new List<PoisonContribution>();
             
-            string uniqueId = GetTrackingId(cardSource);
             var existing = PoisonShares[target].FirstOrDefault(c => c.TrackingId == uniqueId);
             
             if (existing != null) 
@@ -54,8 +53,14 @@ public static partial class CardRegistry
             {
                 PoisonShares[target].Add(new PoisonContribution { TrackingId = uniqueId, Shares = amount });
             }
+            GD.Print($"[DeckTracker] Chained {amount} Poison shares to Fumes card {uniqueId}.");
         }
-        Publish();
+    }
+    
+    // Called by BeforePowerAmountChanged when Poison goes UP
+    public static void AddPoisonShares(Creature target, decimal amount, CardModel? cardSource)
+    {
+        AddPoisonSharesById(target, amount, GetTrackingId(cardSource));
     }
     
     public static void DistributePoisonDamage(Creature target, decimal totalDamage)

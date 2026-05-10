@@ -18,7 +18,7 @@ public class ForgeInstance
 
 public static partial class CardRegistry
 {
-    private static readonly object SyncRoot = new();
+    public static readonly object SyncRoot = new();
     
     private static Dictionary<string, CardStats> Totals = new();
     private static string _currentRunSeed = "";
@@ -101,8 +101,9 @@ public static partial class CardRegistry
         }
     }
     
-    public static string GetTrackingId(CardModel card)
+    public static string GetTrackingId(CardModel? card)
     {
+        if (card == null) return "";
         CardModel sourceCard = card.DeckVersion ?? card;
 
         string baseId = sourceCard.Id.Entry ?? "Unknown";
@@ -172,6 +173,7 @@ public static partial class CardRegistry
             ConquerorTracker.Clear();
             BladeReplayModifierTracker.Clear();
             ResetPoisonState();
+            ResetFumesState();
             
             foreach (var stat in Totals.Values)
             {
