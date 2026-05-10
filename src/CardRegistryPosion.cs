@@ -63,6 +63,42 @@ public static partial class CardRegistry
         AddPoisonSharesById(target, amount, GetTrackingId(cardSource));
     }
     
+    // Decays the shares so old cards don't leech damage from fresh applications
+    public static void RemovePoisonSharesProportionally(Creature target, decimal decreaseAmount)
+    {
+        if (decreaseAmount <= 0) return;
+
+        lock (SyncRoot)
+        {
+            if (!PoisonShares.TryGetValue(target, out var shares) || shares.Count == 0) return;
+
+            decimal totalShares = shares.Sum(c => c.Shares);
+            if (totalShares <= 0) return;
+
+            // Safety check: If a monster is cleansed of all poison, just wipe the bucket
+            if (decreaseAmount >= totalShares)
+            {
+                GD.Print($"[DeckTracker] Poison cleansed/wiped from {target.Name}. Clearing shares.");
+                PoisonShares.Remove(target);
+                return;
+            }
+
+            // Proportionally reduce each share
+            foreach (var share in shares)
+            {
+                decimal percentage = share.Shares / totalShares;
+                decimal amountToShave = decreaseAmount * percentage;
+                
+                share.Shares -= amountToShave;
+                GD.Print($"[DeckTracker] Decayed {share.TrackingId} shares by {amountToShave:F2}. Remaining: {share.Shares:F2}");
+            }
+
+            // Clean up any microscopic floating-point leftovers
+            shares.RemoveAll(c => c.Shares <= 0.01m);
+            if (shares.Count == 0) PoisonShares.Remove(target);
+        }
+    }
+    
     public static void DistributePoisonDamage(Creature target, decimal totalDamage)
     {
         lock (SyncRoot)

@@ -221,6 +221,11 @@ internal static class HookPatches
                         CardRegistry.AddPoisonShares(target, amount, cardSource);
                     }
                 }
+                else if (amount < 0)
+                {
+                    // Amount is negative (e.g., -1), so we use Math.Abs to pass a positive 1 to our math function.
+                    CardRegistry.RemovePoisonSharesProportionally(target, Math.Abs(amount));
+                }
                 break;
         }
     }
