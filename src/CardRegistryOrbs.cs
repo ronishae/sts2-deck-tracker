@@ -27,17 +27,25 @@ public static partial class CardRegistry
         public decimal Amount { get; set; }
     }
 
+    public class LoopContribution
+    {
+        public string TrackingId { get; set; } = "";
+        public decimal Amount { get; set; }
+    }
+    
     public class OrbExecutionContext
     {
         public OrbModel Orb { get; }
         public bool IsEvoke { get; }
         public decimal ExpectedValue { get; }
+        public string? ForcedActorId { get; }
 
-        public OrbExecutionContext(OrbModel orb, bool isEvoke, decimal expectedValue)
+        public OrbExecutionContext(OrbModel orb, bool isEvoke, decimal expectedValue, string? forcedActorId = null)
         {
             Orb = orb;
             IsEvoke = isEvoke;
             ExpectedValue = expectedValue;
+            ForcedActorId = forcedActorId;
         }
     }
 
@@ -50,6 +58,10 @@ public static partial class CardRegistry
     private static readonly List<FocusContribution> FocusHistory = new();
     
     private static readonly Dictionary<OrbModel, List<OrbContribution>> DarkOrbLedgers = new();
+    
+    public static readonly List<LoopContribution> LoopHistory = new();
+    public static readonly List<string> CurrentTurnLoopQueue = new();
+    public static readonly AsyncLocal<bool> IsLoopExecuting = new();
     
     // Tracks the card currently being played to tag the orb during Channel()
     public static readonly AsyncLocal<CardModel?> CurrentPlayingCard = new();
@@ -67,6 +79,7 @@ public static partial class CardRegistry
             FocusHistory.Clear();
             UnattributedOrbLogs.Clear();
             DarkOrbLedgers.Clear();
+            LoopHistory.Clear();
         }
     }
 
@@ -108,19 +121,22 @@ public static partial class CardRegistry
         }
     }
     
-    public static void RecordDarkOrbWave(OrbModel orb, decimal waveAmount, string? specificActorId = null)
+    public static void AddLoop(decimal amount, CardModel? cardSource)
+    {
+        if (cardSource == null || amount <= 0) return;
+        lock (SyncRoot)
+        {
+            string id = GetTrackingId(cardSource);
+            LoopHistory.Add(new LoopContribution { TrackingId = id, Amount = amount });
+            GD.Print($"[DeckTracker] Added {amount} Loop to ledger for {id}");
+        }
+    }
+    
+    public static void RecordDarkOrbWave(OrbModel orb, decimal waveAmount, string? forcedActorId = null)
     {
         lock (SyncRoot)
         {
             if (!DarkOrbLedgers.TryGetValue(orb, out var ledger)) return;
-
-            // Base Actor is the Channeler, unless overridden by Loop/Darkness in the future
-            string baseId = specificActorId;
-            if (baseId == null && OrbChannelers.TryGetValue(orb, out var channeler))
-            {
-                baseId = channeler;
-            }
-            if (baseId == null) baseId = "External_Relic";
 
             // Snapshot the current focus state
             decimal totalFocus = 0;
@@ -136,10 +152,13 @@ public static partial class CardRegistry
             // 1. Log the Base Actor
             if (pureBase > 0)
             {
-                ledger.Add(new OrbContribution { TrackingId = baseId, Amount = pureBase });
-                GD.Print($"[DeckTracker] Dark Orb Wave: Logged {pureBase:F2} Base to {baseId}");
-            }
+                string? baseId = forcedActorId;
+                if (baseId == null && OrbChannelers.TryGetValue(orb, out var channeler)) baseId = channeler;
+                if (baseId == null) baseId = "External_Relic";
 
+                ledger.Add(new OrbContribution { TrackingId = baseId, Amount = pureBase });
+                GD.Print($"[DeckTracker] Dark Wave: Logged {pureBase:F2} Base to {baseId}");
+            }
             // 2. Log the active Focus Queue (Preserves exact ordering for this wave)
             if (totalFocus > 0)
             {
@@ -214,7 +233,7 @@ public static partial class CardRegistry
         {
             OrbModel orb = context.Orb;
             
-            if (!OrbChannelers.TryGetValue(orb, out string channelerId))
+            if (!OrbChannelers.TryGetValue(orb, out string? channelerId))
             {
                 // --- THE GENERIC MULTI-EVOKE FALLBACK ---
                 // If the orb isn't in the ledger, it has already been evoked once and deregistered.
@@ -283,10 +302,20 @@ public static partial class CardRegistry
             // 1. Payout the Channeler
             if (channelerPayout != 0)
             {
-                AddDamageById(channelerId, channelerPayout);
-                GD.Print($"[DeckTracker] Waterfall Paid {channelerPayout:F2} Base Orb Damage to {channelerId}");
+                if (!context.IsEvoke && context.ForcedActorId != null)
+                {
+                    // A Loop or Darkness card forced this passive trigger!
+                    AddDamageById(context.ForcedActorId, channelerPayout);
+                    GD.Print($"[DeckTracker] Waterfall Paid {channelerPayout:F2} Base to Forcing Actor ({context.ForcedActorId})");
+                }
+                else
+                {
+                    // Standard Natural Passive or Evoke
+                    AddDamageById(channelerId, channelerPayout);
+                    GD.Print($"[DeckTracker] Waterfall Paid {channelerPayout:F2} Base Orb Damage to {channelerId}");
+                }
             }
-
+            
             // 2. Payout the Focus Queue (Positive Damage or Negative Debt)
             if (focusPayoutTotal != 0)
             {
@@ -331,7 +360,7 @@ public static partial class CardRegistry
             {
                 GD.Print($"[DeckTracker] {orb.GetType().Name} Orb Execution Task");
                 // We use the ExpectedValue (PassiveVal) we cached in the Prefix
-                RecordDarkOrbWave(orb, context.ExpectedValue);
+                RecordDarkOrbWave(orb, context.ExpectedValue, context.ForcedActorId);
             }
         }
         finally
@@ -364,5 +393,18 @@ public static partial class CardRegistry
     {
         try { await originalTask; }
         finally { IsExpiringTemporaryFocus.Value = false; }
+    }
+    
+    public static async Task AwaitLoopTaskAsync(Task originalTask)
+    {
+        try 
+        { 
+            await originalTask; 
+        }
+        finally 
+        { 
+            IsLoopExecuting.Value = false; 
+            CurrentTurnLoopQueue.Clear();
+        }
     }
 }

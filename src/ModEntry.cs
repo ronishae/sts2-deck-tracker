@@ -130,6 +130,11 @@ public static class ModEntry
 
         MethodInfo tempEnd = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterTurnEnd));
         _harmony!.Patch(tempEnd, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePostfix))));
+        
+        MethodInfo loopOriginal = AccessTools.Method(typeof(LoopPower), nameof(LoopPower.AfterPlayerTurnStart));
+        _harmony!.Patch(loopOriginal,
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -355,6 +360,9 @@ internal static class HookPatches
             case FocusPower:
                 CardRegistry.LogFocusChange(cardSource, amount);
                 break;
+            case LoopPower:
+                if (amount > 0) CardRegistry.AddLoop(amount, cardSource);
+                break;
         }
     }
     
@@ -457,9 +465,22 @@ internal static class HookPatches
 
     public static void OrbPassivePrefix(OrbModel __instance)
     {
-        GD.Print($"[DeckTracker] Trap SET for {__instance.Id.Entry} Passive");
-        // Cache the PassiveVal before the Glass Orb decrements it!
-        CardRegistry.ExecutingOrb.Value = new CardRegistry.OrbExecutionContext(__instance, false, __instance.PassiveVal);
+        string? forcingActor = null;
+
+        // If Loop is running, pop the next card in line!
+        if (CardRegistry.IsLoopExecuting.Value && CardRegistry.CurrentTurnLoopQueue.Count > 0)
+        {
+            forcingActor = CardRegistry.CurrentTurnLoopQueue[0];
+            CardRegistry.CurrentTurnLoopQueue.RemoveAt(0); // Pop!
+        }
+        // Otherwise, if Darkness is being played, it gets the credit!
+        else if (CardRegistry.CurrentPlayingCard.Value != null)
+        {
+            forcingActor = CardRegistry.GetTrackingId(CardRegistry.CurrentPlayingCard.Value);
+        }
+
+        // Bake the Forcing Actor directly into the execution context so the Waterfall doesn't have to guess!
+        CardRegistry.ExecutingOrb.Value = new CardRegistry.OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
     }
     
     public static void OrbPassivePostfix(OrbModel __instance, ref Task __result)
@@ -498,6 +519,30 @@ internal static class HookPatches
     public static void TempFocusExpirePostfix(TemporaryFocusPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitTempFocusExpireAsync(__result);
+    }
+    
+    public static void LoopPrefix(LoopPower __instance)
+    {
+        CardRegistry.IsLoopExecuting.Value = true;
+        CardRegistry.CurrentTurnLoopQueue.Clear();
+        
+        // Flatten the ledger into an execution queue (FIFO)
+        lock (CardRegistry.SyncRoot)
+        {
+            foreach (var contribution in CardRegistry.LoopHistory)
+            {
+                // If Card A gave 2 Loop, add its ID twice. If Card B gave 1, add it once.
+                for (int i = 0; i < contribution.Amount; i++)
+                {
+                    CardRegistry.CurrentTurnLoopQueue.Add(contribution.TrackingId);
+                }
+            }
+        }
+    }
+
+    public static void LoopPostfix(LoopPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitLoopTaskAsync(__result);
     }
     
     // Catches all damage dealt
