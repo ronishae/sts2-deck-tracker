@@ -6,11 +6,7 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    public class DoomContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Amount { get; set; }
-    }
+    
 
     // Tracks exactly who applied doom, in exact order
     private static readonly Dictionary<Creature, List<DoomContribution>> DoomHistory = new();

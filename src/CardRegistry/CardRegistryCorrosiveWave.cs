@@ -5,11 +5,7 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    public class CorrosiveWaveContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Shares { get; set; }
-    }
+    
 
     public static readonly List<CorrosiveWaveContribution> CorrosiveWaveShares = new();
     public static readonly AsyncLocal<bool> IsCorrosiveWaveExecuting = new();

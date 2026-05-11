@@ -5,11 +5,7 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    public class FumesContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Shares { get; set; }
-    }
+    
 
     // The bucket for Noxious Fumes applications
     public static readonly List<FumesContribution> FumesShares = new();

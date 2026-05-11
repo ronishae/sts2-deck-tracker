@@ -347,7 +347,7 @@ internal static class HookPatches
         }
 
         // Bake the Forcing Actor directly into the execution context so the Waterfall doesn't have to guess!
-        CardRegistry.ExecutingOrb.Value = new CardRegistry.OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
+        CardRegistry.ExecutingOrb.Value = new OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
     }
     
     public static void OrbPassivePostfix(OrbModel __instance, ref Task __result)
@@ -359,7 +359,7 @@ internal static class HookPatches
     {
         GD.Print($"[DeckTracker] Trap SET for {__instance.Id.Entry} Evoke");
         // Cache the EvokeVal before the execution!
-        CardRegistry.ExecutingOrb.Value = new CardRegistry.OrbExecutionContext(__instance, true, __instance.EvokeVal);
+        CardRegistry.ExecutingOrb.Value = new OrbExecutionContext(__instance, true, __instance.EvokeVal);
     }
     
     public static void OrbEvokePostfix(OrbModel __instance, ref Task<IEnumerable<Creature>> __result)

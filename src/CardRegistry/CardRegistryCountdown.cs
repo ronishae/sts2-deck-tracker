@@ -9,12 +9,6 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    public class CountdownContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Amount { get; set; }
-    }
-
     // Tracks the exact order cards added Countdown to the player
     public static readonly List<CountdownContribution> CountdownHistory = new();
     

@@ -8,42 +8,6 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    // --- CONTEXT CLASSES ---
-    public class FocusContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Amount { get; set; }
-        public bool IsTemporary { get; set; } 
-    }
-    
-    public class OrbContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Amount { get; set; }
-    }
-
-    public class LoopContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Amount { get; set; }
-    }
-    
-    public class OrbExecutionContext
-    {
-        public OrbModel Orb { get; }
-        public bool IsEvoke { get; }
-        public decimal ExpectedValue { get; }
-        public string? ForcedActorId { get; }
-
-        public OrbExecutionContext(OrbModel orb, bool isEvoke, decimal expectedValue, string? forcedActorId = null)
-        {
-            Orb = orb;
-            IsEvoke = isEvoke;
-            ExpectedValue = expectedValue;
-            ForcedActorId = forcedActorId;
-        }
-    }
-
     // --- STATE VARIABLES ---
     
     public static readonly AsyncLocal<bool> IsApplyingTemporaryFocus = new();
