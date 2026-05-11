@@ -10,7 +10,7 @@ public sealed class CardStats
     public int FloorRemoved { get; set; } = -1;
     public int FloorLeftDeck { get; set; } = -1;
     public bool IsInDeck { get; set; } = true;
-    public int CopiesInDeck { get; set; } = 0;
+    public int CopiesInDeck { get; set; }
     
     public int TimesDrawn { get; set; }
     public int TimesPlayed { get; set; }

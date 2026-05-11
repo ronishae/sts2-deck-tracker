@@ -1,7 +1,5 @@
 using Godot;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Linq;
 
 namespace DeckTracker;
 
@@ -19,18 +17,18 @@ public static class DeckTrackerOverlay
     // --- Full Screen UI Elements ---
     private static PanelContainer? _fullScreenPanel;
     private static VBoxContainer? _fullScreenRowsContainer;
-    private static HBoxContainer? _fullScreenHeadersContainer; // NEW
-    private static Button? _toggleForgeDmgBtnLarge; // NEW
+    private static HBoxContainer? _fullScreenHeadersContainer;
+    private static Button? _toggleForgeDmgBtnLarge;
     private static Button? _toggleRawForgeBtnLarge;
     
     // --- State & Data ---
-    private static readonly ConcurrentQueue<List<CardStats>> _updateQueue = new();
-    private static bool _isHookedToProcess = false;
+    private static readonly ConcurrentQueue<List<CardStats>> UpdateQueue = new();
+    private static bool _isHookedToProcess;
 
-    private static bool _showRunStats = false; 
-    private static bool _includeConnectedForge = false;
-    private static bool _showRawForge = false;
-    private static List<CardStats> _latestStats = new();
+    private static bool _showRunStats; 
+    private static bool _includeConnectedForge;
+    private static bool _showRawForge;
+    private static List<CardStats> _latestStats = [];
 
     public static void EnsureCreated()
     {
@@ -41,7 +39,7 @@ public static class DeckTrackerOverlay
             if (!_isHookedToProcess)
             {
                 tree.ProcessFrame += OnProcessFrame;
-                CardRegistry.Changed += (stats) => _updateQueue.Enqueue(stats);
+                CardRegistry.Changed += (stats) => UpdateQueue.Enqueue(stats);
                 _isHookedToProcess = true;
             }
 
@@ -191,7 +189,7 @@ public static class DeckTrackerOverlay
     {
         if (!GodotObject.IsInstanceValid(_smallRowsContainer)) return;
         bool hasUpdate = false;
-        while (_updateQueue.TryDequeue(out var stats))
+        while (UpdateQueue.TryDequeue(out var stats))
         {
             _latestStats = stats;
             hasUpdate = true;

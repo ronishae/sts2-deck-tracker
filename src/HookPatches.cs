@@ -18,8 +18,8 @@ internal static class HookPatches
     
     public static void AfterRoomEnteredPostfix(IRunState runState, AbstractRoom room)
     {
-        int currentFloor = ExtractFloorNum(runState);
-        List<string> activeDeckIds = ScanDeckForCards(runState);
+        var currentFloor = ExtractFloorNum(runState);
+        var activeDeckIds = ScanDeckForCards(runState);
         
         // Sync the deck the moment we step into a new room to catch Upgrades/Transforms immediately
         CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
@@ -27,7 +27,7 @@ internal static class HookPatches
     
     public static void BeforeCardRemovedPostfix(IRunState runState, CardModel card)
     {
-        int currentFloor = ExtractFloorNum(runState);
+        var currentFloor = ExtractFloorNum(runState);
         CardRegistry.HandleRemove(card, currentFloor);
     }
     
@@ -236,7 +236,7 @@ internal static class HookPatches
     public static void AfterCardPlayedPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         CardRegistry.CurrentPlayingCard.Value = null;
-        string cardId = cardPlay.Card.Id.Entry ?? "";
+        var cardId = cardPlay.Card.Id.Entry ?? "";
         GD.Print($"[DeckTracker] Card {cardId} played with PlayCount: {cardPlay.PlayCount} and PlayIndex: {cardPlay.PlayIndex}.");
 
         if (cardId.Equals("SEEKING_EDGE")) 

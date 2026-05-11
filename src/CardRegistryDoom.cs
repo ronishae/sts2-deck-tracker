@@ -1,8 +1,5 @@
 using Godot;
-using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
-using System;
-using System.Collections.Generic;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;

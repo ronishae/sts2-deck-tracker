@@ -10,9 +10,9 @@ public static partial class CardRegistry
     private static readonly List<ForgeInstance> ForgeHistory = new();
     private static readonly List<DamageHistoryItem> SovereignBladeDamageHistory = [];
     private static readonly Dictionary<Creature, Queue<string>> ConquerorTracker = [];
-    private static CardModel? _activeSeekingEdgeCard = null;
+    private static CardModel? _activeSeekingEdgeCard;
     private static readonly List<CardModel?> BladeReplayModifierTracker = [];
-    private static List<FurnaceContribution> _furnaceContributions = [];
+    private static readonly List<FurnaceContribution> FurnaceContributions = [];
     
     public static void AddForge(CardModel card, decimal amount)
     {
@@ -45,7 +45,7 @@ public static partial class CardRegistry
             // in the exact order they are played.
             if (amount > 0)
             {
-                _furnaceContributions.Add(new FurnaceContribution {
+                FurnaceContributions.Add(new FurnaceContribution {
                     CardSource = cardSource,
                     PowerAmount = amount
                 });
@@ -65,7 +65,7 @@ public static partial class CardRegistry
         {
             decimal remainingForge = forgeAmount;
 
-            foreach (var contribution in _furnaceContributions)
+            foreach (var contribution in FurnaceContributions)
             {
                 if (remainingForge <= 0) break;
 
@@ -335,6 +335,6 @@ public static partial class CardRegistry
 
 public class FurnaceContribution
 {
-    public CardModel CardSource { get; set; } = null!;
-    public decimal PowerAmount { get; set; }
+    public CardModel CardSource { get; init; } = null!;
+    public decimal PowerAmount { get; init; }
 }
