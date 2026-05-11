@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Rooms;
@@ -84,6 +85,41 @@ public static class ModEntry
         _harmony!.Patch(countdownOriginal, 
             prefix: new HarmonyMethod(countdownPrefix), 
             postfix: new HarmonyMethod(countdownPostfix));
+        
+        // --- LIGHTNING ORB PATTERN ---
+        MethodInfo lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));
+        _harmony!.Patch(lightningPassive, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePostfix))));
+
+        MethodInfo lightningEvoke = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Evoke));
+        _harmony!.Patch(lightningEvoke, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePostfix))));
+
+        // --- GLASS ORB PATTERN ---
+        MethodInfo glassPassive = AccessTools.Method(typeof(GlassOrb), nameof(GlassOrb.Passive));
+        _harmony!.Patch(glassPassive, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePostfix))));
+
+        MethodInfo glassEvoke = AccessTools.Method(typeof(GlassOrb), nameof(GlassOrb.Evoke));
+        _harmony!.Patch(glassEvoke, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePostfix))));
+
+        // Keep the Channel patch exactly as you have it, because OrbCmd is a static class!
+        MethodInfo orbChannel = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Commands.OrbCmd), nameof(MegaCrit.Sts2.Core.Commands.OrbCmd.Channel), new Type[] { typeof(MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext), typeof(OrbModel), typeof(MegaCrit.Sts2.Core.Entities.Players.Player) });
+        _harmony!.Patch(orbChannel, postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbChannelPostfix))));
+        
+        MethodInfo tempBefore = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.BeforeApplied));
+        _harmony!.Patch(tempBefore, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPostfix))));
+
+        MethodInfo tempAfterAmount = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterPowerAmountChanged));
+        _harmony!.Patch(tempAfterAmount, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPostfix))));
+
+        MethodInfo tempEnd = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterTurnEnd));
+        _harmony!.Patch(tempEnd, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)
@@ -180,6 +216,7 @@ internal static class HookPatches
             var cardProp = cardPlay.GetType().GetProperty("Card");
             if (cardProp?.GetValue(cardPlay) is CardModel card)
             {
+                CardRegistry.CurrentPlayingCard.Value = card;
                 CardRegistry.RegisterCard(card);
                 // Do not count Replay in the times play tracker
                 if (cardPlay.PlayIndex == 0)
@@ -305,11 +342,15 @@ internal static class HookPatches
                     }
                 }
                 break;
+            case FocusPower:
+                CardRegistry.LogFocusChange(cardSource, amount);
+                break;
         }
     }
     
     public static void AfterCardPlayedPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
+        CardRegistry.CurrentPlayingCard.Value = null;
         string cardId = cardPlay.Card.Id.Entry ?? "";
         GD.Print($"[DeckTracker] Card {cardId} played with PlayCount: {cardPlay.PlayCount} and PlayIndex: {cardPlay.PlayIndex}.");
 
@@ -397,6 +438,58 @@ internal static class HookPatches
         __result = CardRegistry.AwaitCountdownTaskAsync(__result);
     }
     
+    // --- ORB WRAPPERS ---
+
+    public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, MegaCrit.Sts2.Core.Entities.Players.Player player)
+    {
+        CardRegistry.RegisterChanneledOrb(orb, CardRegistry.CurrentPlayingCard.Value);
+    }
+
+    public static void OrbPassivePrefix(OrbModel __instance)
+    {
+        GD.Print($"[DeckTracker] Trap SET for {__instance.Id.Entry} Passive");
+        // Cache the PassiveVal before the Glass Orb decrements it!
+        CardRegistry.ExecutingOrb.Value = new CardRegistry.OrbExecutionContext(__instance, false, __instance.PassiveVal);
+    }
+    
+    public static void OrbPassivePostfix(OrbModel __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitOrbExecutionTaskAsync(__result, __instance, isEvoke: false);
+    }
+
+    public static void OrbEvokePrefix(OrbModel __instance)
+    {
+        GD.Print($"[DeckTracker] Trap SET for {__instance.Id.Entry} Evoke");
+        // Cache the EvokeVal before the execution!
+        CardRegistry.ExecutingOrb.Value = new CardRegistry.OrbExecutionContext(__instance, true, __instance.EvokeVal);
+    }
+    
+    public static void OrbEvokePostfix(OrbModel __instance, ref Task<IEnumerable<Creature>> __result)
+    {
+        // Smoothly wraps the Task<T> without losing the IEnumerable<Creature> return value!
+        __result = CardRegistry.AwaitOrbEvokeTaskAsync(__result, __instance);
+    }
+    
+    public static void TempFocusApplyPrefix(TemporaryFocusPower __instance)
+    {
+        CardRegistry.IsApplyingTemporaryFocus.Value = true;
+    }
+
+    public static void TempFocusApplyPostfix(TemporaryFocusPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitTempFocusApplyAsync(__result);
+    }
+
+    public static void TempFocusExpirePrefix(TemporaryFocusPower __instance)
+    {
+        CardRegistry.IsExpiringTemporaryFocus.Value = true;
+    }
+
+    public static void TempFocusExpirePostfix(TemporaryFocusPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitTempFocusExpireAsync(__result);
+    }
+    
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
@@ -412,9 +505,18 @@ internal static class HookPatches
             return;
         }
         
+        // ORB INTERCEPT
+        if (CardRegistry.ExecutingOrb.Value != null && results.TotalDamage > 0)
+        {
+            Creature player = combatState.Players[0].Creature;
+            CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb.Value, results.TotalDamage, player);
+            return; 
+        }
+        
         if (cardSource == null)
         {
-            GD.Print($"[DeckTracker] CardSource is null and not poison. Returning...");
+            GD.Print($"[DeckTracker] CardSource is null and not poison or supported orb. Returning..." +
+                     $"with value: {CardRegistry.ExecutingOrb.Value} and damage: {results.TotalDamage}");
             return;
         }
         
