@@ -8,6 +8,7 @@ public static class DeckTrackerOverlay
     private static CanvasLayer? _instance;
     
     // --- Small UI Elements ---
+    private static PanelContainer? _smallPanel;
     private static VBoxContainer? _smallRowsContainer;
     private static Label? _titleLabel;
     private static Button? _toggleBtn;
@@ -29,6 +30,10 @@ public static class DeckTrackerOverlay
     private static bool _includeConnectedForge;
     private static bool _showRawForge;
     private static List<CardStats> _latestStats = [];
+    
+    private static bool _smallUIVisibleInternal = true;
+    private static bool _hWasPressed;
+    private static bool _tabWasPressed;
 
     public static void EnsureCreated()
     {
@@ -54,8 +59,8 @@ public static class DeckTrackerOverlay
 
     private static void BuildSmallOverlay(CanvasLayer layer)
     {
-        PanelContainer bg = new PanelContainer { Position = new Vector2(20, 100), CustomMinimumSize = new Vector2(280, 50) };
-        bg.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0.8f), CornerRadiusTopLeft = 4, CornerRadiusTopRight = 4, CornerRadiusBottomLeft = 4, CornerRadiusBottomRight = 4 });
+        _smallPanel = new PanelContainer { Position = new Vector2(20, 100), CustomMinimumSize = new Vector2(280, 50) };
+        _smallPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0.8f), CornerRadiusTopLeft = 4, CornerRadiusTopRight = 4, CornerRadiusBottomLeft = 4, CornerRadiusBottomRight = 4 });
 
         MarginContainer margin = new MarginContainer();
         margin.AddThemeConstantOverride("margin_left", 10); margin.AddThemeConstantOverride("margin_right", 10);
@@ -95,8 +100,8 @@ public static class DeckTrackerOverlay
         mainCol.AddChild(scroll);
 
         margin.AddChild(mainCol);
-        bg.AddChild(margin);
-        layer.AddChild(bg);
+        _smallPanel.AddChild(margin);
+        layer.AddChild(_smallPanel);
     }
 
     private static void BuildFullScreenOverlay(CanvasLayer layer)
@@ -179,14 +184,54 @@ public static class DeckTrackerOverlay
 
     private static void OnExpandPressed()
     {
-        if (_fullScreenPanel != null) _fullScreenPanel.Visible = true;
-        RedrawUI(_latestStats); 
+        SetFullScreenVisible(true);
     }
 
-    private static void OnClosePressed() { if (_fullScreenPanel != null) _fullScreenPanel.Visible = false; }
+    private static void OnClosePressed()
+    {
+        SetFullScreenVisible(false);
+    }
+
+    private static void SetFullScreenVisible(bool visible)
+    {
+        if (_fullScreenPanel != null)
+        {
+            _fullScreenPanel.Visible = visible;
+            if (visible) RedrawUI(_latestStats);
+            SyncVisibility();
+        }
+    }
+
+    private static void SyncVisibility()
+    {
+        bool fullVisible = _fullScreenPanel?.Visible ?? false;
+        if (GodotObject.IsInstanceValid(_smallPanel))
+        {
+            _smallPanel.Visible = _smallUIVisibleInternal && !fullVisible;
+        }
+    }
+
+    private static void HandleInputs()
+    {
+        bool hPressed = Input.IsKeyPressed(Key.H);
+        if (hPressed && !_hWasPressed)
+        {
+            _smallUIVisibleInternal = !_smallUIVisibleInternal;
+            SyncVisibility();
+        }
+        _hWasPressed = hPressed;
+
+        bool tabPressed = Input.IsKeyPressed(Key.Tab);
+        if (tabPressed && !_tabWasPressed)
+        {
+            SetFullScreenVisible(!(_fullScreenPanel?.Visible ?? false));
+        }
+        _tabWasPressed = tabPressed;
+    }
 
     private static void OnProcessFrame()
     {
+        HandleInputs();
         if (!GodotObject.IsInstanceValid(_smallRowsContainer)) return;
         bool hasUpdate = false;
         while (UpdateQueue.TryDequeue(out var stats))
@@ -287,21 +332,19 @@ public static class DeckTrackerOverlay
                 decimal valBoss = _showRawForge ? stat.RawForgeBoss : (stat.DamageBoss + (_includeConnectedForge ? stat.ConnectedForgeBoss - stat.ReceivedForgeBoss : 0));
                 decimal avgBoss = stat.EncountersSeenBoss > 0 ? valBoss / stat.EncountersSeenBoss : 0;
                 
-                Color dataColor;
-                if (_showRawForge) dataColor = new Color("FACC15"); // Gold
-                else dataColor = (_includeConnectedForge && stat.ConnectedForgeTotal > 0) ? new Color("38BDF8") : new Color("4ADE80");
+                Color statColor = new Color("A0A8B4");
                 
                 Label allDataLabel = new Label { Text = $"{valTotal:0.##} ({avgTotal:0.#}) (#{stat.EncountersSeenTotal})", CustomMinimumSize = new Vector2(220, 0) };
-                allDataLabel.AddThemeColorOverride("font_color", dataColor);
+                allDataLabel.AddThemeColorOverride("font_color", statColor);
 
                 Label hallwayLabel = new Label { Text = $"{valHallway:0.##} ({avgHallway:0.#}) (#{stat.EncountersSeenHallway})", CustomMinimumSize = new Vector2(200, 0) };
-                hallwayLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+                hallwayLabel.AddThemeColorOverride("font_color", statColor);
 
                 Label eliteLabel = new Label { Text = $"{valElite:0.##} ({avgElite:0.#}) (#{stat.EncountersSeenElite})", CustomMinimumSize = new Vector2(200, 0) };
-                eliteLabel.AddThemeColorOverride("font_color", new Color("FACC15")); 
+                eliteLabel.AddThemeColorOverride("font_color", statColor); 
 
                 Label bossLabel = new Label { Text = $"{valBoss:0.##} ({avgBoss:0.#}) (#{stat.EncountersSeenBoss})", CustomMinimumSize = new Vector2(200, 0) };
-                bossLabel.AddThemeColorOverride("font_color", new Color("F87171"));
+                bossLabel.AddThemeColorOverride("font_color", statColor);
                 
                 string addedText = stat.FloorAdded == 0 ? "GEN" : stat.FloorAdded.ToString();
                 Label addedLabel = new Label { Text = addedText, CustomMinimumSize = new Vector2(80, 0) };
