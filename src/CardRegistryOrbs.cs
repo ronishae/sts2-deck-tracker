@@ -147,6 +147,18 @@ public static partial class CardRegistry
             
             if (!OrbChannelers.TryGetValue(orb, out string channelerId))
             {
+                // --- THE GENERIC MULTI-EVOKE FALLBACK ---
+                // If the orb isn't in the ledger, it has already been evoked once and deregistered.
+                // If a card is currently playing, it forced this phantom evoke and gets 100% of the credit!
+                if (context.IsEvoke && CurrentPlayingCard.Value != null)
+                {
+                    string multiEvokerId = GetTrackingId(CurrentPlayingCard.Value);
+                    AddDamageById(multiEvokerId, totalDamage);
+                    GD.Print($"[DeckTracker] Phantom Evoke! Paid {totalDamage:F2} Bonus Evoke Damage to {multiEvokerId}");
+                    return;
+                }
+                
+                // If no card is playing, it's a true unaccounted error.
                 UnattributedOrbLogs.Add($"Unattributed {orb.Id.Entry} Orb Damage ({totalDamage}). Cause: No channeling card found.");
                 return;
             }
