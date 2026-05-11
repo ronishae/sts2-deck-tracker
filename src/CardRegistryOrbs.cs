@@ -20,6 +20,12 @@ public static partial class CardRegistry
         public decimal Amount { get; set; }
         public bool IsTemporary { get; set; } 
     }
+    
+    public class OrbContribution
+    {
+        public string TrackingId { get; set; } = "";
+        public decimal Amount { get; set; }
+    }
 
     public class OrbExecutionContext
     {
@@ -43,6 +49,8 @@ public static partial class CardRegistry
     private static readonly Dictionary<OrbModel, string> OrbChannelers = new();
     private static readonly List<FocusContribution> FocusHistory = new();
     
+    private static readonly Dictionary<OrbModel, List<OrbContribution>> DarkOrbLedgers = new();
+    
     // Tracks the card currently being played to tag the orb during Channel()
     public static readonly AsyncLocal<CardModel?> CurrentPlayingCard = new();
     
@@ -58,6 +66,7 @@ public static partial class CardRegistry
             OrbChannelers.Clear();
             FocusHistory.Clear();
             UnattributedOrbLogs.Clear();
+            DarkOrbLedgers.Clear();
         }
     }
 
@@ -72,6 +81,18 @@ public static partial class CardRegistry
             
             OrbChannelers[orb] = trackingId;
             GD.Print($"[DeckTracker] Channeled {orb.Id.Entry} and attributed to {trackingId}");
+            
+            // TODO: change check to check class
+            if (orb.GetType().Name == "DarkOrb")
+            {
+                DarkOrbLedgers[orb] = new List<OrbContribution>();
+                
+                // Directly add the EvokeVal (which is strictly the base 6 on channel) 
+                // Focus gets 0 credit for the initial channel!
+                DarkOrbLedgers[orb].Add(new OrbContribution { TrackingId = trackingId, Amount = orb.EvokeVal });
+                
+                GD.Print($"[DeckTracker] Dark Orb Channel: Logged {orb.EvokeVal:F2} Initial Base to {trackingId}");
+            }
         }
     }
 
@@ -82,10 +103,58 @@ public static partial class CardRegistry
             if (OrbChannelers.ContainsKey(orb))
             {
                 OrbChannelers.Remove(orb);
+                if (DarkOrbLedgers.ContainsKey(orb)) DarkOrbLedgers.Remove(orb);
             }
         }
     }
+    
+    public static void RecordDarkOrbWave(OrbModel orb, decimal waveAmount, string? specificActorId = null)
+    {
+        lock (SyncRoot)
+        {
+            if (!DarkOrbLedgers.TryGetValue(orb, out var ledger)) return;
 
+            // Base Actor is the Channeler, unless overridden by Loop/Darkness in the future
+            string baseId = specificActorId;
+            if (baseId == null && OrbChannelers.TryGetValue(orb, out var channeler))
+            {
+                baseId = channeler;
+            }
+            if (baseId == null) baseId = "External_Relic";
+
+            // Snapshot the current focus state
+            decimal totalFocus = 0;
+            foreach (var focus in FocusHistory) totalFocus += focus.Amount;
+
+            decimal pureBase = waveAmount - totalFocus;
+            if (totalFocus < 0)
+            {
+                pureBase = waveAmount;
+                totalFocus = 0;
+            }
+
+            // 1. Log the Base Actor
+            if (pureBase > 0)
+            {
+                ledger.Add(new OrbContribution { TrackingId = baseId, Amount = pureBase });
+                GD.Print($"[DeckTracker] Dark Orb Wave: Logged {pureBase:F2} Base to {baseId}");
+            }
+
+            // 2. Log the active Focus Queue (Preserves exact ordering for this wave)
+            if (totalFocus > 0)
+            {
+                foreach (var focus in FocusHistory)
+                {
+                    if (focus.Amount > 0)
+                    {
+                        ledger.Add(new OrbContribution { TrackingId = focus.TrackingId, Amount = focus.Amount });
+                        GD.Print($"[DeckTracker] Dark Orb Wave: Logged {focus.Amount:F2} Focus to {focus.TrackingId}");
+                    }
+                }
+            }
+        }
+    }
+    
     // --- FOCUS LEDGER ---
     
     public static void LogFocusChange(CardModel? cardSource, decimal amount)
@@ -162,7 +231,34 @@ public static partial class CardRegistry
                 UnattributedOrbLogs.Add($"Unattributed {orb.Id.Entry} Orb Damage ({totalDamage}). Cause: No channeling card found.");
                 return;
             }
+            
+            // TODO: change check here
+            if (orb.GetType().Name == "DarkOrb")
+            {
+                if (DarkOrbLedgers.TryGetValue(orb, out var ledger))
+                {
+                    decimal remainingDamageToDistribute = totalDamage;
+                    
+                    // Walk through the concatenated waves in pure FIFO order
+                    foreach (var contribution in ledger)
+                    {
+                        if (remainingDamageToDistribute <= 0) break;
+                        
+                        decimal payout = Math.Min(remainingDamageToDistribute, contribution.Amount);
+                        AddDamageById(contribution.TrackingId, payout);
+                        remainingDamageToDistribute -= payout;
+                        
+                        GD.Print($"[DeckTracker] Dark Orb FIFO: Paid {payout:F2} to {contribution.TrackingId}");
+                    }
 
+                    if (remainingDamageToDistribute > 0)
+                    {
+                        GD.Print($"[DeckTracker] {remainingDamageToDistribute} Dark Orb Damage unaccounted for in ledger.");
+                    }
+                }
+                return; // Dark Orb processed. Exit before running the Lightning/Glass waterfall!
+            }
+            
             decimal currentEngineOrbValue = context.ExpectedValue;
             decimal totalFocus = player.GetPower<FocusPower>()?.Amount ?? 0m;
             decimal pureBase = currentEngineOrbValue - totalFocus;
@@ -227,9 +323,16 @@ public static partial class CardRegistry
     
     public static async Task AwaitOrbExecutionTaskAsync(Task originalTask, OrbModel orb, bool isEvoke)
     {
+        var context = ExecutingOrb.Value;
         try
         {
             await originalTask;
+            if (!isEvoke && orb.GetType().Name == "DarkOrb" && context != null)
+            {
+                GD.Print($"[DeckTracker] {orb.GetType().Name} Orb Execution Task");
+                // We use the ExpectedValue (PassiveVal) we cached in the Prefix
+                RecordDarkOrbWave(orb, context.ExpectedValue);
+            }
         }
         finally
         {

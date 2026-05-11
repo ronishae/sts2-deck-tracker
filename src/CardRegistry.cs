@@ -177,6 +177,7 @@ public static partial class CardRegistry
             ResetDoomState();
             ResetCountdownState();
             ClearCorrosiveWaveShares();
+            ResetOrbState();
             
             foreach (var stat in Totals.Values)
             {

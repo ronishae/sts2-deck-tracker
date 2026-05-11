@@ -107,7 +107,17 @@ public static class ModEntry
         _harmony!.Patch(glassEvoke, 
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePrefix))), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePostfix))));
+        
+        MethodInfo darkPassive = AccessTools.Method(typeof(DarkOrb), nameof(DarkOrb.Passive));
+        _harmony!.Patch(darkPassive, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePostfix))));
 
+        MethodInfo darkEvoke = AccessTools.Method(typeof(DarkOrb), nameof(DarkOrb.Evoke));
+        _harmony!.Patch(darkEvoke, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePostfix))));
+        
         // Keep the Channel patch exactly as you have it, because OrbCmd is a static class!
         MethodInfo orbChannel = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Commands.OrbCmd), nameof(MegaCrit.Sts2.Core.Commands.OrbCmd.Channel), new Type[] { typeof(MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext), typeof(OrbModel), typeof(MegaCrit.Sts2.Core.Entities.Players.Player) });
         _harmony!.Patch(orbChannel, postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbChannelPostfix))));
