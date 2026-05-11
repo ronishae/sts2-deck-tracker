@@ -10,3 +10,4 @@ packages/
 .editorconfig
 *.user
 Directory.Build.props
+GEMINI.md
