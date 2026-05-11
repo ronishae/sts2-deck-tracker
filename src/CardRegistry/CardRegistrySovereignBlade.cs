@@ -21,13 +21,16 @@ public static partial class CardRegistry
         {
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
-                stat.RawForgeTotal += amount;
                 stat.RawForgeCombat += amount;
                 
-                // Route into specific encounter buckets
-                if (_currentCombatType == "Elite") stat.RawForgeElite += amount;
-                else if (_currentCombatType == "Boss") stat.RawForgeBoss += amount;
-                else if (_currentCombatType == "Hallway") stat.RawForgeHallway += amount;
+                var actData = GetActData(stat, _currentAct);
+                if (actData != null)
+                {
+                    // Route into specific encounter buckets
+                    if (_currentCombatType == "Elite") actData.RawForgeElite += amount;
+                    else if (_currentCombatType == "Boss") actData.RawForgeBoss += amount;
+                    else if (_currentCombatType == "Hallway") actData.RawForgeHallway += amount;
+                }
                 
                 ForgeHistory.Add(new ForgeInstance { TrackingId = uniqueTrackingId, Amount = amount });
             }
@@ -163,10 +166,14 @@ public static partial class CardRegistry
                     GD.Print($"[DeckTracker] Attributing damage to {conquerorId}");
                     stat.CombatDamage += damageToAttributeToConqueror;
                     stat.RunDamage += damageToAttributeToConqueror;
-
-                    if (_currentCombatType == "Elite") stat.DamageElite += damageToAttributeToConqueror;
-                    else if (_currentCombatType == "Boss") stat.DamageBoss += damageToAttributeToConqueror;
-                    else if (_currentCombatType == "Hallway") stat.DamageHallway += damageToAttributeToConqueror;
+                    
+                    var actData = GetActData(stat, _currentAct);
+                    if (actData != null)
+                    {
+                        if (_currentCombatType == "Elite") actData.DamageElite += damageToAttributeToConqueror;
+                        else if (_currentCombatType == "Boss") actData.DamageBoss += damageToAttributeToConqueror;
+                        else if (_currentCombatType == "Hallway") actData.DamageHallway += damageToAttributeToConqueror;
+                    }
                 }
                 
                 damageToAttribute -= damageToAttributeToConqueror;
@@ -221,11 +228,14 @@ public static partial class CardRegistry
                     {
                         GD.Print($"adding connected forge to {idToAttribute} with amount {amountToAttribute}");
                         stat.ConnectedForgeCombat += amountToAttribute;
-                        stat.ConnectedForgeTotal += amountToAttribute;
-
-                        if (_currentCombatType == "Elite") stat.ConnectedForgeElite += amountToAttribute;
-                        else if (_currentCombatType == "Boss") stat.ConnectedForgeBoss += amountToAttribute;
-                        else if (_currentCombatType == "Hallway") stat.ConnectedForgeHallway += amountToAttribute;
+                        
+                        var actData = GetActData(stat, _currentAct);
+                        if (actData != null)
+                        {
+                            if (_currentCombatType == "Elite") actData.ConnectedForgeElite += amountToAttribute;
+                            else if (_currentCombatType == "Boss") actData.ConnectedForgeBoss += amountToAttribute;
+                            else if (_currentCombatType == "Hallway") actData.ConnectedForgeHallway += amountToAttribute;
+                        }
                     }
 
                     damageToDistribute -= amountToAttribute;
@@ -251,11 +261,14 @@ public static partial class CardRegistry
                     if (Totals.TryGetValue(bladeTrackingId, out CardStats? bladeStat))
                     {
                         bladeStat.ReceivedForgeCombat += totalDistributed;
-                        bladeStat.ReceivedForgeTotal += totalDistributed;
-
-                        if (_currentCombatType == "Elite") bladeStat.ReceivedForgeElite += totalDistributed;
-                        else if (_currentCombatType == "Boss") bladeStat.ReceivedForgeBoss += totalDistributed;
-                        else if (_currentCombatType == "Hallway") bladeStat.ReceivedForgeHallway += totalDistributed;
+                        
+                        var actData = GetActData(bladeStat, _currentAct);
+                        if (actData != null)
+                        {
+                            if (_currentCombatType == "Elite") actData.ReceivedForgeElite += totalDistributed;
+                            else if (_currentCombatType == "Boss") actData.ReceivedForgeBoss += totalDistributed;
+                            else if (_currentCombatType == "Hallway") actData.ReceivedForgeHallway += totalDistributed;
+                        }
                     }
                 }
             }

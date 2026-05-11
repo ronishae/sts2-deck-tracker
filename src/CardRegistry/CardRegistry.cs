@@ -17,9 +17,22 @@ public static partial class CardRegistry
     private static Dictionary<string, CardStats> Totals = new();
     private static string _currentRunSeed = "";
     
+    private static int _currentAct = 1;
     private static string _currentCombatType = "Unknown";
     
     private static HashSet<string> _incrementedThisCombat = new();
+
+    private static ActData? GetActData(CardStats stat, int actNum)
+    {
+        return actNum switch
+        {
+            1 => stat.Act1,
+            2 => stat.Act2,
+            3 => stat.Act3,
+            4 => stat.Act4,
+            _ => null
+        };
+    }
     
     private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
 
@@ -153,15 +166,16 @@ public static partial class CardRegistry
         Publish(); // Instantly update the UI, even outside of combat!
     }
     
-    public static void StartCombat(string combatType, int currentFloor, List<string> activeDeckIds)
+    public static void StartCombat(string combatType, int currentFloor, int currentAct, List<string> activeDeckIds)
     {
         // Diff the deck immediately before processing encounters
         SyncDeckState(currentFloor, activeDeckIds);
 
         lock (SyncRoot)
         {
+            _currentAct = currentAct;
             _currentCombatType = combatType;
-            GD.Print($"[DeckTracker] Starting combat state: {_currentCombatType}");
+            GD.Print($"[DeckTracker] Starting combat state: {_currentCombatType} (Act: {_currentAct})");
             _incrementedThisCombat.Clear(); 
             ForgeHistory.Clear();
             ConquerorTracker.Clear();
@@ -182,12 +196,13 @@ public static partial class CardRegistry
                 
                 if (!stat.IsInDeck) continue; // Skip cards not in the deck
                 
-                // Increment the "seen" counters right at the start of the fight
-                stat.EncountersSeenTotal++;
-                
-                if (combatType == "Elite") stat.EncountersSeenElite++;
-                else if (combatType == "Boss") stat.EncountersSeenBoss++;
-                else stat.EncountersSeenHallway++;
+                var actData = GetActData(stat, _currentAct);
+                if (actData != null)
+                {
+                    if (combatType == "Elite") actData.EncountersSeenElite++;
+                    else if (combatType == "Boss") actData.EncountersSeenBoss++;
+                    else actData.EncountersSeenHallway++;
+                }
 
                 _incrementedThisCombat.Add(stat.CardId);
             }
@@ -243,19 +258,18 @@ public static partial class CardRegistry
                 CardModel sourceCard = card.DeckVersion ?? card;
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
                 string enchantName = sourceCard.Enchantment?.Id.Entry ?? "";
-                
                 stat = new CardStats 
                 { 
-                    CardId = uniqueTrackingId, 
-                    DisplayName = displayName,
-                    CardType = sourceCard.Type.ToString(),
-                    Enchantment = enchantName,
-                    FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
-                    FloorRemoved = isGenerated ? 0 : -1, 
-                    IsInDeck = !isGenerated, // Normal cards are True, Generated are False
-                    CopiesInDeck = isGenerated ? 0 : 1,
-                    CombatDamage = 0,
-                    RunDamage = 0
+                CardId = uniqueTrackingId, 
+                DisplayName = displayName,
+                CardType = sourceCard.Type.ToString(),
+                Enchantment = enchantName,
+                FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
+                FloorRemoved = isGenerated ? 0 : -1, 
+                IsInDeck = !isGenerated, // Normal cards are True, Generated are False
+                CopiesInDeck = isGenerated ? 0 : 1,
+                CombatDamage = 0,
+                RunDamage = 0
                 };
                 
                 Totals[uniqueTrackingId] = stat;
@@ -267,10 +281,13 @@ public static partial class CardRegistry
                 // This ensures 10 Shivs generated in one fight only increment the denominator by 1.
                 if (_incrementedThisCombat.Add(uniqueTrackingId))
                 {
-                    stat.EncountersSeenTotal++;
-                    if (_currentCombatType == "Elite") stat.EncountersSeenElite++;
-                    else if (_currentCombatType == "Boss") stat.EncountersSeenBoss++;
-                    else stat.EncountersSeenHallway++;
+                    var actData = GetActData(stat, _currentAct);
+                    if (actData != null)
+                    {
+                        if (_currentCombatType == "Elite") actData.EncountersSeenElite++;
+                        else if (_currentCombatType == "Boss") actData.EncountersSeenBoss++;
+                        else actData.EncountersSeenHallway++;
+                    }
                 }
             }
         }
@@ -283,7 +300,8 @@ public static partial class CardRegistry
         {
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
-                stat.TimesDrawn++;
+                var actData = GetActData(stat, _currentAct);
+                if (actData != null) actData.TimesDrawn++;
             }
         }
         Publish(); // Instantly update UI when drawn
@@ -296,7 +314,8 @@ public static partial class CardRegistry
         {
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
-                stat.TimesPlayed++;
+                var actData = GetActData(stat, _currentAct);
+                if (actData != null) actData.TimesPlayed++;
             }
         }
         Publish();
@@ -317,17 +336,21 @@ public static partial class CardRegistry
                 stat.CombatDamage += amount;
                 stat.RunDamage += amount;
                 
-                switch (_currentCombatType)
+                var actData = GetActData(stat, _currentAct);
+                if (actData != null)
                 {
-                    case "Elite":
-                        stat.DamageElite += amount;
-                        break;
-                    case "Boss":
-                        stat.DamageBoss += amount;
-                        break;
-                    case "Hallway":
-                        stat.DamageHallway += amount;
-                        break;
+                    switch (_currentCombatType)
+                    {
+                        case "Elite":
+                            actData.DamageElite += amount;
+                            break;
+                        case "Boss":
+                            actData.DamageBoss += amount;
+                            break;
+                        case "Hallway":
+                            actData.DamageHallway += amount;
+                            break;
+                    }
                 }
             }
         }

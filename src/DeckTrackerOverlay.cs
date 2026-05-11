@@ -21,6 +21,9 @@ public static class DeckTrackerOverlay
     private static HBoxContainer? _fullScreenHeadersContainer;
     private static Button? _toggleForgeDmgBtnLarge;
     private static Button? _toggleRawForgeBtnLarge;
+    private static CheckBox? _act1Check;
+    private static CheckBox? _act2Check;
+    private static CheckBox? _act3Check;
     
     // --- State & Data ---
     private static readonly ConcurrentQueue<List<CardStats>> UpdateQueue = new();
@@ -29,6 +32,11 @@ public static class DeckTrackerOverlay
     private static bool _showRunStats; 
     private static bool _includeConnectedForge;
     private static bool _showRawForge;
+    
+    private static bool _act1Enabled = true;
+    private static bool _act2Enabled = true;
+    private static bool _act3Enabled = true;
+
     private static List<CardStats> _latestStats = [];
     
     private static bool _smallUIVisibleInternal = true;
@@ -124,6 +132,14 @@ public static class DeckTrackerOverlay
         title.AddThemeColorOverride("font_color", new Color("FACC15"));
         title.AddThemeFontSizeOverride("font_size", 24);
 
+        _act1Check = new CheckBox { Text = "Act 1", ButtonPressed = _act1Enabled, FocusMode = Control.FocusModeEnum.None };
+        _act2Check = new CheckBox { Text = "Act 2", ButtonPressed = _act2Enabled, FocusMode = Control.FocusModeEnum.None };
+        _act3Check = new CheckBox { Text = "Act 3", ButtonPressed = _act3Enabled, FocusMode = Control.FocusModeEnum.None };
+        
+        _act1Check.Toggled += (val) => { _act1Enabled = val; RedrawUI(_latestStats); };
+        _act2Check.Toggled += (val) => { _act2Enabled = val; RedrawUI(_latestStats); };
+        _act3Check.Toggled += (val) => { _act3Enabled = val; RedrawUI(_latestStats); };
+
         _toggleRawForgeBtnLarge = new Button { Text = "Show Raw Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleRawForgeBtnLarge.Pressed += ToggleRawForge;
 
@@ -136,6 +152,9 @@ public static class DeckTrackerOverlay
         closeBtn.Pressed += OnClosePressed;
 
         header.AddChild(title);
+        header.AddChild(_act1Check);
+        header.AddChild(_act2Check);
+        header.AddChild(_act3Check);
         header.AddChild(_toggleRawForgeBtnLarge);
         header.AddChild(_toggleForgeDmgBtnLarge);
         header.AddChild(closeBtn);
@@ -250,6 +269,37 @@ public static class DeckTrackerOverlay
         return title;
     }
 
+    private static ActData AggregateActData(CardStats stat)
+    {
+        ActData result = new ActData();
+        if (_act1Enabled) AddAct(result, stat.Act1);
+        if (_act2Enabled) AddAct(result, stat.Act2);
+        if (_act3Enabled) AddAct(result, stat.Act3);
+        // Act 4 is supported in data but hidden in UI for now
+        return result;
+    }
+
+    private static void AddAct(ActData target, ActData source)
+    {
+        target.TimesDrawn += source.TimesDrawn;
+        target.TimesPlayed += source.TimesPlayed;
+        target.DamageHallway += source.DamageHallway;
+        target.DamageElite += source.DamageElite;
+        target.DamageBoss += source.DamageBoss;
+        target.RawForgeHallway += source.RawForgeHallway;
+        target.RawForgeElite += source.RawForgeElite;
+        target.RawForgeBoss += source.RawForgeBoss;
+        target.ConnectedForgeHallway += source.ConnectedForgeHallway;
+        target.ConnectedForgeElite += source.ConnectedForgeElite;
+        target.ConnectedForgeBoss += source.ConnectedForgeBoss;
+        target.ReceivedForgeHallway += source.ReceivedForgeHallway;
+        target.ReceivedForgeElite += source.ReceivedForgeElite;
+        target.ReceivedForgeBoss += source.ReceivedForgeBoss;
+        target.EncountersSeenHallway += source.EncountersSeenHallway;
+        target.EncountersSeenElite += source.EncountersSeenElite;
+        target.EncountersSeenBoss += source.EncountersSeenBoss;
+    }
+
     private static void RedrawUI(List<CardStats> stats)
     {
         // --- 1. Update Small UI ---
@@ -259,29 +309,32 @@ public static class DeckTrackerOverlay
             
             var allCards = stats
                 .Where(s => s.CardType != "Status") 
-                .Where(s => {
-                    decimal effCombat = _showRawForge ? s.RawForgeCombat : s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0);
-                    decimal effRun = _showRawForge ? s.RawForgeTotal : s.RunDamage + (_includeConnectedForge ? s.ConnectedForgeTotal - s.ReceivedForgeTotal : 0);
+                .Select(s => new { Stat = s, Agg = AggregateActData(s) })
+                .Where(x => {
+                    decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0);
+                    decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0);
                     return _showRunStats ? effRun > 0 : effCombat > 0;
                 })
-                .OrderByDescending(s => _showRunStats ? 
-                    (_showRawForge ? s.RawForgeTotal : (s.RunDamage + (_includeConnectedForge ? s.ConnectedForgeTotal - s.ReceivedForgeTotal : 0))) : 
-                    (_showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0))))
-                .ThenBy(s => s.FloorAdded)
+                .OrderByDescending(x => _showRunStats ? 
+                    (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) : 
+                    (_showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0))))
+                .ThenBy(x => x.Stat.FloorAdded)
                 .ToList();
             
-            foreach (var stat in allCards)
+            foreach (var item in allCards)
             {
+                var stat = item.Stat;
+                var agg = item.Agg;
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 Label nameLabel = new Label { Text = GetCardDisplayTitle(stat), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
                 decimal damageToShow = _showRunStats ? 
-                    (stat.RunDamage + (_includeConnectedForge ? stat.ConnectedForgeTotal - stat.ReceivedForgeTotal : 0)) : 
+                    (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0)) : 
                     (stat.CombatDamage + (_includeConnectedForge ? stat.ConnectedForgeCombat - stat.ReceivedForgeCombat : 0));
                 
                 Label damageLabel = new Label { Text = damageToShow.ToString("0.##") };
                 // Turn text blue if forge is making up a portion of the damage!
-                Color dmgColor = (_includeConnectedForge && ((_showRunStats ? stat.ConnectedForgeTotal : stat.ConnectedForgeCombat) > 0)) ? new Color("38BDF8") : new Color("4ADE80");
+                Color dmgColor = (_includeConnectedForge && ((_showRunStats ? agg.ConnectedForgeTotal : stat.ConnectedForgeCombat) > 0)) ? new Color("38BDF8") : new Color("4ADE80");
                 damageLabel.AddThemeColorOverride("font_color", dmgColor); 
 
                 row.AddChild(nameLabel); row.AddChild(damageLabel); _smallRowsContainer.AddChild(row);
@@ -309,41 +362,44 @@ public static class DeckTrackerOverlay
             _fullScreenHeadersContainer.AddChild(new Label { Text = "LEFT", CustomMinimumSize = new Vector2(80, 0) });
 
             var allCards = stats.Where(s => s.CardType != "Status")
-                .OrderByDescending(s => _showRawForge ? s.RawForgeTotal : (s.RunDamage + (_includeConnectedForge ? s.ConnectedForgeTotal - s.ReceivedForgeTotal : 0)))
-                .ThenBy(s => s.FloorAdded).ToList();
+                .Select(s => new { Stat = s, Agg = AggregateActData(s) })
+                .OrderByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)))
+                .ThenBy(x => x.Stat.FloorAdded).ToList();
             
-            foreach (var stat in allCards)
+            foreach (var item in allCards)
             {
+                var stat = item.Stat;
+                var agg = item.Agg;
                 HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 
                 Label nameLabel = new Label { Text = GetCardDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
-                Label playRateLabel = new Label { Text = $"{stat.TimesPlayed}/{stat.TimesDrawn} ({stat.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
+                Label playRateLabel = new Label { Text = $"{agg.TimesPlayed}/{agg.TimesDrawn} ({agg.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
                 playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
                 
-                decimal valTotal = _showRawForge ? stat.RawForgeTotal : (stat.RunDamage + (_includeConnectedForge ? stat.ConnectedForgeTotal - stat.ReceivedForgeTotal : 0));
-                decimal avgTotal = stat.EncountersSeenTotal > 0 ? valTotal / stat.EncountersSeenTotal : 0;
+                decimal valTotal = _showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0));
+                decimal avgTotal = agg.EncountersSeenTotal > 0 ? valTotal / agg.EncountersSeenTotal : 0;
                 
-                decimal valHallway = _showRawForge ? stat.RawForgeHallway : (stat.DamageHallway + (_includeConnectedForge ? stat.ConnectedForgeHallway - stat.ReceivedForgeHallway : 0));
-                decimal avgHallway = stat.EncountersSeenHallway > 0 ? valHallway / stat.EncountersSeenHallway : 0;
+                decimal valHallway = _showRawForge ? agg.RawForgeHallway : (agg.DamageHallway + (_includeConnectedForge ? agg.ConnectedForgeHallway - agg.ReceivedForgeHallway : 0));
+                decimal avgHallway = agg.EncountersSeenHallway > 0 ? valHallway / agg.EncountersSeenHallway : 0;
 
-                decimal valElite = _showRawForge ? stat.RawForgeElite : (stat.DamageElite + (_includeConnectedForge ? stat.ConnectedForgeElite - stat.ReceivedForgeElite : 0));
-                decimal avgElite = stat.EncountersSeenElite > 0 ? valElite / stat.EncountersSeenElite : 0;
+                decimal valElite = _showRawForge ? agg.RawForgeElite : (agg.DamageElite + (_includeConnectedForge ? agg.ConnectedForgeElite - agg.ReceivedForgeElite : 0));
+                decimal avgElite = agg.EncountersSeenElite > 0 ? valElite / agg.EncountersSeenElite : 0;
 
-                decimal valBoss = _showRawForge ? stat.RawForgeBoss : (stat.DamageBoss + (_includeConnectedForge ? stat.ConnectedForgeBoss - stat.ReceivedForgeBoss : 0));
-                decimal avgBoss = stat.EncountersSeenBoss > 0 ? valBoss / stat.EncountersSeenBoss : 0;
+                decimal valBoss = _showRawForge ? agg.RawForgeBoss : (agg.DamageBoss + (_includeConnectedForge ? agg.ConnectedForgeBoss - agg.ReceivedForgeBoss : 0));
+                decimal avgBoss = agg.EncountersSeenBoss > 0 ? valBoss / agg.EncountersSeenBoss : 0;
                 
                 Color statColor = new Color("A0A8B4");
                 
-                Label allDataLabel = new Label { Text = $"{valTotal:0.##} ({avgTotal:0.#}) (#{stat.EncountersSeenTotal})", CustomMinimumSize = new Vector2(220, 0) };
+                Label allDataLabel = new Label { Text = $"{valTotal:0.##} ({avgTotal:0.#}) (#{agg.EncountersSeenTotal})", CustomMinimumSize = new Vector2(220, 0) };
                 allDataLabel.AddThemeColorOverride("font_color", statColor);
 
-                Label hallwayLabel = new Label { Text = $"{valHallway:0.##} ({avgHallway:0.#}) (#{stat.EncountersSeenHallway})", CustomMinimumSize = new Vector2(200, 0) };
+                Label hallwayLabel = new Label { Text = $"{valHallway:0.##} ({avgHallway:0.#}) (#{agg.EncountersSeenHallway})", CustomMinimumSize = new Vector2(200, 0) };
                 hallwayLabel.AddThemeColorOverride("font_color", statColor);
 
-                Label eliteLabel = new Label { Text = $"{valElite:0.##} ({avgElite:0.#}) (#{stat.EncountersSeenElite})", CustomMinimumSize = new Vector2(200, 0) };
+                Label eliteLabel = new Label { Text = $"{valElite:0.##} ({avgElite:0.#}) (#{agg.EncountersSeenElite})", CustomMinimumSize = new Vector2(200, 0) };
                 eliteLabel.AddThemeColorOverride("font_color", statColor); 
 
-                Label bossLabel = new Label { Text = $"{valBoss:0.##} ({avgBoss:0.#}) (#{stat.EncountersSeenBoss})", CustomMinimumSize = new Vector2(200, 0) };
+                Label bossLabel = new Label { Text = $"{valBoss:0.##} ({avgBoss:0.#}) (#{agg.EncountersSeenBoss})", CustomMinimumSize = new Vector2(200, 0) };
                 bossLabel.AddThemeColorOverride("font_color", statColor);
                 
                 string addedText = stat.FloorAdded == 0 ? "GEN" : stat.FloorAdded.ToString();

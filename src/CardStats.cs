@@ -12,61 +12,40 @@ public sealed class CardStats
     public bool IsInDeck { get; set; } = true;
     public int CopiesInDeck { get; set; }
     
-    public int TimesDrawn { get; set; }
-    public int TimesPlayed { get; set; }
-    public decimal PlayRate => TimesDrawn > 0 ? (decimal)TimesPlayed / TimesDrawn : 0;
+    public ActData Act1 { get; set; } = new();
+    public ActData Act2 { get; set; } = new();
+    public ActData Act3 { get; set; } = new();
+    public ActData Act4 { get; set; } = new();
     
+    // Combat-only metrics (cleared every fight)
     public decimal CombatDamage { get; set; }
     public decimal RunDamage { get; set; }
-    public decimal DamageHallway { get; set; }
-    public decimal DamageElite { get; set; }
-    public decimal DamageBoss { get; set; }
-    
-    public decimal RawForgeTotal { get; set; }
     public decimal RawForgeCombat { get; set; }
-    public decimal RawForgeHallway { get; set; }
-    public decimal RawForgeElite { get; set; }
-    public decimal RawForgeBoss { get; set; }
     public decimal ConnectedForgeCombat { get; set; }
-    public decimal ConnectedForgeTotal { get; set; }
-    public decimal ConnectedForgeHallway { get; set; }
-    public decimal ConnectedForgeElite { get; set; }
-    public decimal ConnectedForgeBoss { get; set; }
-    
     public decimal ReceivedForgeCombat { get; set; }
-    public decimal ReceivedForgeTotal { get; set; }
-    public decimal ReceivedForgeHallway { get; set; }
-    public decimal ReceivedForgeElite { get; set; }
-    public decimal ReceivedForgeBoss { get; set; }
-
-    public int EncountersSeenTotal { get; set; }
-    public int EncountersSeenHallway { get; set; }
-    public int EncountersSeenElite { get; set; }
-    public int EncountersSeenBoss { get; set; }
-
-    public decimal AvgTotal => EncountersSeenTotal > 0 ? RunDamage / EncountersSeenTotal : 0;
-    public decimal AvgHallway => EncountersSeenHallway > 0 ? DamageHallway / EncountersSeenHallway : 0;
-    public decimal AvgElite => EncountersSeenElite > 0 ? DamageElite / EncountersSeenElite : 0;
-    public decimal AvgBoss => EncountersSeenBoss > 0 ? DamageBoss / EncountersSeenBoss : 0;
 
     public CardStats Clone()
     {
         return new CardStats
         {
-            CardId = CardId, DisplayName = DisplayName, CardType = CardType, FloorAdded = FloorAdded, 
+            CardId = CardId, 
+            DisplayName = DisplayName, 
+            CardType = CardType, 
             Enchantment = Enchantment,
-            FloorRemoved = FloorRemoved, FloorLeftDeck = FloorLeftDeck, IsInDeck = IsInDeck, CopiesInDeck = CopiesInDeck,
-            TimesDrawn = TimesDrawn, TimesPlayed = TimesPlayed,
-            CombatDamage = CombatDamage, RunDamage = RunDamage,
-            DamageHallway = DamageHallway, DamageElite = DamageElite, DamageBoss = DamageBoss,
-            RawForgeTotal = RawForgeTotal, RawForgeCombat = RawForgeCombat, RawForgeHallway = RawForgeHallway,
-            RawForgeElite = RawForgeElite, RawForgeBoss = RawForgeBoss,
-            ConnectedForgeCombat = ConnectedForgeCombat, ConnectedForgeTotal = ConnectedForgeTotal,
-            ConnectedForgeHallway = ConnectedForgeHallway, ConnectedForgeElite = ConnectedForgeElite, ConnectedForgeBoss = ConnectedForgeBoss,
-            ReceivedForgeCombat = ReceivedForgeCombat, ReceivedForgeTotal = ReceivedForgeTotal,
-            ReceivedForgeHallway = ReceivedForgeHallway, ReceivedForgeElite = ReceivedForgeElite, ReceivedForgeBoss = ReceivedForgeBoss,
-            EncountersSeenTotal = EncountersSeenTotal, EncountersSeenHallway = EncountersSeenHallway,
-            EncountersSeenElite = EncountersSeenElite, EncountersSeenBoss = EncountersSeenBoss
+            FloorAdded = FloorAdded, 
+            FloorRemoved = FloorRemoved, 
+            FloorLeftDeck = FloorLeftDeck, 
+            IsInDeck = IsInDeck, 
+            CopiesInDeck = CopiesInDeck,
+            Act1 = Act1.Clone(),
+            Act2 = Act2.Clone(),
+            Act3 = Act3.Clone(),
+            Act4 = Act4.Clone(),
+            CombatDamage = CombatDamage,
+            RunDamage = RunDamage,
+            RawForgeCombat = RawForgeCombat,
+            ConnectedForgeCombat = ConnectedForgeCombat,
+            ReceivedForgeCombat = ReceivedForgeCombat
         };
     }
 }

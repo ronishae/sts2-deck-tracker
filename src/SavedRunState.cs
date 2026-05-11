@@ -11,4 +11,5 @@ public sealed class SavedRunState
 
 
 [System.Text.Json.Serialization.JsonSerializable(typeof(SavedRunState))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(ActData))]
 internal partial class SavedStateCtx : System.Text.Json.Serialization.JsonSerializerContext { }

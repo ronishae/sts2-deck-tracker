@@ -53,17 +53,18 @@ internal static class HookPatches
     
     public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
     {
-        string seed = ExtractRunSeed(runState);
+        var seed = ExtractRunSeed(runState);
         CardRegistry.SyncRun(seed);
     
-        int currentFloor = ExtractFloorNum(runState);
-        string combatType = GetCombatType(runState);
+        var currentFloor = ExtractFloorNum(runState);
+        var currentAct = ExtractActNum(runState);
+        var combatType = GetCombatType(runState);
         
         // 1. Scan deck first to register cards and get the active list
-        List<string> activeDeckIds = ScanDeckForCards(runState);
+        var activeDeckIds = ScanDeckForCards(runState);
         
         // 2. Start combat and pass the active list so it can diff against the tracker history
-        CardRegistry.StartCombat(combatType, currentFloor, activeDeckIds);
+        CardRegistry.StartCombat(combatType, currentFloor, currentAct, activeDeckIds);
         
         CardRegistry.ForcePublish();
 
@@ -461,6 +462,13 @@ internal static class HookPatches
     {
         if (runState == null) return 1;
         return runState.TotalFloor;
+    }
+
+    private static int ExtractActNum(IRunState? runState)
+    {
+        if (runState == null) return 1;
+        // CurrentActIndex is 0-based (Act 1 = 0), so we add 1 to match our 1-based registry.
+        return runState.CurrentActIndex + 1;
     }
     
     private static string GetCombatType(IRunState? runState)
