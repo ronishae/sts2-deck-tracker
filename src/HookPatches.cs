@@ -152,6 +152,9 @@ internal static class HookPatches
             case SerpentFormPower:
                 if (amount > 0) CardRegistry.LogSerpentFormApply(cardSource, (int)amount);
                 break;
+            case BlackHolePower:
+                if (amount > 0) CardRegistry.LogBlackHoleApply(cardSource, (int)amount);
+                break;
             case CorrosiveWavePower:
                 if (amount > 0) 
                 {
@@ -360,6 +363,26 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitSerpentFormTaskAsync(__result);
     }
+
+    public static void BlackHoleAfterCardPlayedPrefix(BlackHolePower __instance)
+    {
+        CardRegistry.IsBlackHoleExecuting.Value = true;
+    }
+
+    public static void BlackHoleAfterCardPlayedPostfix(BlackHolePower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitBlackHoleTaskAsync(__result);
+    }
+
+    public static void BlackHoleAfterStarsGainedPrefix(BlackHolePower __instance)
+    {
+        CardRegistry.IsBlackHoleExecuting.Value = true;
+    }
+
+    public static void BlackHoleAfterStarsGainedPostfix(BlackHolePower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitBlackHoleTaskAsync(__result);
+    }
     
     // --- ORB WRAPPERS ---
 
@@ -482,6 +505,12 @@ internal static class HookPatches
         if (CardRegistry.IsSerpentFormExecuting.Value && results.TotalDamage > 0)
         {
             CardRegistry.DistributeSerpentFormDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsBlackHoleExecuting.Value && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeBlackHoleDamage(results.TotalDamage);
             return;
         }
 

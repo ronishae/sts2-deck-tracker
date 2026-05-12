@@ -90,6 +90,17 @@ public static class ModEntry
         _harmony.Patch(serpentOriginal, 
             prefix: new HarmonyMethod(serpentPrefix), 
             postfix: new HarmonyMethod(serpentPostfix));
+
+        var blackHolePlayedOriginal = AccessTools.Method(typeof(BlackHolePower), nameof(BlackHolePower.AfterCardPlayed));
+        var blackHoleStarsOriginal = AccessTools.Method(typeof(BlackHolePower), nameof(BlackHolePower.AfterStarsGained));
+        
+        _harmony.Patch(blackHolePlayedOriginal, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterCardPlayedPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterCardPlayedPostfix))));
+
+        _harmony.Patch(blackHoleStarsOriginal, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterStarsGainedPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterStarsGainedPostfix))));
         
         // --- LIGHTNING ORB PATTERN ---
         var lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));
