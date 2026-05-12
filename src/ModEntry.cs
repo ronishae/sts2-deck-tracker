@@ -101,6 +101,14 @@ public static class ModEntry
         _harmony.Patch(blackHoleStarsOriginal, 
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterStarsGainedPrefix))), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterStarsGainedPostfix))));
+
+        var sleightOriginal = AccessTools.Method(typeof(SleightOfFleshPower), nameof(SleightOfFleshPower.AfterPowerAmountChanged));
+        var sleightPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SleightOfFleshAfterPowerAmountChangedPrefix));
+        var sleightPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SleightOfFleshAfterPowerAmountChangedPostfix));
+        
+        _harmony.Patch(sleightOriginal, 
+            prefix: new HarmonyMethod(sleightPrefix), 
+            postfix: new HarmonyMethod(sleightPostfix));
         
         // --- LIGHTNING ORB PATTERN ---
         var lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));

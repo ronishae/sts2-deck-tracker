@@ -155,6 +155,9 @@ internal static class HookPatches
             case BlackHolePower:
                 if (amount > 0) CardRegistry.LogBlackHoleApply(cardSource, (int)amount);
                 break;
+            case SleightOfFleshPower:
+                if (amount > 0) CardRegistry.LogSleightOfFleshApply(cardSource, (int)amount);
+                break;
             case CorrosiveWavePower:
                 if (amount > 0) 
                 {
@@ -383,6 +386,16 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitBlackHoleTaskAsync(__result);
     }
+
+    public static void SleightOfFleshAfterPowerAmountChangedPrefix(SleightOfFleshPower __instance)
+    {
+        CardRegistry.IsSleightOfFleshExecuting.Value = true;
+    }
+
+    public static void SleightOfFleshAfterPowerAmountChangedPostfix(SleightOfFleshPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitSleightOfFleshTaskAsync(__result);
+    }
     
     // --- ORB WRAPPERS ---
 
@@ -511,6 +524,12 @@ internal static class HookPatches
         if (CardRegistry.IsBlackHoleExecuting.Value && results.TotalDamage > 0)
         {
             CardRegistry.DistributeBlackHoleDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsSleightOfFleshExecuting.Value && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeSleightOfFleshDamage(results.TotalDamage);
             return;
         }
 
