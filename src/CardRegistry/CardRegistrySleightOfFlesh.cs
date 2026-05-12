@@ -22,7 +22,7 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
+            var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
             SleightOfFleshLedger.Add(new SleightOfFleshContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogSleightOfFleshApply. Card: {trackingId}, Amount: {amount}");
         }
@@ -34,14 +34,14 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            decimal remainingDamage = totalDamage;
+            var remainingDamage = totalDamage;
             GD.Print($"[DeckTracker] DistributeSleightOfFleshDamage. Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (int i = 0; i < SleightOfFleshLedger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < SleightOfFleshLedger.Count && remainingDamage > 0; i++)
             {
                 var contribution = SleightOfFleshLedger[i];
-                decimal share = Math.Min(remainingDamage, (decimal)contribution.Amount);
+                var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
                 {

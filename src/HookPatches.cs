@@ -161,6 +161,9 @@ internal static class HookPatches
             case HauntPower:
                 if (amount > 0) CardRegistry.LogHauntApply(cardSource, (int)amount);
                 break;
+            case JuggernautPower:
+                if (amount > 0) CardRegistry.LogJuggernautApply(cardSource, (int)amount);
+                break;
             case CorrosiveWavePower:
                 if (amount > 0) 
                 {
@@ -409,6 +412,16 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitHauntTaskAsync(__result);
     }
+
+    public static void JuggernautAfterBlockGainedPrefix(JuggernautPower __instance)
+    {
+        CardRegistry.IsJuggernautExecuting.Value = true;
+    }
+
+    public static void JuggernautAfterBlockGainedPostfix(JuggernautPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitJuggernautTaskAsync(__result);
+    }
     
     // --- ORB WRAPPERS ---
 
@@ -549,6 +562,12 @@ internal static class HookPatches
         if (CardRegistry.IsHauntExecuting.Value && results.TotalDamage > 0)
         {
             CardRegistry.DistributeHauntDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsJuggernautExecuting.Value && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeJuggernautDamage(results.TotalDamage);
             return;
         }
 

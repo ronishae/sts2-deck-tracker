@@ -34,7 +34,7 @@ public static partial class CardRegistry
                 StrangleLedgers[target] = ledger;
             }
 
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
+            var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
             ledger.Add(new StrangleContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogStrangleApply. Target: {target.Name}, Card: {trackingId}, Amount: {amount}");
         }
@@ -63,17 +63,17 @@ public static partial class CardRegistry
                 return;
             }
 
-            decimal remainingDamage = totalDamage;
+            var remainingDamage = totalDamage;
             GD.Print($"[DeckTracker] DistributeStrangleDamage. Target: {target.Name}, Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (int i = 0; i < ledger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < ledger.Count && remainingDamage > 0; i++)
             {
                 var contribution = ledger[i];
                 // In Strangle, every card play deals damage equal to the FULL stack.
                 // However, the user wants FIFO attribution for overkill.
                 // This means we attribute up to the contribution amount of each card.
-                decimal share = Math.Min(remainingDamage, (decimal)contribution.Amount);
+                var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
                 {

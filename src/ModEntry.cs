@@ -117,6 +117,14 @@ public static class ModEntry
         _harmony.Patch(hauntOriginal, 
             prefix: new HarmonyMethod(hauntPrefix), 
             postfix: new HarmonyMethod(hauntPostfix));
+
+        var juggernautOriginal = AccessTools.Method(typeof(JuggernautPower), nameof(JuggernautPower.AfterBlockGained));
+        var juggernautPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.JuggernautAfterBlockGainedPrefix));
+        var juggernautPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.JuggernautAfterBlockGainedPostfix));
+        
+        _harmony.Patch(juggernautOriginal, 
+            prefix: new HarmonyMethod(juggernautPrefix), 
+            postfix: new HarmonyMethod(juggernautPostfix));
         
         // --- LIGHTNING ORB PATTERN ---
         var lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));

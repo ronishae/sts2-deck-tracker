@@ -28,7 +28,7 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
+            var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
             SerpentFormLedger.Add(new SerpentFormContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogSerpentFormApply. Card: {trackingId}, Amount: {amount}");
         }
@@ -40,14 +40,14 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            decimal remainingDamage = totalDamage;
+            var remainingDamage = totalDamage;
             GD.Print($"[DeckTracker] DistributeSerpentFormDamage. Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (int i = 0; i < SerpentFormLedger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < SerpentFormLedger.Count && remainingDamage > 0; i++)
             {
                 var contribution = SerpentFormLedger[i];
-                decimal share = Math.Min(remainingDamage, (decimal)contribution.Amount);
+                var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
                 {

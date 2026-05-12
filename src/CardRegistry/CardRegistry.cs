@@ -240,6 +240,7 @@ public static partial class CardRegistry
             ResetBlackHoleState();
             ResetSleightOfFleshState();
             ResetHauntState();
+            ResetJuggernautState();
             ResetFumesState();
             ResetDoomState();
             ResetCountdownState();
