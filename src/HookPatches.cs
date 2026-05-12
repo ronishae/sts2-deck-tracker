@@ -145,6 +145,10 @@ internal static class HookPatches
             case NoxiousFumesPower:
                 if (amount > 0) CardRegistry.AddFumesShares(amount, cardSource);
                 break;
+            case StranglePower:
+                if (amount > 0) CardRegistry.LogStrangleApply(target, cardSource, (int)amount);
+                else if (amount < 0) CardRegistry.ClearStrangle(target);
+                break;
             case CorrosiveWavePower:
                 if (amount > 0) 
                 {
@@ -333,6 +337,16 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitCountdownTaskAsync(__result);
     }
+
+    public static void StrangleAfterCardPlayedPrefix(StranglePower __instance)
+    {
+        CardRegistry.IsStrangleExecuting.Value = true;
+    }
+
+    public static void StrangleAfterCardPlayedPostfix(StranglePower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitStrangleTaskAsync(__result, __instance.Owner, (decimal)__instance.Amount);
+    }
     
     // --- ORB WRAPPERS ---
 
@@ -444,6 +458,12 @@ internal static class HookPatches
             Creature player = combatState.Players[0].Creature;
             CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb.Value, results.TotalDamage, player);
             return; 
+        }
+
+        if (CardRegistry.IsStrangleExecuting.Value && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeStrangleDamage(target, results.TotalDamage);
+            return;
         }
         
         if (cardSource == null)

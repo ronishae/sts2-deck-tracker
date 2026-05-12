@@ -44,7 +44,16 @@ public static partial class CardRegistry
     }
 
     public static bool IsCardPlayActive() => _currentPlayingCard.Value != null;
-
+    
+    public static void ClearStateForTarget(Creature target)
+    {
+        lock (SyncRoot)
+        {
+            PoisonShares.Remove(target);
+            ClearStrangle(target);
+        }
+    }
+    
     public static void DeferDraw(CardModel card)
     {
         _deferredDraws.Value?.Add(card);
@@ -226,6 +235,7 @@ public static partial class CardRegistry
             ConquerorTracker.Clear();
             BladeReplayModifierTracker.Clear();
             ResetPoisonState();
+            ResetStrangleState();
             ResetFumesState();
             ResetDoomState();
             ResetCountdownState();

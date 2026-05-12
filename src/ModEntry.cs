@@ -74,6 +74,14 @@ public static class ModEntry
         _harmony.Patch(countdownOriginal, 
             prefix: new HarmonyMethod(countdownPrefix), 
             postfix: new HarmonyMethod(countdownPostfix));
+
+        var strangleOriginal = AccessTools.Method(typeof(StranglePower), nameof(StranglePower.AfterCardPlayed));
+        var stranglePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StrangleAfterCardPlayedPrefix));
+        var stranglePostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StrangleAfterCardPlayedPostfix));
+        
+        _harmony.Patch(strangleOriginal, 
+            prefix: new HarmonyMethod(stranglePrefix), 
+            postfix: new HarmonyMethod(stranglePostfix));
         
         // --- LIGHTNING ORB PATTERN ---
         var lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));

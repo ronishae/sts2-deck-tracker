@@ -24,14 +24,6 @@ public static partial class CardRegistry
             PoisonShares.Clear();
         }
     }
-
-    public static void ClearStateForTarget(Creature target)
-    {
-        lock (SyncRoot)
-        {
-            PoisonShares.Remove(target);
-        }
-    }
     
     public static void AddPoisonSharesById(Creature target, decimal amount, string? uniqueId)
     {
