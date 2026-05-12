@@ -57,7 +57,7 @@ public static partial class CardRegistry
             else
             {
                 GD.Print($"[DeckTracker] Starting fresh tracker for new run seed: {runSeed}");
-                Totals.Clear();
+                ResetRun();
             }
         }
         Publish();
@@ -127,6 +127,12 @@ public static partial class CardRegistry
         {
             Totals.Clear();
             ForgeHistory.Clear();
+            _incrementedThisCombat.Clear();
+            _currentAct = 1;
+            _currentCombatType = "Unknown";
+            
+            // Note: Combat-specific states (Poison, Orbs, etc) are already 
+            // reset at StartCombat, so we don't need to duplicate that here.
         }
         Publish();
     }
