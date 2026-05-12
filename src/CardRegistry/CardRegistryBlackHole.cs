@@ -1,18 +1,28 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Godot;
+using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<BlackHoleContribution> BlackHoleLedger = new();
-    public static readonly AsyncLocal<bool> IsBlackHoleExecuting = new();
+    private static readonly List<BlackHoleContribution> _blackHoleLedger = new();
+    private static readonly AsyncLocal<bool> _isBlackHoleExecuting = new();
+
+    public static bool IsBlackHoleExecuting => _isBlackHoleExecuting.Value;
+
+    public static void StartBlackHoleExecution() => _isBlackHoleExecuting.Value = true;
 
     public static void ResetBlackHoleState()
     {
         lock (SyncRoot)
         {
-            BlackHoleLedger.Clear();
+            _blackHoleLedger.Clear();
         }
     }
 
@@ -23,7 +33,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
-            BlackHoleLedger.Add(new BlackHoleContribution { TrackingId = trackingId, Amount = amount });
+            _blackHoleLedger.Add(new BlackHoleContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogBlackHoleApply. Card: {trackingId}, Amount: {amount}");
         }
     }
@@ -38,9 +48,9 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] DistributeBlackHoleDamage. Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (var i = 0; i < BlackHoleLedger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < _blackHoleLedger.Count && remainingDamage > 0; i++)
             {
-                var contribution = BlackHoleLedger[i];
+                var contribution = _blackHoleLedger[i];
                 var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
@@ -62,12 +72,12 @@ public static partial class CardRegistry
     {
         try
         {
-            IsBlackHoleExecuting.Value = true;
+            StartBlackHoleExecution();
             await originalTask;
         }
         finally
         {
-            IsBlackHoleExecuting.Value = false;
+            _isBlackHoleExecuting.Value = false;
         }
     }
 }

@@ -11,14 +11,18 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly Dictionary<Creature, List<StrangleContribution>> StrangleLedgers = new();
-    public static readonly AsyncLocal<bool> IsStrangleExecuting = new();
+    private static readonly Dictionary<Creature, List<StrangleContribution>> _strangleLedgers = new();
+    private static readonly AsyncLocal<bool> _isStrangleExecuting = new();
+
+    public static bool IsStrangleExecuting => _isStrangleExecuting.Value;
+
+    public static void StartStrangleExecution() => _isStrangleExecuting.Value = true;
 
     public static void ResetStrangleState()
     {
         lock (SyncRoot)
         {
-            StrangleLedgers.Clear();
+            _strangleLedgers.Clear();
         }
     }
 
@@ -28,10 +32,10 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            if (!StrangleLedgers.TryGetValue(target, out var ledger))
+            if (!_strangleLedgers.TryGetValue(target, out var ledger))
             {
                 ledger = new List<StrangleContribution>();
-                StrangleLedgers[target] = ledger;
+                _strangleLedgers[target] = ledger;
             }
 
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
@@ -44,7 +48,7 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            if (StrangleLedgers.Remove(target))
+            if (_strangleLedgers.Remove(target))
             {
                 GD.Print($"[DeckTracker] ClearStrangle. Target: {target.Name}");
             }
@@ -57,7 +61,7 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            if (!StrangleLedgers.TryGetValue(target, out var ledger))
+            if (!_strangleLedgers.TryGetValue(target, out var ledger))
             {
                 GD.Print($"[DeckTracker] DistributeStrangleDamage. No ledger found for {target.Name}");
                 return;
@@ -94,16 +98,12 @@ public static partial class CardRegistry
     {
         try
         {
-            IsStrangleExecuting.Value = true;
+            StartStrangleExecution();
             await originalTask;
         }
         finally
         {
-            IsStrangleExecuting.Value = false;
-            // The damage distribution is handled by the AfterDamageGiven hook if we set the flag,
-            // OR we can do it here if we know the damage. 
-            // StranglePower.AfterCardPlayed deals damage via CreatureCmd.Damage.
-            // Since we wrap the task, we can't easily get the DamageResult here unless we hook AfterDamageGiven.
+            _isStrangleExecuting.Value = false;
         }
     }
 }

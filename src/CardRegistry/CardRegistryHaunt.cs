@@ -9,14 +9,18 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<HauntContribution> HauntLedger = new();
-    public static readonly AsyncLocal<bool> IsHauntExecuting = new();
+    private static readonly List<HauntContribution> _hauntLedger = new();
+    private static readonly AsyncLocal<bool> _isHauntExecuting = new();
+
+    public static bool IsHauntExecuting => _isHauntExecuting.Value;
+
+    public static void StartHauntExecution() => _isHauntExecuting.Value = true;
 
     public static void ResetHauntState()
     {
         lock (SyncRoot)
         {
-            HauntLedger.Clear();
+            _hauntLedger.Clear();
         }
     }
 
@@ -27,7 +31,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
-            HauntLedger.Add(new HauntContribution { TrackingId = trackingId, Amount = amount });
+            _hauntLedger.Add(new HauntContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogHauntApply. Card: {trackingId}, Amount: {amount}");
         }
     }
@@ -42,9 +46,9 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] DistributeHauntDamage. Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (var i = 0; i < HauntLedger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < _hauntLedger.Count && remainingDamage > 0; i++)
             {
-                var contribution = HauntLedger[i];
+                var contribution = _hauntLedger[i];
                 var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
@@ -66,12 +70,12 @@ public static partial class CardRegistry
     {
         try
         {
-            IsHauntExecuting.Value = true;
+            StartHauntExecution();
             await originalTask;
         }
         finally
         {
-            IsHauntExecuting.Value = false;
+            _isHauntExecuting.Value = false;
         }
     }
 }

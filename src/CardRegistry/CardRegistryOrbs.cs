@@ -24,7 +24,12 @@ public static partial class CardRegistry
     public static readonly AsyncLocal<bool> IsLoopExecuting = new();
     
     // Tracks if an Orb is currently dealing damage
-    public static readonly AsyncLocal<OrbExecutionContext?> ExecutingOrb = new();
+    private static readonly AsyncLocal<OrbExecutionContext?> _executingOrb = new();
+    public static OrbExecutionContext? ExecutingOrb
+    {
+        get => _executingOrb.Value;
+        set => _executingOrb.Value = value;
+    }
     
     public static readonly List<string> UnattributedOrbLogs = new();
 
@@ -307,7 +312,7 @@ public static partial class CardRegistry
     
     public static async Task AwaitOrbExecutionTaskAsync(Task originalTask, OrbModel orb, bool isEvoke)
     {
-        var context = ExecutingOrb.Value;
+        var context = ExecutingOrb;
         try
         {
             await originalTask;
@@ -320,7 +325,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            ExecutingOrb.Value = null;
+            ExecutingOrb = null;
             if (isEvoke) DeregisterOrb(orb);
         }
     }
@@ -333,7 +338,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            ExecutingOrb.Value = null;
+            ExecutingOrb = null;
             DeregisterOrb(orb);
         }
     }

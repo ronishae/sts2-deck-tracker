@@ -11,14 +11,18 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<SerpentFormContribution> SerpentFormLedger = new();
-    public static readonly AsyncLocal<bool> IsSerpentFormExecuting = new();
+    private static readonly List<SerpentFormContribution> _serpentFormLedger = new();
+    private static readonly AsyncLocal<bool> _isSerpentFormExecuting = new();
+
+    public static bool IsSerpentFormExecuting => _isSerpentFormExecuting.Value;
+
+    public static void StartSerpentFormExecution() => _isSerpentFormExecuting.Value = true;
 
     public static void ResetSerpentFormState()
     {
         lock (SyncRoot)
         {
-            SerpentFormLedger.Clear();
+            _serpentFormLedger.Clear();
         }
     }
 
@@ -29,7 +33,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
-            SerpentFormLedger.Add(new SerpentFormContribution { TrackingId = trackingId, Amount = amount });
+            _serpentFormLedger.Add(new SerpentFormContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogSerpentFormApply. Card: {trackingId}, Amount: {amount}");
         }
     }
@@ -44,9 +48,9 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] DistributeSerpentFormDamage. Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (var i = 0; i < SerpentFormLedger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < _serpentFormLedger.Count && remainingDamage > 0; i++)
             {
-                var contribution = SerpentFormLedger[i];
+                var contribution = _serpentFormLedger[i];
                 var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
@@ -68,12 +72,12 @@ public static partial class CardRegistry
     {
         try
         {
-            IsSerpentFormExecuting.Value = true;
+            StartSerpentFormExecution();
             await originalTask;
         }
         finally
         {
-            IsSerpentFormExecuting.Value = false;
+            _isSerpentFormExecuting.Value = false;
         }
     }
 }

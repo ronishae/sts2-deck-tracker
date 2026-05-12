@@ -1,18 +1,28 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Godot;
+using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<SleightOfFleshContribution> SleightOfFleshLedger = new();
-    public static readonly AsyncLocal<bool> IsSleightOfFleshExecuting = new();
+    private static readonly List<SleightOfFleshContribution> _sleightOfFleshLedger = new();
+    private static readonly AsyncLocal<bool> _isSleightOfFleshExecuting = new();
+
+    public static bool IsSleightOfFleshExecuting => _isSleightOfFleshExecuting.Value;
+
+    public static void StartSleightOfFleshExecution() => _isSleightOfFleshExecuting.Value = true;
 
     public static void ResetSleightOfFleshState()
     {
         lock (SyncRoot)
         {
-            SleightOfFleshLedger.Clear();
+            _sleightOfFleshLedger.Clear();
         }
     }
 
@@ -23,7 +33,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
-            SleightOfFleshLedger.Add(new SleightOfFleshContribution { TrackingId = trackingId, Amount = amount });
+            _sleightOfFleshLedger.Add(new SleightOfFleshContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogSleightOfFleshApply. Card: {trackingId}, Amount: {amount}");
         }
     }
@@ -38,9 +48,9 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] DistributeSleightOfFleshDamage. Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (var i = 0; i < SleightOfFleshLedger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < _sleightOfFleshLedger.Count && remainingDamage > 0; i++)
             {
-                var contribution = SleightOfFleshLedger[i];
+                var contribution = _sleightOfFleshLedger[i];
                 var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
@@ -62,12 +72,12 @@ public static partial class CardRegistry
     {
         try
         {
-            IsSleightOfFleshExecuting.Value = true;
+            StartSleightOfFleshExecution();
             await originalTask;
         }
         finally
         {
-            IsSleightOfFleshExecuting.Value = false;
+            _isSleightOfFleshExecuting.Value = false;
         }
     }
 }

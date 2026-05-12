@@ -9,14 +9,18 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<JuggernautContribution> JuggernautLedger = new();
-    public static readonly AsyncLocal<bool> IsJuggernautExecuting = new();
+    private static readonly List<JuggernautContribution> _juggernautLedger = new();
+    private static readonly AsyncLocal<bool> _isJuggernautExecuting = new();
+
+    public static bool IsJuggernautExecuting => _isJuggernautExecuting.Value;
+
+    public static void StartJuggernautExecution() => _isJuggernautExecuting.Value = true;
 
     public static void ResetJuggernautState()
     {
         lock (SyncRoot)
         {
-            JuggernautLedger.Clear();
+            _juggernautLedger.Clear();
         }
     }
 
@@ -27,7 +31,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
-            JuggernautLedger.Add(new JuggernautContribution { TrackingId = trackingId, Amount = amount });
+            _juggernautLedger.Add(new JuggernautContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogJuggernautApply. Card: {trackingId}, Amount: {amount}");
         }
     }
@@ -42,9 +46,9 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] DistributeJuggernautDamage. Total Damage: {totalDamage}");
 
             // Distribute damage in FIFO order based on contributions
-            for (var i = 0; i < JuggernautLedger.Count && remainingDamage > 0; i++)
+            for (var i = 0; i < _juggernautLedger.Count && remainingDamage > 0; i++)
             {
-                var contribution = JuggernautLedger[i];
+                var contribution = _juggernautLedger[i];
                 var share = Math.Min(remainingDamage, (decimal)contribution.Amount);
                 
                 if (share > 0)
@@ -66,12 +70,12 @@ public static partial class CardRegistry
     {
         try
         {
-            IsJuggernautExecuting.Value = true;
+            StartJuggernautExecution();
             await originalTask;
         }
         finally
         {
-            IsJuggernautExecuting.Value = false;
+            _isJuggernautExecuting.Value = false;
         }
     }
 }
