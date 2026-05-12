@@ -158,6 +158,9 @@ internal static class HookPatches
             case SleightOfFleshPower:
                 if (amount > 0) CardRegistry.LogSleightOfFleshApply(cardSource, (int)amount);
                 break;
+            case HauntPower:
+                if (amount > 0) CardRegistry.LogHauntApply(cardSource, (int)amount);
+                break;
             case CorrosiveWavePower:
                 if (amount > 0) 
                 {
@@ -396,6 +399,16 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitSleightOfFleshTaskAsync(__result);
     }
+
+    public static void HauntAfterCardPlayedPrefix(HauntPower __instance)
+    {
+        CardRegistry.IsHauntExecuting.Value = true;
+    }
+
+    public static void HauntAfterCardPlayedPostfix(HauntPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitHauntTaskAsync(__result);
+    }
     
     // --- ORB WRAPPERS ---
 
@@ -530,6 +543,12 @@ internal static class HookPatches
         if (CardRegistry.IsSleightOfFleshExecuting.Value && results.TotalDamage > 0)
         {
             CardRegistry.DistributeSleightOfFleshDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsHauntExecuting.Value && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeHauntDamage(results.TotalDamage);
             return;
         }
 

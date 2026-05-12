@@ -239,6 +239,7 @@ public static partial class CardRegistry
             ResetSerpentFormState();
             ResetBlackHoleState();
             ResetSleightOfFleshState();
+            ResetHauntState();
             ResetFumesState();
             ResetDoomState();
             ResetCountdownState();

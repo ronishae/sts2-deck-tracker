@@ -109,6 +109,14 @@ public static class ModEntry
         _harmony.Patch(sleightOriginal, 
             prefix: new HarmonyMethod(sleightPrefix), 
             postfix: new HarmonyMethod(sleightPostfix));
+
+        var hauntOriginal = AccessTools.Method(typeof(HauntPower), nameof(HauntPower.AfterCardPlayed));
+        var hauntPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HauntAfterCardPlayedPrefix));
+        var hauntPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HauntAfterCardPlayedPostfix));
+        
+        _harmony.Patch(hauntOriginal, 
+            prefix: new HarmonyMethod(hauntPrefix), 
+            postfix: new HarmonyMethod(hauntPostfix));
         
         // --- LIGHTNING ORB PATTERN ---
         var lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));
