@@ -22,6 +22,46 @@ public static partial class CardRegistry
     
     private static HashSet<string> _incrementedThisCombat = new();
 
+    // Tracks the card currently being played
+    private static readonly AsyncLocal<CardModel?> _currentPlayingCard = new();
+    
+    // Cards added to hand during a play (to wait for enchantments)
+    private static readonly AsyncLocal<List<CardModel>?> _deferredDraws = new();
+
+    public static CardModel? CurrentPlayingCard => _currentPlayingCard.Value;
+
+    public static void StartCardPlay(CardModel card)
+    {
+        _currentPlayingCard.Value = card;
+        _deferredDraws.Value = new List<CardModel>();
+    }
+
+    public static void EndCardPlay()
+    {
+        ProcessDeferredDraws();
+        _deferredDraws.Value = null;
+        _currentPlayingCard.Value = null;
+    }
+
+    public static bool IsCardPlayActive() => _currentPlayingCard.Value != null;
+
+    public static void DeferDraw(CardModel card)
+    {
+        _deferredDraws.Value?.Add(card);
+    }
+
+    private static void ProcessDeferredDraws()
+    {
+        if (_deferredDraws.Value == null) return;
+        
+        foreach (var card in _deferredDraws.Value)
+        {
+            RegisterCard(card);
+            AddDraw(card);
+        }
+        _deferredDraws.Value.Clear();
+    }
+
     private static ActData? GetActData(CardStats stat, int actNum)
     {
         return actNum switch
@@ -106,10 +146,9 @@ public static partial class CardRegistry
         {
             return false;
         }
-    }
-    
-    public static string GetTrackingId(CardModel? card)
-    {
+        }
+
+        public static string GetTrackingId(CardModel? card)    {
         if (card == null) return "";
         CardModel sourceCard = card.DeckVersion ?? card;
 

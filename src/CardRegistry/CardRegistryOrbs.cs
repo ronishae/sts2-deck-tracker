@@ -22,9 +22,6 @@ public static partial class CardRegistry
     public static readonly List<string> CurrentTurnLoopQueue = new();
     public static readonly AsyncLocal<bool> IsLoopExecuting = new();
     
-    // Tracks the card currently being played to tag the orb during Channel()
-    public static readonly AsyncLocal<CardModel?> CurrentPlayingCard = new();
-    
     // Tracks if an Orb is currently dealing damage
     public static readonly AsyncLocal<OrbExecutionContext?> ExecutingOrb = new();
     
@@ -197,9 +194,9 @@ public static partial class CardRegistry
                 // --- THE GENERIC MULTI-EVOKE FALLBACK ---
                 // If the orb isn't in the ledger, it has already been evoked once and deregistered.
                 // If a card is currently playing, it forced this phantom evoke and gets 100% of the credit!
-                if (context.IsEvoke && CurrentPlayingCard.Value != null)
+                if (context.IsEvoke && CurrentPlayingCard != null)
                 {
-                    string multiEvokerId = GetTrackingId(CurrentPlayingCard.Value);
+                    string multiEvokerId = GetTrackingId(CurrentPlayingCard);
                     AddDamageById(multiEvokerId, totalDamage);
                     GD.Print($"[DeckTracker] Phantom Evoke! Paid {totalDamage:F2} Bonus Evoke Damage to {multiEvokerId}");
                     return;

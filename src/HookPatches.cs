@@ -36,16 +36,24 @@ internal static class HookPatches
     {
         // We only care if we are actively in combat
         if (combatState == null) return;
-
+        GD.Print($"[DeckTracker] AfterCardChangedPiles: pile: {oldPile} - card: {card.Id.Entry} - source: {source?.Id.Entry}.");
         try
         {
             // If the card is now in the Hand, but it didn't come from the Draw pile 
             // (because our other AfterCardDrawn hook already handles standard draws)
             if (card.Pile != null && card.Pile.Type == PileType.Hand && oldPile != PileType.Draw)
             {
-                CardRegistry.RegisterCard(card);
-                CardRegistry.AddDraw(card);
-                CardRegistry.ForcePublish();
+                if (CardRegistry.IsCardPlayActive())
+                {
+                    CardRegistry.DeferDraw(card);
+                    GD.Print($"[DeckTracker] AfterCardChangedPiles: Deferring draw for {card.Id.Entry} until play finishes.");
+                }
+                else
+                {
+                    CardRegistry.RegisterCard(card);
+                    CardRegistry.AddDraw(card);
+                    CardRegistry.ForcePublish();
+                }
             }
         }
         catch { /* Fails silently if Pile data is missing */ }
@@ -99,7 +107,7 @@ internal static class HookPatches
             var cardProp = cardPlay.GetType().GetProperty("Card");
             if (cardProp?.GetValue(cardPlay) is CardModel card)
             {
-                CardRegistry.CurrentPlayingCard.Value = card;
+                CardRegistry.StartCardPlay(card);
                 CardRegistry.RegisterCard(card);
                 // Do not count Replay in the times play tracker
                 if (cardPlay.PlayIndex == 0)
@@ -236,7 +244,9 @@ internal static class HookPatches
     
     public static void AfterCardPlayedPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        CardRegistry.CurrentPlayingCard.Value = null;
+        CardRegistry.EndCardPlay();
+        CardRegistry.ForcePublish();
+        
         var cardId = cardPlay.Card.Id.Entry ?? "";
         GD.Print($"[DeckTracker] Card {cardId} played with PlayCount: {cardPlay.PlayCount} and PlayIndex: {cardPlay.PlayIndex}.");
 
@@ -328,7 +338,7 @@ internal static class HookPatches
 
     public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, MegaCrit.Sts2.Core.Entities.Players.Player player)
     {
-        CardRegistry.RegisterChanneledOrb(orb, CardRegistry.CurrentPlayingCard.Value);
+        CardRegistry.RegisterChanneledOrb(orb, CardRegistry.CurrentPlayingCard);
     }
 
     public static void OrbPassivePrefix(OrbModel __instance)
@@ -342,9 +352,9 @@ internal static class HookPatches
             CardRegistry.CurrentTurnLoopQueue.RemoveAt(0); // Pop!
         }
         // Otherwise, if Darkness is being played, it gets the credit!
-        else if (CardRegistry.CurrentPlayingCard.Value != null)
+        else if (CardRegistry.CurrentPlayingCard != null)
         {
-            forcingActor = CardRegistry.GetTrackingId(CardRegistry.CurrentPlayingCard.Value);
+            forcingActor = CardRegistry.GetTrackingId(CardRegistry.CurrentPlayingCard);
         }
 
         // Bake the Forcing Actor directly into the execution context so the Waterfall doesn't have to guess!
