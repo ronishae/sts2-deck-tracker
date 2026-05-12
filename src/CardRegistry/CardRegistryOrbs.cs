@@ -2,6 +2,7 @@ using Godot;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace DeckTracker;
@@ -51,8 +52,7 @@ public static partial class CardRegistry
             OrbChannelers[orb] = trackingId;
             GD.Print($"[DeckTracker] Channeled {orb.Id.Entry} and attributed to {trackingId}");
             
-            // TODO: change check to check class
-            if (orb.GetType().Name == "DarkOrb")
+            if (orb is DarkOrb)
             {
                 DarkOrbLedgers[orb] = new List<OrbContribution>();
                 
@@ -207,8 +207,7 @@ public static partial class CardRegistry
                 return;
             }
             
-            // TODO: change check here
-            if (orb.GetType().Name == "DarkOrb")
+            if (orb is DarkOrb)
             {
                 if (DarkOrbLedgers.TryGetValue(orb, out var ledger))
                 {
@@ -312,7 +311,7 @@ public static partial class CardRegistry
         try
         {
             await originalTask;
-            if (!isEvoke && orb.GetType().Name == "DarkOrb" && context != null)
+            if (!isEvoke && orb is DarkOrb && context != null)
             {
                 GD.Print($"[DeckTracker] {orb.GetType().Name} Orb Execution Task");
                 // We use the ExpectedValue (PassiveVal) we cached in the Prefix
