@@ -1,5 +1,6 @@
 using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Models;
@@ -125,6 +126,18 @@ public static class ModEntry
         _harmony.Patch(juggernautOriginal, 
             prefix: new HarmonyMethod(juggernautPrefix), 
             postfix: new HarmonyMethod(juggernautPostfix));
+
+        var flameBarrierOriginal = AccessTools.Method(typeof(FlameBarrierPower), nameof(FlameBarrierPower.AfterDamageReceived));
+        var flameBarrierPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPrefix));
+        var flameBarrierPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPostfix));
+        
+        _harmony.Patch(flameBarrierOriginal, 
+            prefix: new HarmonyMethod(flameBarrierPrefix), 
+            postfix: new HarmonyMethod(flameBarrierPostfix));
+
+        var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });
+        var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
+        _harmony.Patch(powerRemoveOriginal, prefix: new HarmonyMethod(powerRemovePrefix));
         
         // --- LIGHTNING ORB PATTERN ---
         var lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));

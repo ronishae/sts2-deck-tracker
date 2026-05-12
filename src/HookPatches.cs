@@ -147,7 +147,6 @@ internal static class HookPatches
                 break;
             case StranglePower:
                 if (amount > 0) CardRegistry.LogStrangleApply(target, cardSource, (int)amount);
-                else if (amount < 0) CardRegistry.ClearStrangle(target);
                 break;
             case SerpentFormPower:
                 if (amount > 0) CardRegistry.LogSerpentFormApply(cardSource, (int)amount);
@@ -163,6 +162,9 @@ internal static class HookPatches
                 break;
             case JuggernautPower:
                 if (amount > 0) CardRegistry.LogJuggernautApply(cardSource, (int)amount);
+                break;
+            case FlameBarrierPower:
+                if (amount > 0) CardRegistry.LogFlameBarrierApply(cardSource, (int)amount);
                 break;
             case CorrosiveWavePower:
                 if (amount > 0) 
@@ -355,7 +357,7 @@ internal static class HookPatches
 
     public static void StrangleAfterCardPlayedPrefix(StranglePower __instance)
     {
-        CardRegistry.IsStrangleExecuting.Value = true;
+        CardRegistry.StartStrangleExecution();
     }
 
     public static void StrangleAfterCardPlayedPostfix(StranglePower __instance, ref Task __result)
@@ -365,7 +367,7 @@ internal static class HookPatches
 
     public static void SerpentFormAfterCardPlayedPrefix(SerpentFormPower __instance)
     {
-        CardRegistry.IsSerpentFormExecuting.Value = true;
+        CardRegistry.StartSerpentFormExecution();
     }
 
     public static void SerpentFormAfterCardPlayedPostfix(SerpentFormPower __instance, ref Task __result)
@@ -375,7 +377,7 @@ internal static class HookPatches
 
     public static void BlackHoleAfterCardPlayedPrefix(BlackHolePower __instance)
     {
-        CardRegistry.IsBlackHoleExecuting.Value = true;
+        CardRegistry.StartBlackHoleExecution();
     }
 
     public static void BlackHoleAfterCardPlayedPostfix(BlackHolePower __instance, ref Task __result)
@@ -385,7 +387,7 @@ internal static class HookPatches
 
     public static void BlackHoleAfterStarsGainedPrefix(BlackHolePower __instance)
     {
-        CardRegistry.IsBlackHoleExecuting.Value = true;
+        CardRegistry.StartBlackHoleExecution();
     }
 
     public static void BlackHoleAfterStarsGainedPostfix(BlackHolePower __instance, ref Task __result)
@@ -395,7 +397,7 @@ internal static class HookPatches
 
     public static void SleightOfFleshAfterPowerAmountChangedPrefix(SleightOfFleshPower __instance)
     {
-        CardRegistry.IsSleightOfFleshExecuting.Value = true;
+        CardRegistry.StartSleightOfFleshExecution();
     }
 
     public static void SleightOfFleshAfterPowerAmountChangedPostfix(SleightOfFleshPower __instance, ref Task __result)
@@ -405,7 +407,7 @@ internal static class HookPatches
 
     public static void HauntAfterCardPlayedPrefix(HauntPower __instance)
     {
-        CardRegistry.IsHauntExecuting.Value = true;
+        CardRegistry.StartHauntExecution();
     }
 
     public static void HauntAfterCardPlayedPostfix(HauntPower __instance, ref Task __result)
@@ -415,14 +417,41 @@ internal static class HookPatches
 
     public static void JuggernautAfterBlockGainedPrefix(JuggernautPower __instance)
     {
-        CardRegistry.IsJuggernautExecuting.Value = true;
+        CardRegistry.StartJuggernautExecution();
     }
 
     public static void JuggernautAfterBlockGainedPostfix(JuggernautPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitJuggernautTaskAsync(__result);
     }
+
+    public static void FlameBarrierAfterDamageReceivedPrefix(FlameBarrierPower __instance)
+    {
+        CardRegistry.StartFlameBarrierExecution();
+    }
+
+    public static void FlameBarrierAfterDamageReceivedPostfix(FlameBarrierPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitFlameBarrierTaskAsync(__result);
+    }
     
+    public static void BeforePowerRemovedPrefix(PowerModel? power)
+    {
+        if (power == null) return;
+        
+        GD.Print($"[DeckTracker] BeforePowerRemovedPrefix: {power.GetType().Name} removed from {power.Owner.Name}");
+        
+        switch (power)
+        {
+            case FlameBarrierPower:
+                CardRegistry.ClearFlameBarrier();
+                break;
+            case StranglePower:
+                CardRegistry.ClearStrangle(power.Owner);
+                break;
+        }
+    }
+
     // --- ORB WRAPPERS ---
 
     public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, MegaCrit.Sts2.Core.Entities.Players.Player player)
@@ -447,7 +476,7 @@ internal static class HookPatches
         }
 
         // Bake the Forcing Actor directly into the execution context so the Waterfall doesn't have to guess!
-        CardRegistry.ExecutingOrb.Value = new OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
+        CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
     }
     
     public static void OrbPassivePostfix(OrbModel __instance, ref Task __result)
@@ -459,7 +488,7 @@ internal static class HookPatches
     {
         GD.Print($"[DeckTracker] Trap SET for {__instance.Id.Entry} Evoke");
         // Cache the EvokeVal before the execution!
-        CardRegistry.ExecutingOrb.Value = new OrbExecutionContext(__instance, true, __instance.EvokeVal);
+        CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, true, __instance.EvokeVal);
     }
     
     public static void OrbEvokePostfix(OrbModel __instance, ref Task<IEnumerable<Creature>> __result)
@@ -528,53 +557,59 @@ internal static class HookPatches
         }
         
         // ORB INTERCEPT
-        if (CardRegistry.ExecutingOrb.Value != null && results.TotalDamage > 0)
+        if (CardRegistry.ExecutingOrb != null && results.TotalDamage > 0)
         {
             Creature player = combatState.Players[0].Creature;
-            CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb.Value, results.TotalDamage, player);
+            CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb, results.TotalDamage, player);
             return; 
         }
 
-        if (CardRegistry.IsStrangleExecuting.Value && results.TotalDamage > 0)
+        if (CardRegistry.IsStrangleExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeStrangleDamage(target, results.TotalDamage);
             return;
         }
 
-        if (CardRegistry.IsSerpentFormExecuting.Value && results.TotalDamage > 0)
+        if (CardRegistry.IsSerpentFormExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeSerpentFormDamage(results.TotalDamage);
             return;
         }
 
-        if (CardRegistry.IsBlackHoleExecuting.Value && results.TotalDamage > 0)
+        if (CardRegistry.IsBlackHoleExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeBlackHoleDamage(results.TotalDamage);
             return;
         }
 
-        if (CardRegistry.IsSleightOfFleshExecuting.Value && results.TotalDamage > 0)
+        if (CardRegistry.IsSleightOfFleshExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeSleightOfFleshDamage(results.TotalDamage);
             return;
         }
 
-        if (CardRegistry.IsHauntExecuting.Value && results.TotalDamage > 0)
+        if (CardRegistry.IsHauntExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeHauntDamage(results.TotalDamage);
             return;
         }
 
-        if (CardRegistry.IsJuggernautExecuting.Value && results.TotalDamage > 0)
+        if (CardRegistry.IsJuggernautExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeJuggernautDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsFlameBarrierExecuting && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeFlameBarrierDamage(results.TotalDamage);
             return;
         }
 
         if (cardSource == null)
         {
             GD.Print($"[DeckTracker] CardSource is null and not poison or supported orb. Returning..." +
-                     $"with value: {CardRegistry.ExecutingOrb.Value} and damage: {results.TotalDamage}");
+                     $"with value: {CardRegistry.ExecutingOrb} and damage: {results.TotalDamage}");
             return;
         }
         
