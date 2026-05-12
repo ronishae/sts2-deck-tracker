@@ -149,6 +149,9 @@ internal static class HookPatches
                 if (amount > 0) CardRegistry.LogStrangleApply(target, cardSource, (int)amount);
                 else if (amount < 0) CardRegistry.ClearStrangle(target);
                 break;
+            case SerpentFormPower:
+                if (amount > 0) CardRegistry.LogSerpentFormApply(cardSource, (int)amount);
+                break;
             case CorrosiveWavePower:
                 if (amount > 0) 
                 {
@@ -347,6 +350,16 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitStrangleTaskAsync(__result, __instance.Owner, (decimal)__instance.Amount);
     }
+
+    public static void SerpentFormAfterCardPlayedPrefix(SerpentFormPower __instance)
+    {
+        CardRegistry.IsSerpentFormExecuting.Value = true;
+    }
+
+    public static void SerpentFormAfterCardPlayedPostfix(SerpentFormPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitSerpentFormTaskAsync(__result);
+    }
     
     // --- ORB WRAPPERS ---
 
@@ -465,7 +478,13 @@ internal static class HookPatches
             CardRegistry.DistributeStrangleDamage(target, results.TotalDamage);
             return;
         }
-        
+
+        if (CardRegistry.IsSerpentFormExecuting.Value && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeSerpentFormDamage(results.TotalDamage);
+            return;
+        }
+
         if (cardSource == null)
         {
             GD.Print($"[DeckTracker] CardSource is null and not poison or supported orb. Returning..." +

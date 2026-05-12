@@ -236,6 +236,7 @@ public static partial class CardRegistry
             BladeReplayModifierTracker.Clear();
             ResetPoisonState();
             ResetStrangleState();
+            ResetSerpentFormState();
             ResetFumesState();
             ResetDoomState();
             ResetCountdownState();
