@@ -148,6 +148,9 @@ internal static class HookPatches
             case StranglePower:
                 if (amount > 0) CardRegistry.LogStrangleApply(target, cardSource, (int)amount);
                 break;
+            case OblivionPower:
+                if (amount > 0) CardRegistry.LogOblivionApply(target, cardSource, (int)amount);
+                break;
             case SerpentFormPower:
                 if (amount > 0) CardRegistry.LogSerpentFormApply(cardSource, (int)amount);
                 break;
@@ -270,10 +273,31 @@ internal static class HookPatches
                             {
                                 if (remainingDoom <= 0) break;
                                 
-                                decimal amountToAttribute = Math.Min(remainingDoom, damageDealt);
+                                // Reaper Form multiplier: share.Shares * damageDealt
+                                decimal amountToAttribute = Math.Min(remainingDoom, share.Shares * damageDealt);
                                 CardRegistry.AddDoomHistoryById(target, amountToAttribute, share.TrackingId);
 
                                 remainingDoom -= amountToAttribute;
+                            }
+                        }
+                    }
+                    else if (CardRegistry.IsOblivionExecuting)
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            decimal remainingDoom = amount;
+
+                            if (CardRegistry.OblivionLedgers.TryGetValue(target, out var ledger))
+                            {
+                                foreach (var share in ledger)
+                                {
+                                    if (remainingDoom <= 0) break;
+
+                                    decimal amountToAttribute = Math.Min(remainingDoom, (decimal)share.Amount);
+                                    CardRegistry.AddDoomHistoryById(target, amountToAttribute, share.TrackingId);
+
+                                    remainingDoom -= amountToAttribute;
+                                }
                             }
                         }
                     }
@@ -402,7 +426,17 @@ internal static class HookPatches
 
     public static void StrangleAfterCardPlayedPostfix(StranglePower __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitStrangleTaskAsync(__result, __instance.Owner, (decimal)__instance.Amount);
+        __result = CardRegistry.AwaitStrangleTaskAsync(__result, __instance.Owner, __instance.Amount);
+    }
+
+    public static void OblivionAfterCardPlayedPrefix(OblivionPower __instance)
+    {
+        CardRegistry.StartOblivionExecution();
+    }
+
+    public static void OblivionAfterCardPlayedPostfix(OblivionPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitOblivionTaskAsync(__result);
     }
 
     public static void SerpentFormAfterCardPlayedPrefix(SerpentFormPower __instance)
@@ -528,6 +562,9 @@ internal static class HookPatches
                 break;
             case StranglePower:
                 CardRegistry.ClearStrangle(power.Owner);
+                break;
+            case OblivionPower:
+                CardRegistry.ClearOblivion(power.Owner);
                 break;
         }
     }

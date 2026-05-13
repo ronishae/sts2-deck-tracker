@@ -84,6 +84,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(stranglePrefix), 
             postfix: new HarmonyMethod(stranglePostfix));
 
+        var oblivionOriginal = AccessTools.Method(typeof(OblivionPower), nameof(OblivionPower.AfterCardPlayed));
+        var oblivionPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OblivionAfterCardPlayedPrefix));
+        var oblivionPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OblivionAfterCardPlayedPostfix));
+
+        _harmony.Patch(oblivionOriginal,
+            prefix: new HarmonyMethod(oblivionPrefix),
+            postfix: new HarmonyMethod(oblivionPostfix));
+
         var serpentOriginal = AccessTools.Method(typeof(SerpentFormPower), nameof(SerpentFormPower.AfterCardPlayed));
         var serpentPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SerpentFormAfterCardPlayedPrefix));
         var serpentPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SerpentFormAfterCardPlayedPostfix));
