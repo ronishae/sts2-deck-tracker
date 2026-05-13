@@ -92,6 +92,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(serpentPrefix), 
             postfix: new HarmonyMethod(serpentPostfix));
 
+        var reaperOriginal = AccessTools.Method(typeof(ReaperFormPower), nameof(ReaperFormPower.AfterDamageGiven));
+        var reaperPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReaperFormAfterDamageGivenPrefix));
+        var reaperPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReaperFormAfterDamageGivenPostfix));
+
+        _harmony.Patch(reaperOriginal,
+            prefix: new HarmonyMethod(reaperPrefix),
+            postfix: new HarmonyMethod(reaperPostfix));
+
         var blackHolePlayedOriginal = AccessTools.Method(typeof(BlackHolePower), nameof(BlackHolePower.AfterCardPlayed));
         var blackHoleStarsOriginal = AccessTools.Method(typeof(BlackHolePower), nameof(BlackHolePower.AfterStarsGained));
         

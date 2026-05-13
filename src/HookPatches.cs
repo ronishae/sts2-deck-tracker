@@ -151,6 +151,9 @@ internal static class HookPatches
             case SerpentFormPower:
                 if (amount > 0) CardRegistry.LogSerpentFormApply(cardSource, (int)amount);
                 break;
+            case ReaperFormPower:
+                if (amount > 0) CardRegistry.AddReaperFormShares(amount, cardSource);
+                break;
             case BlackHolePower:
                 if (amount > 0) CardRegistry.LogBlackHoleApply(cardSource, (int)amount);
                 break;
@@ -250,6 +253,25 @@ internal static class HookPatches
 
                                 decimal amountToAttribute = Math.Min(remainingDoom, contribution.Amount);
                                 CardRegistry.AddDoomHistoryById(target, amountToAttribute, contribution.TrackingId);
+
+                                remainingDoom -= amountToAttribute;
+                            }
+                        }
+                    }
+                    else if (CardRegistry.IsReaperFormExecuting.Value)
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            decimal remainingDoom = amount;
+                            decimal damageDealt = CardRegistry.GetReaperDamage();
+
+                            // Read the Reaper Form history top-to-bottom and assign the Doom
+                            foreach (var share in CardRegistry.ReaperFormShares)
+                            {
+                                if (remainingDoom <= 0) break;
+                                
+                                decimal amountToAttribute = Math.Min(remainingDoom, damageDealt);
+                                CardRegistry.AddDoomHistoryById(target, amountToAttribute, share.TrackingId);
 
                                 remainingDoom -= amountToAttribute;
                             }
@@ -391,6 +413,16 @@ internal static class HookPatches
     public static void SerpentFormAfterCardPlayedPostfix(SerpentFormPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitSerpentFormTaskAsync(__result);
+    }
+
+    public static void ReaperFormAfterDamageGivenPrefix(ReaperFormPower __instance, DamageResult result)
+    {
+        CardRegistry.StartReaperFormExecution(result.TotalDamage);
+    }
+
+    public static void ReaperFormAfterDamageGivenPostfix(ReaperFormPower __instance, ref Task __result, DamageResult result)
+    {
+        __result = CardRegistry.AwaitReaperFormTaskAsync(__result, result.TotalDamage);
     }
 
     public static void BlackHoleAfterCardPlayedPrefix(BlackHolePower __instance)
