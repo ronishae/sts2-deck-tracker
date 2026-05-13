@@ -127,6 +127,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(juggernautPrefix), 
             postfix: new HarmonyMethod(juggernautPostfix));
 
+        var necroMasteryOriginal = AccessTools.Method(typeof(NecroMasteryPower), nameof(NecroMasteryPower.AfterCurrentHpChanged));
+        var necroMasteryPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPrefix));
+        var necroMasteryPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPostfix));
+
+        _harmony.Patch(necroMasteryOriginal,
+            prefix: new HarmonyMethod(necroMasteryPrefix),
+            postfix: new HarmonyMethod(necroMasteryPostfix));
+
         var flameBarrierOriginal = AccessTools.Method(typeof(FlameBarrierPower), nameof(FlameBarrierPower.AfterDamageReceived));
         var flameBarrierPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPrefix));
         var flameBarrierPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPostfix));

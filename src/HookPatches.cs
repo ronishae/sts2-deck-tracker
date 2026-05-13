@@ -163,6 +163,9 @@ internal static class HookPatches
             case JuggernautPower:
                 if (amount > 0) CardRegistry.LogJuggernautApply(cardSource, (int)amount);
                 break;
+            case NecroMasteryPower:
+                if (amount > 0) CardRegistry.LogNecroMasteryApply(cardSource, (int)amount);
+                break;
             case FlameBarrierPower:
                 if (amount > 0) CardRegistry.LogFlameBarrierApply(cardSource, (int)amount);
                 break;
@@ -437,6 +440,16 @@ internal static class HookPatches
         __result = CardRegistry.AwaitJuggernautTaskAsync(__result);
     }
 
+    public static void NecroMasteryAfterCurrentHpChangedPrefix(NecroMasteryPower __instance, decimal delta )
+    {
+        CardRegistry.StartNecroMasteryExecution(delta);
+    }
+
+    public static void NecroMasteryAfterCurrentHpChangedPostfix(NecroMasteryPower __instance, ref Task __result, decimal delta)
+    {
+        __result = CardRegistry.AwaitNecroMasteryTaskAsync(__result, delta);
+    }
+
     public static void FlameBarrierAfterDamageReceivedPrefix(FlameBarrierPower __instance)
     {
         CardRegistry.StartFlameBarrierExecution();
@@ -619,6 +632,12 @@ internal static class HookPatches
         if (CardRegistry.IsJuggernautExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeJuggernautDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsNecroMasteryExecuting && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeNecroMasteryDamage(results.TotalDamage);
             return;
         }
 
