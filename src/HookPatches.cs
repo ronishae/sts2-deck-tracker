@@ -172,6 +172,9 @@ internal static class HookPatches
             case NecroMasteryPower:
                 if (amount > 0) CardRegistry.LogNecroMasteryApply(cardSource, (int)amount);
                 break;
+            case RollingBoulderPower:
+                CardRegistry.LogRollingBoulderInstance(power, cardSource);
+                break;
             case ThornsPower:
                 if (amount > 0 && target.IsPlayer) CardRegistry.LogThornsApply(cardSource, (int)amount);
                 break;
@@ -657,6 +660,16 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitLoopTaskAsync(__result);
     }
+
+    public static void RollingBoulderAfterPlayerTurnStartPrefix(RollingBoulderPower __instance)
+    {
+        CardRegistry.StartRollingBoulderExecution(__instance);
+    }
+
+    public static void RollingBoulderAfterPlayerTurnStartPostfix(RollingBoulderPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitRollingBoulderTaskAsync(__result, __instance);
+    }
     
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
@@ -738,6 +751,12 @@ internal static class HookPatches
         if (CardRegistry.IsReflectExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeReflectDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.ExecutingBoulder != null && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeRollingBoulderDamage(results.TotalDamage);
             return;
         }
 

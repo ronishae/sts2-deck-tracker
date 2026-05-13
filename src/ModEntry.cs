@@ -229,6 +229,14 @@ public static class ModEntry
         _harmony.Patch(loopOriginal,
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPostfix))));
+
+        var boulderOriginal = AccessTools.Method(typeof(RollingBoulderPower), nameof(RollingBoulderPower.AfterPlayerTurnStart));
+        var boulderPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPrefix));
+        var boulderPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPostfix));
+
+        _harmony.Patch(boulderOriginal,
+            prefix: new HarmonyMethod(boulderPrefix),
+            postfix: new HarmonyMethod(boulderPostfix));
     }
 
     private static void PatchHook(string hookName, string postfixName)
