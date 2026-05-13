@@ -190,6 +190,12 @@ public static partial class CardRegistry
     {
         if (totalDamage <= 0) return;
 
+        if (IsThunderExecuting)
+        {
+            DistributeThunderDamage(totalDamage);
+            return;
+        }
+
         lock (SyncRoot)
         {
             OrbModel orb = context.Orb;

@@ -169,6 +169,9 @@ internal static class HookPatches
             case SpeedsterPower:
                 if (amount > 0) CardRegistry.LogSpeedsterApply(cardSource, (int)amount);
                 break;
+            case ThunderPower:
+                if (amount > 0) CardRegistry.LogThunderApply(cardSource, (int)amount);
+                break;
             case JuggernautPower:
                 if (amount > 0) CardRegistry.LogJuggernautApply(cardSource, (int)amount);
                 break;
@@ -515,6 +518,16 @@ internal static class HookPatches
         __result = CardRegistry.AwaitSpeedsterTaskAsync(__result);
     }
 
+    public static void ThunderAfterOrbEvokedPrefix(ThunderPower __instance)
+    {
+        CardRegistry.StartThunderExecution();
+    }
+
+    public static void ThunderAfterOrbEvokedPostfix(ThunderPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitThunderTaskAsync(__result);
+    }
+
     public static void JuggernautAfterBlockGainedPrefix(JuggernautPower __instance)
     {
         CardRegistry.StartJuggernautExecution();
@@ -740,6 +753,12 @@ internal static class HookPatches
         if (CardRegistry.IsSpeedsterExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeSpeedsterDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsThunderExecuting && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeThunderDamage(results.TotalDamage);
             return;
         }
 

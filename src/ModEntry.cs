@@ -179,12 +179,19 @@ public static class ModEntry
         var speedsterPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpeedsterAfterCardDrawnPrefix));
         var speedsterPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpeedsterAfterCardDrawnPostfix));
 
-        _harmony.Patch(speedsterOriginal,
-            prefix: new HarmonyMethod(speedsterPrefix),
+        _harmony.Patch(speedsterOriginal, 
+            prefix: new HarmonyMethod(speedsterPrefix), 
             postfix: new HarmonyMethod(speedsterPostfix));
 
-        var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });
-        var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
+        var thunderOriginal = AccessTools.Method(typeof(ThunderPower), nameof(ThunderPower.AfterOrbEvoked));
+        var thunderPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThunderAfterOrbEvokedPrefix));
+        var thunderPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThunderAfterOrbEvokedPostfix));
+
+        _harmony.Patch(thunderOriginal,
+            prefix: new HarmonyMethod(thunderPrefix),
+            postfix: new HarmonyMethod(thunderPostfix));
+
+        var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });        var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
         _harmony.Patch(powerRemoveOriginal, prefix: new HarmonyMethod(powerRemovePrefix));
         
         // --- LIGHTNING ORB PATTERN ---
