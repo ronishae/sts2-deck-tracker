@@ -135,6 +135,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(necroMasteryPrefix),
             postfix: new HarmonyMethod(necroMasteryPostfix));
 
+        var thornsOriginal = AccessTools.Method(typeof(ThornsPower), nameof(ThornsPower.BeforeDamageReceived));
+        var thornsPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThornsBeforeDamageReceivedPrefix));
+        var thornsPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThornsBeforeDamageReceivedPostfix));
+
+        _harmony.Patch(thornsOriginal,
+            prefix: new HarmonyMethod(thornsPrefix),
+            postfix: new HarmonyMethod(thornsPostfix));
+
         var flameBarrierOriginal = AccessTools.Method(typeof(FlameBarrierPower), nameof(FlameBarrierPower.AfterDamageReceived));
         var flameBarrierPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPrefix));
         var flameBarrierPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPostfix));

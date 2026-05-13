@@ -242,6 +242,7 @@ public static partial class CardRegistry
             ResetHauntState();
             ResetJuggernautState();
             ResetNecroMasteryState();
+            ResetThornsState();
             ResetFlameBarrierState();
             ResetFumesState();
             ResetDoomState();

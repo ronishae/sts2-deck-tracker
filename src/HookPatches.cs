@@ -166,6 +166,9 @@ internal static class HookPatches
             case NecroMasteryPower:
                 if (amount > 0) CardRegistry.LogNecroMasteryApply(cardSource, (int)amount);
                 break;
+            case ThornsPower:
+                if (amount > 0 && target.IsPlayer) CardRegistry.LogThornsApply(cardSource, (int)amount);
+                break;
             case FlameBarrierPower:
                 if (amount > 0) CardRegistry.LogFlameBarrierApply(cardSource, (int)amount);
                 break;
@@ -450,6 +453,16 @@ internal static class HookPatches
         __result = CardRegistry.AwaitNecroMasteryTaskAsync(__result, delta);
     }
 
+    public static void ThornsBeforeDamageReceivedPrefix(ThornsPower __instance)
+    {
+        CardRegistry.StartThornsExecution();
+    }
+
+    public static void ThornsBeforeDamageReceivedPostfix(ThornsPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitThornsTaskAsync(__result);
+    }
+
     public static void FlameBarrierAfterDamageReceivedPrefix(FlameBarrierPower __instance)
     {
         CardRegistry.StartFlameBarrierExecution();
@@ -638,6 +651,12 @@ internal static class HookPatches
         if (CardRegistry.IsNecroMasteryExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeNecroMasteryDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsThornsExecuting && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeThornsDamage(results.TotalDamage);
             return;
         }
 
