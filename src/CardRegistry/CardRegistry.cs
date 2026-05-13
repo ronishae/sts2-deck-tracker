@@ -245,6 +245,7 @@ public static partial class CardRegistry
             ResetFumesState();
             ResetDoomState();
             ResetCountdownState();
+            ResetReflectState();
             ClearCorrosiveWaveShares();
             ResetOrbState();
             

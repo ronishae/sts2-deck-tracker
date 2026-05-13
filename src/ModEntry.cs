@@ -135,6 +135,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(flameBarrierPrefix), 
             postfix: new HarmonyMethod(flameBarrierPostfix));
 
+        var reflectOriginal = AccessTools.Method(typeof(ReflectPower), nameof(ReflectPower.AfterDamageReceived));
+        var reflectPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReflectAfterDamageReceivedPrefix));
+        var reflectPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReflectAfterDamageReceivedPostfix));
+        
+        _harmony.Patch(reflectOriginal, 
+            prefix: new HarmonyMethod(reflectPrefix), 
+            postfix: new HarmonyMethod(reflectPostfix));
+
         var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });
         var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
         _harmony.Patch(powerRemoveOriginal, prefix: new HarmonyMethod(powerRemovePrefix));

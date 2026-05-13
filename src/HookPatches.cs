@@ -36,7 +36,7 @@ internal static class HookPatches
     {
         // We only care if we are actively in combat
         if (combatState == null) return;
-        GD.Print($"[DeckTracker] AfterCardChangedPiles: pile: {oldPile} - card: {card.Id.Entry} - source: {source?.Id.Entry}.");
+        
         try
         {
             // If the card is now in the Hand, but it didn't come from the Draw pile 
@@ -260,6 +260,18 @@ internal static class HookPatches
             case LoopPower:
                 if (amount > 0) CardRegistry.AddLoop(amount, cardSource);
                 break;
+            case ReflectPower:
+                if (amount > 0 && cardSource != null)
+                {
+                    for (int i = 0; i < amount; i++)
+                        CardRegistry.AddReflect(CardRegistry.GetTrackingId(cardSource));
+                }
+                else if (amount < 0)
+                {
+                    for (int i = 0; i > amount; i--)
+                        CardRegistry.DecrementReflect();
+                }
+                break;
         }
     }
     
@@ -435,6 +447,16 @@ internal static class HookPatches
         __result = CardRegistry.AwaitFlameBarrierTaskAsync(__result);
     }
     
+    public static void ReflectAfterDamageReceivedPrefix(ReflectPower __instance)
+    {
+        CardRegistry.StartReflectExecution();
+    }
+
+    public static void ReflectAfterDamageReceivedPostfix(ReflectPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitReflectTaskAsync(__result);
+    }
+    
     public static void BeforePowerRemovedPrefix(PowerModel? power)
     {
         if (power == null) return;
@@ -603,6 +625,12 @@ internal static class HookPatches
         if (CardRegistry.IsFlameBarrierExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeFlameBarrierDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsReflectExecuting && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeReflectDamage(results.TotalDamage);
             return;
         }
 
