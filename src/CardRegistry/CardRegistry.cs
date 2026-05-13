@@ -241,6 +241,7 @@ public static partial class CardRegistry
             ResetReaperFormState();
             ResetBlackHoleState();
             ResetSleightOfFleshState();
+            ResetSpeedsterState();
             ResetHauntState();
             ResetJuggernautState();
             ResetNecroMasteryState();

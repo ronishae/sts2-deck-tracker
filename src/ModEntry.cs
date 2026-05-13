@@ -175,6 +175,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(reflectPrefix), 
             postfix: new HarmonyMethod(reflectPostfix));
 
+        var speedsterOriginal = AccessTools.Method(typeof(SpeedsterPower), nameof(SpeedsterPower.AfterCardDrawn));
+        var speedsterPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpeedsterAfterCardDrawnPrefix));
+        var speedsterPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpeedsterAfterCardDrawnPostfix));
+
+        _harmony.Patch(speedsterOriginal,
+            prefix: new HarmonyMethod(speedsterPrefix),
+            postfix: new HarmonyMethod(speedsterPostfix));
+
         var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });
         var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
         _harmony.Patch(powerRemoveOriginal, prefix: new HarmonyMethod(powerRemovePrefix));
