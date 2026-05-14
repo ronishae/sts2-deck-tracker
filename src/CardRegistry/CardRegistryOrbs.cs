@@ -54,6 +54,12 @@ public static partial class CardRegistry
             // If there is no card, it was channeled by a Relic, a Potion, or an Event
             string trackingId = sourceCard != null ? GetTrackingId(sourceCard) : "External_Relic";
             
+            if (IsStormExecuting.Value)
+            {
+                var stormId = GetNextStormTrackingId();
+                if (stormId != null) trackingId = stormId;
+            }
+            
             OrbChannelers[orb] = trackingId;
             GD.Print($"[DeckTracker] Channeled {orb.Id.Entry} and attributed to {trackingId}");
             

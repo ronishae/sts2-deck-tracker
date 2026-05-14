@@ -172,6 +172,9 @@ internal static class HookPatches
             case ThunderPower:
                 if (amount > 0) CardRegistry.LogThunderApply(cardSource, (int)amount);
                 break;
+            case StormPower:
+                if (amount > 0) CardRegistry.LogStormApply(cardSource, (int)amount);
+                break;
             case JuggernautPower:
                 if (amount > 0) CardRegistry.LogJuggernautApply(cardSource, (int)amount);
                 break;
@@ -526,6 +529,27 @@ internal static class HookPatches
     public static void ThunderAfterOrbEvokedPostfix(ThunderPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitThunderTaskAsync(__result);
+    }
+
+    public static void StormAfterCardPlayedPrefix(StormPower __instance)
+    {
+        CardRegistry.IsStormExecuting.Value = true;
+        CardRegistry.CurrentTurnStormQueue.Clear();
+        lock (CardRegistry.SyncRoot)
+        {
+            foreach (var contribution in CardRegistry.StormHistory)
+            {
+                for (int i = 0; i < contribution.Amount; i++)
+                {
+                    CardRegistry.CurrentTurnStormQueue.Add(contribution.TrackingId);
+                }
+            }
+        }
+    }
+
+    public static void StormAfterCardPlayedPostfix(StormPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitStormTaskAsync(__result);
     }
 
     public static void JuggernautAfterBlockGainedPrefix(JuggernautPower __instance)

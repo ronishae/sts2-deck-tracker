@@ -191,6 +191,14 @@ public static class ModEntry
             prefix: new HarmonyMethod(thunderPrefix),
             postfix: new HarmonyMethod(thunderPostfix));
 
+        var stormOriginal = AccessTools.Method(typeof(StormPower), nameof(StormPower.AfterCardPlayed));
+        var stormPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StormAfterCardPlayedPrefix));
+        var stormPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StormAfterCardPlayedPostfix));
+
+        _harmony.Patch(stormOriginal,
+            prefix: new HarmonyMethod(stormPrefix),
+            postfix: new HarmonyMethod(stormPostfix));
+
         var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });        var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
         _harmony.Patch(powerRemoveOriginal, prefix: new HarmonyMethod(powerRemovePrefix));
         
