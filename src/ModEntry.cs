@@ -268,6 +268,11 @@ public static class ModEntry
         _harmony.Patch(boulderOriginal,
             prefix: new HarmonyMethod(boulderPrefix),
             postfix: new HarmonyMethod(boulderPostfix));
+        
+        // --- ADDITIVE/MULTIPLICATIVE DAMAGE CALCULATOR ---
+        var modifyDamage = AccessTools.Method(typeof(Hook), nameof(Hook.ModifyDamage));
+        _harmony.Patch(modifyDamage, 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ModifyDamagePostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)

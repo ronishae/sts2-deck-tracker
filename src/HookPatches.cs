@@ -120,6 +120,54 @@ internal static class HookPatches
         catch { /* Silently fail if STS2 changes the CardPlay object */ }
     }
     
+    public static void ModifyDamagePostfix(
+        Decimal damage,
+        Creature? target,
+        Creature? dealer,
+        ValueProp props,
+        CardModel? cardSource,
+        CardPreviewMode previewMode,
+        ref IEnumerable<AbstractModel> modifiers,
+        ref Decimal __result)
+    {
+        // FILTER: Completely ignore UI previews and phantom calculations!
+        if (previewMode != CardPreviewMode.None) return;
+
+        var snapshot = new CardRegistry.DamageSnapshot
+        {
+            BaseDamage = damage, 
+            CardSource = cardSource
+        };
+
+        foreach (var mod in modifiers)
+        {
+            if (mod is PowerModel power)
+            {
+                // Extract the exact additive value this power provided to THIS specific attack
+                decimal addAmount = power.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
+                if (addAmount > 0)
+                {
+                    snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot {
+                        PowerId = power.GetType().Name,
+                        Amount = addAmount
+                    });
+                }
+
+                // Extract any multiplier (e.g., Vulnerable = 1.5)
+                decimal multAmount = power.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
+                if (multAmount != 1m && multAmount != 0m)
+                {
+                    snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot {
+                        PowerId = power.GetType().Name,
+                        Amount = multAmount
+                    });
+                }
+            }
+        }
+
+        CardRegistry.CurrentAttackSnapshot.Value = snapshot;
+    }
+    
     public static void BeforePowerAmountChangedPostfix(
         ICombatState combatState,
         PowerModel power,
@@ -339,6 +387,22 @@ internal static class HookPatches
                         CardRegistry.DecrementReflect();
                 }
                 break;
+            case StrengthPower:
+                if (amount > 0) CardRegistry.AddPersistentBuff("StrengthPower", amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff("StrengthPower", Math.Abs(amount));
+                break;
+            case AccuracyPower:
+                if (amount > 0) CardRegistry.AddPersistentBuff("AccuracyPower", amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff("AccuracyPower", Math.Abs(amount));
+                break;
+            case PhantomBladesPower:
+                if (amount > 0) CardRegistry.AddPersistentBuff("PhantomBladesPower", amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff("PhantomBladesPower", Math.Abs(amount));
+                break;
+            case VigorPower:
+                if (amount > 0) CardRegistry.AddConsumableBuff("VigorPower", amount, cardSource);
+                else if (amount < 0) CardRegistry.RemoveConsumableBuff("VigorPower", Math.Abs(amount));
+                break;
         }
     }
     
@@ -365,6 +429,7 @@ internal static class HookPatches
         else if (cardId.Equals("SHIV"))
         {
             CardRegistry.ProcessShivHistory(cardPlay);
+            CardRegistry.CurrentAttackSnapshot.Value = null;
         }
     }
     
@@ -856,6 +921,13 @@ internal static class HookPatches
             return;
         }
         
+        decimal baseCardDamage = results.TotalDamage;
+        if (CardRegistry.CurrentAttackSnapshot.Value != null && 
+            CardRegistry.CurrentAttackSnapshot.Value.CardSource == cardSource)
+        {
+            baseCardDamage = CardRegistry.ProcessDamageSnapshot(CardRegistry.CurrentAttackSnapshot.Value, results.TotalDamage);
+        }
+        
         // If the card is Sovereign Blade, process the forge distribution!
         GD.Print($"[DeckTracker] Card {cardSource.Id.Entry} did {results.TotalDamage} damage to {target.Name} with target type {cardSource.TargetType}");
         GD.Print($"[DeckTracker] {combatState.Enemies.Count} enemies in the combat via after damage");
@@ -866,12 +938,12 @@ internal static class HookPatches
         }
         else if (cardSource.Id.Entry.Equals("SHIV"))
         {
-            var damageHistoryItem = new DamageHistoryItem(combatState, dealer, results, target, cardSource);
-            CardRegistry.AddShivDamageHistoryItem(damageHistoryItem);
+            // Bypass the un-peeled results object and pass the clean base damage!
+            CardRegistry.AddShivDamage(cardSource, baseCardDamage);
         }
         else
         {
-            CardRegistry.AddDamage(cardSource, results.TotalDamage); 
+            CardRegistry.AddDamage(cardSource, baseCardDamage); 
         }
     }
 

@@ -7,8 +7,16 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
+   // --- SHIV & FAN OF KNIVES TRACKING ---
+
+    public class ShivDamageRecord
+    {
+        public CardModel CardModel { get; set; } = null!;
+        public decimal PeeledDamage { get; set; }
+    }
+
     private static CardModel? _activeFanOfKnivesCard;
-    private static readonly List<DamageHistoryItem> ShivDamageHistory = new();
+    private static readonly List<ShivDamageRecord> ShivDamageHistory = new();
 
     public static void ResetFanOfKnivesState()
     {
@@ -28,11 +36,12 @@ public static partial class CardRegistry
         }
     }
 
-    public static void AddShivDamageHistoryItem(DamageHistoryItem damageHistoryItem)
+    // UPDATED: Now accepts the peeled damage directly!
+    public static void AddShivDamage(CardModel cardModel, decimal peeledDamage)
     {
         lock (SyncRoot)
         {
-            ShivDamageHistory.Add(damageHistoryItem);
+            ShivDamageHistory.Add(new ShivDamageRecord { CardModel = cardModel, PeeledDamage = peeledDamage });
         }
     }
 
@@ -44,34 +53,36 @@ public static partial class CardRegistry
 
             GD.Print($"[DeckTracker] Processing Shiv history with count: {ShivDamageHistory.Count}");
 
-            var maxTotalDamageInstance = ShivDamageHistory[0];
-            foreach (var damageHistoryItem in ShivDamageHistory)
+            // Find the primary target (the one that took the most base damage)
+            var maxDamageRecord = ShivDamageHistory[0];
+            foreach (var record in ShivDamageHistory)
             {
-                if (damageHistoryItem.Results.TotalDamage > maxTotalDamageInstance.Results.TotalDamage)
+                if (record.PeeledDamage > maxDamageRecord.PeeledDamage)
                 {
-                    maxTotalDamageInstance = damageHistoryItem;
+                    maxDamageRecord = record;
                 }
             }
 
-            foreach (var damageHistoryItem in ShivDamageHistory)
+            foreach (var record in ShivDamageHistory)
             {
-                if (damageHistoryItem.CardModel == null) continue;
+                if (record.CardModel == null) continue;
 
-                if (damageHistoryItem == maxTotalDamageInstance)
+                if (record == maxDamageRecord)
                 {
-                    AddDamage(damageHistoryItem.CardModel, damageHistoryItem.Results.TotalDamage);
+                    // Primary hit belongs to the Shiv
+                    AddDamage(record.CardModel, record.PeeledDamage);
                 }
                 else
                 {
+                    // Spillover belongs to Fan of Knives
                     if (_activeFanOfKnivesCard != null)
                     {
                         GD.Print($"[DeckTracker] Attributing spillover Shiv damage to Fan of Knives.");
-                        AddDamage(_activeFanOfKnivesCard, damageHistoryItem.Results.TotalDamage);
+                        AddDamage(_activeFanOfKnivesCard, record.PeeledDamage);
                     }
                     else
                     {
-                        // Should not happen unless AoE Shivs exist without Fan of Knives, but just in case
-                        AddDamage(damageHistoryItem.CardModel, damageHistoryItem.Results.TotalDamage);
+                        AddDamage(record.CardModel, record.PeeledDamage);
                     }
                 }
             }

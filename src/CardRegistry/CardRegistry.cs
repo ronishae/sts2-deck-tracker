@@ -256,6 +256,7 @@ public static partial class CardRegistry
             ResetRollingBoulderState();
             ClearCorrosiveWaveShares();
             ResetOrbState();
+            ResetBuffState();
             
             foreach (var stat in Totals.Values)
             {
