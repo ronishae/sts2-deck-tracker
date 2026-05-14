@@ -269,6 +269,12 @@ public static class ModEntry
             prefix: new HarmonyMethod(boulderPrefix),
             postfix: new HarmonyMethod(boulderPostfix));
         
+        // --- PREP TIME POWER ---
+        var prepTimeOriginal = AccessTools.Method(typeof(PrepTimePower), nameof(PrepTimePower.AfterSideTurnStart));
+        _harmony.Patch(prepTimeOriginal,
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePostfix))));
+        
         // --- ADDITIVE/MULTIPLICATIVE DAMAGE CALCULATOR ---
         var modifyDamage = AccessTools.Method(typeof(Hook), nameof(Hook.ModifyDamage));
         _harmony.Patch(modifyDamage, 

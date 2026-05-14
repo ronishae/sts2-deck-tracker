@@ -399,8 +399,23 @@ internal static class HookPatches
                 if (amount > 0) CardRegistry.AddPersistentBuff("PhantomBladesPower", amount, cardSource);
                 else if (amount < 0) CardRegistry.RemovePersistentBuff("PhantomBladesPower", Math.Abs(amount));
                 break;
+            case PrepTimePower:
+                if (amount > 0) CardRegistry.AddPersistentBuff("PrepTimePower", amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff("PrepTimePower", Math.Abs(amount));
+                break;
             case VigorPower:
-                if (amount > 0) CardRegistry.AddConsumableBuff("VigorPower", amount, cardSource);
+                if (amount > 0)
+                {
+                    // INTERCEPT: Did PrepTimePower generate this Vigor?
+                    if (CardRegistry.IsPrepTimeExecuting.Value)
+                    {
+                        CardRegistry.ProcessPrepTimeVigor(amount);
+                    }
+                    else
+                    {
+                        CardRegistry.AddConsumableBuff("VigorPower", amount, cardSource);
+                    }
+                }
                 else if (amount < 0) CardRegistry.RemoveConsumableBuff("VigorPower", Math.Abs(amount));
                 break;
         }
@@ -805,6 +820,16 @@ internal static class HookPatches
     public static void RollingBoulderAfterPlayerTurnStartPostfix(RollingBoulderPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitRollingBoulderTaskAsync(__result, __instance);
+    }
+    
+    public static void PrepTimePrefix(PrepTimePower __instance)
+    {
+        CardRegistry.IsPrepTimeExecuting.Value = true;
+    }
+
+    public static void PrepTimePostfix(PrepTimePower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitPrepTimeTaskAsync(__result);
     }
     
     // Catches all damage dealt
