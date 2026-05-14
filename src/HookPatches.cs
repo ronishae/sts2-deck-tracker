@@ -175,6 +175,9 @@ internal static class HookPatches
             case StormPower:
                 if (amount > 0) CardRegistry.LogStormApply(cardSource, (int)amount);
                 break;
+            case HailstormPower:
+                if (amount > 0) CardRegistry.LogHailstormApply(cardSource, (int)amount);
+                break;
             case JuggernautPower:
                 if (amount > 0) CardRegistry.LogJuggernautApply(cardSource, (int)amount);
                 break;
@@ -552,6 +555,16 @@ internal static class HookPatches
         __result = CardRegistry.AwaitStormTaskAsync(__result);
     }
 
+    public static void HailstormBeforeTurnEndPrefix(HailstormPower __instance)
+    {
+        CardRegistry.StartHailstormExecution();
+    }
+
+    public static void HailstormBeforeTurnEndPostfix(HailstormPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitHailstormTaskAsync(__result);
+    }
+
     public static void JuggernautAfterBlockGainedPrefix(JuggernautPower __instance)
     {
         CardRegistry.StartJuggernautExecution();
@@ -771,6 +784,12 @@ internal static class HookPatches
         if (CardRegistry.IsHauntExecuting && results.TotalDamage > 0)
         {
             CardRegistry.DistributeHauntDamage(results.TotalDamage);
+            return;
+        }
+
+        if (CardRegistry.IsHailstormExecuting && results.TotalDamage > 0)
+        {
+            CardRegistry.DistributeHailstormDamage(results.TotalDamage);
             return;
         }
 
