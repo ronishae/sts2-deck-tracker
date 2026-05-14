@@ -354,9 +354,17 @@ internal static class HookPatches
         {
             CardRegistry.UpdateSeekingEdge(cardPlay.Card);
         }
+        else if (cardId.Equals("FAN_OF_KNIVES"))
+        {
+            CardRegistry.UpdateFanOfKnives(cardPlay.Card);
+        }
         else if (cardId.Equals("SOVEREIGN_BLADE"))
         {
             CardRegistry.ProcessSovereignBladeHistory(cardPlay);
+        }
+        else if (cardId.Equals("SHIV"))
+        {
+            CardRegistry.ProcessShivHistory(cardPlay);
         }
     }
     
@@ -855,6 +863,11 @@ internal static class HookPatches
         {
             var damageHistoryItem = new DamageHistoryItem(combatState, dealer, results, target, cardSource);
             CardRegistry.AddSovereignBladeDamageHistoryItem(damageHistoryItem);
+        }
+        else if (cardSource.Id.Entry.Equals("SHIV"))
+        {
+            var damageHistoryItem = new DamageHistoryItem(combatState, dealer, results, target, cardSource);
+            CardRegistry.AddShivDamageHistoryItem(damageHistoryItem);
         }
         else
         {

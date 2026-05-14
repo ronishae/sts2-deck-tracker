@@ -245,6 +245,7 @@ public static partial class CardRegistry
             ResetThunderState();
             ResetStormState();
             ResetHailstormState();
+            ResetFanOfKnivesState();
             ResetNecroMasteryState();
             ResetThornsState();
             ResetFlameBarrierState();
