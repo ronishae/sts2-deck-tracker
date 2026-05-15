@@ -300,14 +300,31 @@ public static partial class CardRegistry
         {
             decimal totalPool = 0;
             foreach (var c in persistentLedger) totalPool += c.Amount;
-            
+        
             if (totalPool > 0)
             {
-                foreach (var contribution in persistentLedger)
+                decimal remainingToPay = amount;
+            
+                for (int i = 0; i < persistentLedger.Count; i++)
                 {
-                    // Proportional split for static intensity buffs
-                    decimal share = Math.Floor(amount * (contribution.Amount / totalPool));
-                    if (share > 0) AddDamageById(contribution.TrackingId, share);
+                    var contribution = persistentLedger[i];
+                    if (remainingToPay <= 0) break;
+
+                    // If this is the final card in the queue, it skips the math and catches the remainder.
+                    // This guarantees ZERO damage is lost to floating-point truncation!
+                    if (i == persistentLedger.Count - 1)
+                    {
+                        AddDamageById(contribution.TrackingId, remainingToPay);
+                        break;
+                    }
+
+                    // Older cards (FIFO) get the rounding priority!
+                    decimal share = Math.Min(remainingToPay, Math.Ceiling(amount * (contribution.Amount / totalPool)));
+                    if (share > 0)
+                    {
+                        AddDamageById(contribution.TrackingId, share);
+                        remainingToPay -= share;
+                    }
                 }
             }
         }
