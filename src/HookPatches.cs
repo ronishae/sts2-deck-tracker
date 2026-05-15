@@ -137,7 +137,8 @@ internal static class HookPatches
         {
             BaseDamage = damage, 
             CardSource = cardSource,
-            Target = target
+            Target = target,
+            Dealer = dealer
         };
 
         foreach (var mod in modifiers)
@@ -419,8 +420,31 @@ internal static class HookPatches
                 else if (amount < 0) CardRegistry.RemoveConsumableBuff("VigorPower", Math.Abs(amount));
                 break;
             case VulnerablePower:
-                if (amount > 0) CardRegistry.AddEnemyDebuff(target, "VulnerablePower", amount, cardSource);
-                else if (amount < 0) CardRegistry.RemoveEnemyDebuff(target, "VulnerablePower", Math.Abs(amount));
+                // Note we changed AddEnemyDebuff to AddDurationBuff
+                if (amount > 0) CardRegistry.AddDurationBuff(target, "VulnerablePower", amount, CardRegistry.GetTrackingId(cardSource));
+                else if (amount < 0) CardRegistry.RemoveDurationBuff(target, "VulnerablePower", Math.Abs(amount));
+                break;
+            case ShadowStepPower:
+                if (amount > 0) CardRegistry.AddPersistentBuff("ShadowStepPower", amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff("ShadowStepPower", Math.Abs(amount));
+                break;
+
+            case DoubleDamagePower:
+                if (amount > 0)
+                {
+                    if (CardRegistry.IsShadowStepExecuting.Value)
+                    {
+                        CardRegistry.ProcessShadowStepDoubleDamage(amount, target);
+                    }
+                    else
+                    {
+                        CardRegistry.AddDurationBuff(target, "DoubleDamagePower", amount, CardRegistry.GetTrackingId(cardSource));
+                    }
+                }
+                else if (amount < 0) 
+                {
+                    CardRegistry.RemoveDurationBuff(target, "DoubleDamagePower", Math.Abs(amount));
+                }
                 break;
         }
     }
@@ -834,6 +858,18 @@ internal static class HookPatches
     public static void PrepTimePostfix(PrepTimePower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitPrepTimeTaskAsync(__result);
+    }
+    
+    // --- SHADOW STEP EXECUTION TRAP ---
+
+    public static void ShadowStepPrefix(ShadowStepPower __instance)
+    {
+        CardRegistry.IsShadowStepExecuting.Value = true;
+    }
+
+    public static void ShadowStepPostfix(ShadowStepPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitShadowStepTaskAsync(__result);
     }
     
     // Catches all damage dealt

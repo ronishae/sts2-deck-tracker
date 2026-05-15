@@ -27,6 +27,7 @@ public static partial class CardRegistry
     {
         public CardModel? CardSource { get; set; }
         public Creature? Target { get; set; }
+        public Creature? Dealer { get; set; }
         public decimal BaseDamage { get; set; }
         public List<DamageModifierSnapshot> AdditiveModifiers { get; set; } = new();
         public List<DamageModifierSnapshot> MultiplicativeModifiers { get; set; } = new();
@@ -53,26 +54,29 @@ public static partial class CardRegistry
 
     // --- ENEMY DEBUFF LEDGERS ---
 
-    public static void AddEnemyDebuff(Creature target, string buffType, decimal amount, CardModel? cardSource)
+    // --- DURATION LEDGERS (For Vulnerable, Double Damage, Weak, Intangible) ---
+    // Maps a Creature (Player or Enemy) to their active turn-based buffs!
+    public static readonly Dictionary<Creature, Dictionary<string, List<BuffContribution>>> DurationLedgers = new();
+
+    public static void AddDurationBuff(Creature target, string buffType, decimal amount, string trackingId)
     {
         if (target == null || amount <= 0) return;
         lock (SyncRoot)
         {
-            if (!EnemyDebuffLedgers.ContainsKey(target)) EnemyDebuffLedgers[target] = new();
-            if (!EnemyDebuffLedgers[target].ContainsKey(buffType)) EnemyDebuffLedgers[target][buffType] = new List<BuffContribution>();
+            if (!DurationLedgers.ContainsKey(target)) DurationLedgers[target] = new();
+            if (!DurationLedgers[target].ContainsKey(buffType)) DurationLedgers[target][buffType] = new List<BuffContribution>();
             
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Debuff";
-            EnemyDebuffLedgers[target][buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] Added {amount} {buffType} to FIFO ledger for {trackingId} on {target.Name}");
+            DurationLedgers[target][buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            GD.Print($"[DeckTracker] Added {amount} {buffType} to Duration FIFO ledger for {trackingId} on {target.Name}");
         }
     }
 
-    public static void RemoveEnemyDebuff(Creature target, string buffType, decimal amount)
+    public static void RemoveDurationBuff(Creature target, string buffType, decimal amount)
     {
         if (target == null || amount <= 0) return;
         lock (SyncRoot)
         {
-            if (!EnemyDebuffLedgers.TryGetValue(target, out var targetLedger)) return;
+            if (!DurationLedgers.TryGetValue(target, out var targetLedger)) return;
             if (!targetLedger.TryGetValue(buffType, out var ledger)) return;
 
             decimal remainingToRemove = amount;
@@ -80,14 +84,12 @@ public static partial class CardRegistry
             for (int i = 0; i < ledger.Count; i++)
             {
                 if (remainingToRemove <= 0) break;
-                
                 var contribution = ledger[i];
                 decimal erased = Math.Min(remainingToRemove, contribution.Amount);
                 contribution.Amount -= erased;
                 remainingToRemove -= erased;
             }
             ledger.RemoveAll(c => c.Amount <= 0);
-            GD.Print($"[DeckTracker] Consumed {amount} {buffType} from FIFO ledger on {target.Name}.");
         }
     }
     
@@ -106,7 +108,19 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] Added {amount} {buffType} to persistent ledger for {trackingId}");
         }
     }
-
+    
+    // Helper to add persistent buffs when we already know the exact ID
+    public static void AddPersistentBuffById(string buffType, decimal amount, string trackingId)
+    {
+        if (amount <= 0) return;
+        lock (SyncRoot)
+        {
+            if (!PersistentLedgers.ContainsKey(buffType)) PersistentLedgers[buffType] = new List<BuffContribution>();
+            PersistentLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            GD.Print($"[DeckTracker] Handoff: Added {amount} {buffType} to Persistent ledger for {trackingId}");
+        }
+    }
+    
     public static void RemovePersistentBuff(string buffType, decimal amount)
     {
         if (amount <= 0) return;
@@ -200,7 +214,7 @@ public static partial class CardRegistry
                 decimal awardedDamage = theoreticalDiff - penalty;
                 overkill -= penalty;
 
-                if (awardedDamage > 0) PayoutMultiplierDamage(multMod.PowerId, awardedDamage, snapshot.Target);
+                if (awardedDamage > 0) PayoutMultiplierDamage(multMod.PowerId, awardedDamage, snapshot.Target, snapshot.Dealer);
                 
                 // We successfully peeled a Buff. Update the stack!
                 currentCalculatedDamage = damageWithout;
@@ -235,24 +249,39 @@ public static partial class CardRegistry
         return Math.Max(0, currentCalculatedDamage - overkill + extraDamage);
     }
     
-    private static void PayoutMultiplierDamage(string powerId, decimal amount, Creature? target)
+    private static void PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer)
     {
-        // 1. Is it an Enemy Debuff? (Vulnerable)
-        if (target != null && EnemyDebuffLedgers.TryGetValue(target, out var targetLedger) 
+        // 1. Is it a Target Debuff? (Vulnerable)
+        if (target != null && DurationLedgers.TryGetValue(target, out var targetLedger) 
                            && targetLedger.TryGetValue(powerId, out var enemyLedger))
         {
             decimal remainingToPay = amount;
             foreach (var contribution in enemyLedger)
             {
                 if (remainingToPay <= 0) break;
-                decimal payout = remainingToPay; // Debuffs claim the full amount for their tick
+                decimal payout = remainingToPay; // 100% to the active turn!
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
             }
             return;
         }
 
-        // 2. Is it a Consumable Player Buff? (Pen Nib)
+        // 2. Is it a Dealer Duration Buff? (Double Damage)
+        if (dealer != null && DurationLedgers.TryGetValue(dealer, out var dealerLedger) 
+                           && dealerLedger.TryGetValue(powerId, out var playerDurationLedger))
+        {
+            decimal remainingToPay = amount;
+            foreach (var contribution in playerDurationLedger)
+            {
+                if (remainingToPay <= 0) break;
+                decimal payout = remainingToPay; // 100% to the active turn!
+                AddDamageById(contribution.TrackingId, payout);
+                remainingToPay -= payout;
+            }
+            return;
+        }
+
+        // 3. Is it a Consumable Player Buff? (e.g., Pen Nib)
         if (ConsumableLedgers.TryGetValue(powerId, out var consumableLedger))
         {
             decimal remainingToPay = amount;
@@ -265,8 +294,8 @@ public static partial class CardRegistry
             }
             return;
         }
-
-        // 3. Is it a Persistent Player Buff? (Double Damage, Phantasmal Killer)
+        
+        // 4. Is it a Persistent Player Buff? (e.g., A passive Stance or Relic modifier)
         if (PersistentLedgers.TryGetValue(powerId, out var persistentLedger))
         {
             decimal totalPool = 0;
@@ -276,6 +305,7 @@ public static partial class CardRegistry
             {
                 foreach (var contribution in persistentLedger)
                 {
+                    // Proportional split for static intensity buffs
                     decimal share = Math.Floor(amount * (contribution.Amount / totalPool));
                     if (share > 0) AddDamageById(contribution.TrackingId, share);
                 }
