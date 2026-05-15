@@ -389,6 +389,7 @@ internal static class HookPatches
                 }
                 break;
             case StrengthPower:
+                if (!target.IsPlayer) break;
                 if (amount > 0) CardRegistry.AddPersistentBuff("StrengthPower", amount, cardSource);
                 else if (amount < 0) CardRegistry.RemovePersistentBuff("StrengthPower", Math.Abs(amount));
                 break;
@@ -444,6 +445,29 @@ internal static class HookPatches
                 else if (amount < 0) 
                 {
                     CardRegistry.RemoveDurationBuff(target, "DoubleDamagePower", Math.Abs(amount));
+                }
+                break;
+            case TrackingPower:
+                if (amount > 0) 
+                {
+                    // Check if this is the very first time Tracking is being applied
+                    bool isFirstApplication = !CardRegistry.PersistentLedgers.ContainsKey("TrackingPower") || 
+                                              CardRegistry.PersistentLedgers["TrackingPower"].Count == 0;
+                
+                    // The first application gives 2 stacks, but 1 of those is the inherent 1.0x base.
+                    // We only want to log the actual BONUS multiplier delta into the ledger!
+                    decimal loggedAmount = isFirstApplication ? amount - 1 : amount;
+                
+                    if (loggedAmount > 0) 
+                    {
+                        CardRegistry.AddPersistentBuff("TrackingPower", loggedAmount, cardSource);
+                    }
+                }
+                else if (amount < 0) 
+                {
+                    // If it ever gets removed or completely wiped, we wipe the ledger as usual.
+                    // (Using a full wipe here is safest if a boss cleanses debuffs/buffs)
+                    CardRegistry.RemovePersistentBuff("TrackingPower", Math.Abs(amount));
                 }
                 break;
         }
