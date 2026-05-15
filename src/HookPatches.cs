@@ -136,35 +136,35 @@ internal static class HookPatches
         var snapshot = new CardRegistry.DamageSnapshot
         {
             BaseDamage = damage, 
-            CardSource = cardSource
+            CardSource = cardSource,
+            Target = target
         };
 
         foreach (var mod in modifiers)
         {
-            if (mod is PowerModel power)
+            // We call the math directly on the base AbstractModel!
+            decimal addAmount = mod.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
+            if (addAmount > 0)
             {
-                // Extract the exact additive value this power provided to THIS specific attack
-                decimal addAmount = power.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
-                if (addAmount > 0)
-                {
-                    snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot {
-                        PowerId = power.GetType().Name,
-                        Amount = addAmount
-                    });
-                }
+                snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot {
+                    PowerId = mod.GetType().Name,
+                    Amount = addAmount
+                });
+            }
 
-                // Extract any multiplier (e.g., Vulnerable = 1.5)
-                decimal multAmount = power.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
-                if (multAmount != 1m && multAmount != 0m)
-                {
-                    snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot {
-                        PowerId = power.GetType().Name,
-                        Amount = multAmount
-                    });
-                }
+            // Extract the Multiplier
+            decimal multAmount = mod.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
+            
+            // We ignore 1m (no change) and 0m (just in case of a weird engine fail-safe)
+            if (multAmount != 1m && multAmount != 0m)
+            {
+                snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot {
+                    PowerId = mod.GetType().Name,
+                    Amount = multAmount
+                });
+                GD.Print($"[DeckTracker] Logged Multiplier: {mod.GetType().Name} with {multAmount}x");
             }
         }
-
         CardRegistry.CurrentAttackSnapshot.Value = snapshot;
     }
     
@@ -417,6 +417,10 @@ internal static class HookPatches
                     }
                 }
                 else if (amount < 0) CardRegistry.RemoveConsumableBuff("VigorPower", Math.Abs(amount));
+                break;
+            case VulnerablePower:
+                if (amount > 0) CardRegistry.AddEnemyDebuff(target, "VulnerablePower", amount, cardSource);
+                else if (amount < 0) CardRegistry.RemoveEnemyDebuff(target, "VulnerablePower", Math.Abs(amount));
                 break;
         }
     }
