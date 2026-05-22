@@ -199,7 +199,7 @@ public static class ModEntry
             prefix: new HarmonyMethod(stormPrefix),
             postfix: new HarmonyMethod(stormPostfix));
 
-        var hailstormOriginal = AccessTools.Method(typeof(HailstormPower), nameof(HailstormPower.BeforeTurnEnd));
+        var hailstormOriginal = AccessTools.Method(typeof(HailstormPower), nameof(HailstormPower.BeforeSideTurnEnd));
         var hailstormPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HailstormBeforeTurnEndPrefix));
         var hailstormPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HailstormBeforeTurnEndPostfix));
 
@@ -253,7 +253,7 @@ public static class ModEntry
         var tempAfterAmount = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterPowerAmountChanged));
         _harmony.Patch(tempAfterAmount, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPostfix))));
 
-        var tempEnd = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterTurnEnd));
+        var tempEnd = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterSideTurnEnd));
         _harmony.Patch(tempEnd, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePostfix))));
         
         var loopOriginal = AccessTools.Method(typeof(LoopPower), nameof(LoopPower.AfterPlayerTurnStart));
