@@ -32,7 +32,7 @@ internal static class HookPatches
     }
     
     // Catches cards that enter the hand via Generation, Exhaust, or Discard retrieval!
-    public static void AfterCardChangedPilesPostfix(IRunState runState, ICombatState? combatState, CardModel card, PileType oldPile, AbstractModel? source)
+    public static void AfterCardChangedPilesPostfix(IRunState runState, ICombatState? combatState, CardModel card, PileType oldPile, AbstractModel? clonedBy)
     {
         // We only care if we are actively in combat
         if (combatState == null) return;
