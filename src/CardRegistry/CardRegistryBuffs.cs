@@ -214,7 +214,16 @@ public static partial class CardRegistry
                 decimal awardedDamage = theoreticalDiff - penalty;
                 overkill -= penalty;
 
-                if (awardedDamage > 0) PayoutMultiplierDamage(multMod.PowerId, awardedDamage, snapshot.Target, snapshot.Dealer);
+                if (awardedDamage > 0)
+                {
+                    var paid = PayoutMultiplierDamage(multMod.PowerId, awardedDamage, snapshot.Target, snapshot.Dealer);
+                    if (!paid)
+                    {
+                        // UNTRACKED POWER DETECTED! Route it back to the Base Card!
+                        extraDamage += awardedDamage;
+                        GD.Print($"[DeckTracker] Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
+                    }
+                }
                 
                 // We successfully peeled a Buff. Update the stack!
                 currentCalculatedDamage = damageWithout;
@@ -241,7 +250,16 @@ public static partial class CardRegistry
             decimal awardedDamage = theoreticalDiff - penalty;
             overkill -= penalty;
 
-            if (awardedDamage > 0) PayoutAdditiveDamage(addMod.PowerId, awardedDamage);
+            if (awardedDamage > 0)
+            {
+                var paid = PayoutAdditiveDamage(addMod.PowerId, awardedDamage);
+                if (!paid)
+                {
+                    // UNTRACKED POWER DETECTED! Route it back to the Base Card!
+                    extraDamage += awardedDamage;
+                    GD.Print($"[DeckTracker] Unattributed {awardedDamage} damage from {addMod.PowerId} routed to Base Card.");
+                }
+            }
 
             currentCalculatedDamage = damageWithout;
         }
@@ -249,7 +267,8 @@ public static partial class CardRegistry
         return Math.Max(0, currentCalculatedDamage - overkill + extraDamage);
     }
     
-    private static void PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer)
+    // Returns true if it found a card to payout to, false if it did not (un-attributed environmental damage -- e.g. slow)
+    private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer)
     {
         // 1. Is it a Target Debuff? (Vulnerable)
         if (target != null && DurationLedgers.TryGetValue(target, out var targetLedger) 
@@ -263,7 +282,7 @@ public static partial class CardRegistry
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
             }
-            return;
+            return true;
         }
 
         // 2. Is it a Dealer Duration Buff? (Double Damage)
@@ -278,7 +297,7 @@ public static partial class CardRegistry
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
             }
-            return;
+            return true;
         }
 
         // 3. Is it a Consumable Player Buff? (e.g., Pen Nib)
@@ -292,7 +311,7 @@ public static partial class CardRegistry
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
             }
-            return;
+            return true;
         }
         
         // 4. Is it a Persistent Player Buff? (e.g., A passive Stance or Relic modifier)
@@ -328,9 +347,11 @@ public static partial class CardRegistry
                 }
             }
         }
+
+        return false;
     }
     
-    private static void PayoutAdditiveDamage(string powerId, decimal amount)
+    private static bool PayoutAdditiveDamage(string powerId, decimal amount)
     {
         // 1. Is it a Consumable? (Vigor)
         if (ConsumableLedgers.ContainsKey(powerId))
@@ -348,9 +369,11 @@ public static partial class CardRegistry
                 
                 remainingToPay -= payout;
             }
+
+            return true;
         }
         // 2. Is it a Persistent Buff? (Strength, Accuracy, PhantomBlades)
-        else if (PersistentLedgers.ContainsKey(powerId))
+        if (PersistentLedgers.ContainsKey(powerId))
         {
             // Persistent buffs don't get consumed, so we just read the ledger top-down!
             foreach (var contribution in PersistentLedgers[powerId])
@@ -371,6 +394,10 @@ public static partial class CardRegistry
                     }
                 }
             }
+
+            return true;
         }
+
+        return false;
     }
 }
