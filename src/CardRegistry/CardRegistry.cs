@@ -124,7 +124,7 @@ public static partial class CardRegistry
                 state = new SavedRunState
                 {
                     RunSeed = _currentRunSeed,
-                    Totals = Totals.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Clone())
+                    Totals = Totals.ToDictionary(kvp => kvp.Key, kvp => (CardStats)kvp.Value.Clone())
                 };
             }
 
@@ -197,22 +197,22 @@ public static partial class CardRegistry
             foreach (var stat in Totals.Values)
             {
                 // DIFF CHECK: If we think the card is in the deck, but the game scan didn't find it
-                if (stat.IsInDeck && !uniqueActiveIds.Contains(stat.CardId))
+                if (stat.IsActive && !uniqueActiveIds.Contains(stat.Id))
                 {
-                    GD.Print($"[DeckTracker] {stat.CardId} is gone");
-                    stat.IsInDeck = false;
+                    GD.Print($"[DeckTracker] {stat.Id} is gone");
+                    stat.IsActive = false;
                     stat.CopiesInDeck = 0;
                         
                     int floorLeft = Math.Max(1, currentFloor - 1);
                     if (stat.FloorRemoved == -1)
                     {
                         stat.FloorLeftDeck = floorLeft;
-                        GD.Print($"[DeckTracker] {stat.CardId} FloorLeftDeck updated to {stat.FloorLeftDeck}");
+                        GD.Print($"[DeckTracker] {stat.Id} FloorLeftDeck updated to {stat.FloorLeftDeck}");
                     }
                 }
-                else if (copyCounts.TryGetValue(stat.CardId, out int count))
+                else if (copyCounts.TryGetValue(stat.Id, out int count))
                 {
-                    stat.IsInDeck = true;
+                    stat.IsActive = true;
                     stat.CopiesInDeck = count;
                 }
             }
@@ -265,7 +265,7 @@ public static partial class CardRegistry
                 stat.ConnectedForgeCombat = 0;
                 stat.ReceivedForgeCombat = 0;
                 
-                if (!stat.IsInDeck) continue; // Skip cards not in the deck
+                if (!stat.IsActive) continue; // Skip cards not in the deck
                 
                 var actData = GetActData(stat, _currentAct);
                 if (actData != null)
@@ -275,7 +275,7 @@ public static partial class CardRegistry
                     else actData.EncountersSeenHallway++;
                 }
 
-                _incrementedThisCombat.Add(stat.CardId);
+                _incrementedThisCombat.Add(stat.Id);
             }
         }
     }
@@ -307,7 +307,7 @@ public static partial class CardRegistry
                 {
                     stat.FloorRemoved = floorRemoved;
                     stat.FloorLeftDeck = floorRemoved;
-                    stat.IsInDeck = false;
+                    stat.IsActive = false;
                     stat.CopiesInDeck = 0;
                 }
             }
@@ -331,16 +331,16 @@ public static partial class CardRegistry
                 string enchantName = sourceCard.Enchantment?.Id.Entry ?? "";
                 stat = new CardStats 
                 { 
-                CardId = uniqueTrackingId, 
-                DisplayName = displayName,
-                CardType = sourceCard.Type.ToString(),
-                Enchantment = enchantName,
-                FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
-                FloorRemoved = isGenerated ? 0 : -1, 
-                IsInDeck = !isGenerated, // Normal cards are True, Generated are False
-                CopiesInDeck = isGenerated ? 0 : 1,
-                CombatDamage = 0,
-                RunDamage = 0
+                    Id = uniqueTrackingId, 
+                    DisplayName = displayName,
+                    CardType = sourceCard.Type.ToString(),
+                    Enchantment = enchantName,
+                    FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
+                    FloorRemoved = isGenerated ? 0 : -1, 
+                    IsActive = !isGenerated, // Normal cards are True, Generated are False
+                    CopiesInDeck = isGenerated ? 0 : 1,
+                    CombatDamage = 0,
+                    RunDamage = 0
                 };
                 
                 Totals[uniqueTrackingId] = stat;
@@ -435,7 +435,7 @@ public static partial class CardRegistry
         List<CardStats> statsCopy;
         lock (SyncRoot)
         {
-            statsCopy = Totals.Values.Select(s => s.Clone()).ToList();
+            statsCopy = Totals.Values.Select(s => (CardStats)s.Clone()).ToList();
         }
         Changed?.Invoke(statsCopy);
     }
