@@ -406,7 +406,7 @@ public static partial class CardRegistry
             {
                 stat.CombatDamage += amount;
                 stat.RunDamage += amount;
-                
+                GD.Print($"Added {amount} damage to {trackingId}.");
                 var actData = GetActData(stat, _currentAct);
                 if (actData != null)
                 {
