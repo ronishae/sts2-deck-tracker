@@ -18,6 +18,8 @@ public static class ModEntry
     {
         if (_harmony != null) return;
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
+        
+        RelicExecutionManager.PatchAllDirectDamageRelics(_harmony);
 
         // --- Core Lifecycle Hooks ---
         PatchHook(nameof(Hook.AfterRoomEntered), nameof(HookPatches.AfterRoomEnteredPostfix));

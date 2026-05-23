@@ -985,6 +985,13 @@ internal static class HookPatches
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
         GD.Print($"[DeckTracker] AfterDamageGivePostfix triggered");
+        if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+        {
+            string executingRelic = RelicExecutionManager.ExecutingRelicId.Value;
+            CardRegistry.AddRelicDamage(executingRelic, results.TotalDamage);
+            return; 
+        }
+        
         if (CardRegistry.CurrentPoisonTarget.Value == target && results.TotalDamage > 0)
         {
             GD.Print($"[DeckTracker] Poison detected");
