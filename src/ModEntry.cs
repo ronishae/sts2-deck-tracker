@@ -295,6 +295,12 @@ public static class ModEntry
         _harmony.Patch(arsenalOriginal,
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ArsenalPrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ArsenalPostfix))));
+        
+        // --- MONOLOGUE POWER ---
+        var monologueOriginal = AccessTools.Method(typeof(MonologuePower), nameof(MonologuePower.AfterCardPlayed));
+        _harmony.Patch(monologueOriginal,
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MonologuePrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MonologuePostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)

@@ -257,6 +257,7 @@ public static partial class CardRegistry
             ClearCorrosiveWaveShares();
             ResetOrbState();
             ResetBuffState();
+            InstancedPowerSources.Clear();
             
             foreach (var stat in Totals.Values)
             {

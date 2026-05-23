@@ -402,6 +402,21 @@ internal static class HookPatches
                     else if (amount < 0) CardRegistry.RemovePersistentBuff("ArsenalPower", Math.Abs(amount));
                 }
                 break;
+            case MonologuePower:
+                if (target.IsPlayer)
+                {
+                    if (amount > 0) 
+                    {
+                        // TAPE THE NAMETAG: Link this specific power object to the card source!
+                        CardRegistry.InstancedPowerSources[power] = CardRegistry.GetTrackingId(cardSource);
+                    }
+                    else if (amount < 0) 
+                    {
+                        // Cleanup when the power is removed
+                        CardRegistry.InstancedPowerSources.Remove(power);
+                    }
+                }
+                break;
             case StrengthPower:
                 if (!target.IsPlayer) break;
                 if (amount > 0)
@@ -413,6 +428,11 @@ internal static class HookPatches
                     else if (CardRegistry.IsArsenalExecuting.Value)
                     {
                         CardRegistry.ProcessArsenalStrength(amount);
+                    }
+                    else if (!string.IsNullOrEmpty(CardRegistry.ExecutingInstancedSource.Value))
+                    {
+                        // Flawless attribution. We don't need a ledger sweep!
+                        CardRegistry.AddPersistentBuffById("StrengthPower", amount, CardRegistry.ExecutingInstancedSource.Value);
                     }
                     else
                     {
@@ -943,6 +963,22 @@ internal static class HookPatches
     public static void ArsenalPostfix(ArsenalPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitArsenalTaskAsync(__result);
+    }
+    
+    // --- MONOLOGUE EXECUTION TRAP ---
+
+    public static void MonologuePrefix(MonologuePower __instance)
+    {
+        // Read the nametag! If this instance has one, tell the system who is executing.
+        if (CardRegistry.InstancedPowerSources.TryGetValue(__instance, out var sourceId))
+        {
+            CardRegistry.ExecutingInstancedSource.Value = sourceId;
+        }
+    }
+
+    public static void MonologuePostfix(MonologuePower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitInstancedTaskAsync(__result);
     }
     
     // Catches all damage dealt

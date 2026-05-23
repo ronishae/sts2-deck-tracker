@@ -42,6 +42,19 @@ public static partial class CardRegistry
     // The Snapshot trap we will use in Phase 3
     public static readonly AsyncLocal<DamageSnapshot?> CurrentAttackSnapshot = new();
 
+    // --- INSTANCED POWER TRACKING ---
+    // Maps a specific Power object to the Tracking ID of the card that created it!
+    public static readonly Dictionary<PowerModel, string> InstancedPowerSources = new();
+
+    // Instead of a boolean, we store the exact tracking ID of the executing power!
+    public static readonly AsyncLocal<string?> ExecutingInstancedSource = new();
+
+    public static async Task AwaitInstancedTaskAsync(Task originalTask)
+    {
+        try { await originalTask; }
+        finally { ExecutingInstancedSource.Value = null; }
+    }
+    
     public static void ResetBuffState()
     {
         lock (SyncRoot)
