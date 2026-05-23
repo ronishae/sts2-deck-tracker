@@ -395,6 +395,13 @@ internal static class HookPatches
                     else if (amount < 0) CardRegistry.RemovePersistentBuff("DemonFormPower", Math.Abs(amount));
                 }
                 break;
+            case ArsenalPower:
+                if (target.IsPlayer)
+                {
+                    if (amount > 0) CardRegistry.AddPersistentBuff("ArsenalPower", amount, cardSource);
+                    else if (amount < 0) CardRegistry.RemovePersistentBuff("ArsenalPower", Math.Abs(amount));
+                }
+                break;
             case StrengthPower:
                 if (!target.IsPlayer) break;
                 if (amount > 0)
@@ -402,6 +409,10 @@ internal static class HookPatches
                     if (CardRegistry.IsDemonFormExecuting.Value)
                     {
                         CardRegistry.ProcessDemonFormStrength(amount);
+                    }
+                    else if (CardRegistry.IsArsenalExecuting.Value)
+                    {
+                        CardRegistry.ProcessArsenalStrength(amount);
                     }
                     else
                     {
@@ -922,6 +933,16 @@ internal static class HookPatches
     public static void DemonFormPostfix(DemonFormPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitDemonFormTaskAsync(__result);
+    }
+    
+    public static void ArsenalPrefix(ArsenalPower __instance)
+    {
+        CardRegistry.IsArsenalExecuting.Value = true;
+    }
+
+    public static void ArsenalPostfix(ArsenalPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitArsenalTaskAsync(__result);
     }
     
     // Catches all damage dealt

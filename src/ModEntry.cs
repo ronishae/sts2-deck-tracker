@@ -287,9 +287,14 @@ public static class ModEntry
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ShadowStepPostfix))));
         
         var demonFormOriginal = AccessTools.Method(typeof(DemonFormPower), nameof(DemonFormPower.AfterSideTurnStart));
-        _harmony!.Patch(demonFormOriginal,
+        _harmony.Patch(demonFormOriginal,
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemonFormPrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemonFormPostfix))));
+        
+        var arsenalOriginal = AccessTools.Method(typeof(ArsenalPower), nameof(ArsenalPower.AfterCardGeneratedForCombat));
+        _harmony.Patch(arsenalOriginal,
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ArsenalPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ArsenalPostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)
