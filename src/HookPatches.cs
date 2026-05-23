@@ -388,9 +388,27 @@ internal static class HookPatches
                         CardRegistry.DecrementReflect();
                 }
                 break;
+            case DemonFormPower:
+                if (target.IsPlayer)
+                {
+                    if (amount > 0) CardRegistry.AddPersistentBuff("DemonFormPower", amount, cardSource);
+                    else if (amount < 0) CardRegistry.RemovePersistentBuff("DemonFormPower", Math.Abs(amount));
+                }
+                break;
             case StrengthPower:
                 if (!target.IsPlayer) break;
-                if (amount > 0) CardRegistry.AddPersistentBuff("StrengthPower", amount, cardSource);
+                if (amount > 0)
+                {
+                    if (CardRegistry.IsDemonFormExecuting.Value)
+                    {
+                        CardRegistry.ProcessDemonFormStrength(amount);
+                    }
+                    else
+                    {
+                        // Standard application (e.g., Inflame, Flex)
+                        CardRegistry.AddPersistentBuff("StrengthPower", amount, cardSource);
+                    }
+                }
                 else if (amount < 0) CardRegistry.RemovePersistentBuff("StrengthPower", Math.Abs(amount));
                 break;
             case AccuracyPower:
@@ -894,6 +912,16 @@ internal static class HookPatches
     public static void ShadowStepPostfix(ShadowStepPower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitShadowStepTaskAsync(__result);
+    }
+    
+    public static void DemonFormPrefix(DemonFormPower __instance)
+    {
+        CardRegistry.IsDemonFormExecuting.Value = true;
+    }
+
+    public static void DemonFormPostfix(DemonFormPower __instance, ref Task __result)
+    {
+        __result = CardRegistry.AwaitDemonFormTaskAsync(__result);
     }
     
     // Catches all damage dealt

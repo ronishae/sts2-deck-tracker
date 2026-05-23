@@ -285,6 +285,11 @@ public static class ModEntry
         _harmony.Patch(shadowStepOriginal,
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ShadowStepPrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ShadowStepPostfix))));
+        
+        var demonFormOriginal = AccessTools.Method(typeof(DemonFormPower), nameof(DemonFormPower.AfterSideTurnStart));
+        _harmony!.Patch(demonFormOriginal,
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemonFormPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemonFormPostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)
