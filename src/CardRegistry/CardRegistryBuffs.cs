@@ -283,6 +283,13 @@ public static partial class CardRegistry
     // Returns true if it found a card to payout to, false if it did not (un-attributed environmental damage -- e.g. slow)
     private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer)
     {
+        GD.Print($"[DeckTracker] PayoutMultiplierDamage powerId: {powerId}, amount: {amount}");
+        if (RelicLedger.ContainsKey(powerId) || powerId == "PenNib") // Add your relic class names here!
+        {
+            AddRelicDamage(powerId, amount);
+            return true;
+        }
+        
         // 1. Is it a Target Debuff? (Vulnerable)
         if (target != null && DurationLedgers.TryGetValue(target, out var targetLedger) 
                            && targetLedger.TryGetValue(powerId, out var enemyLedger))
@@ -366,6 +373,14 @@ public static partial class CardRegistry
     
     private static bool PayoutAdditiveDamage(string powerId, decimal amount)
     {
+        GD.Print($"[DeckTracker] PayoutAdditiveDamage powerId: {powerId}, amount: {amount}");
+        if (RelicLedger.ContainsKey(powerId) || powerId == "StrikeDummy" || powerId == "FakeStrikeDummy" 
+            || powerId == "MysticLighter" || powerId == "MiniatureCannon")
+        {
+            AddRelicDamage(powerId, amount);
+            return true;
+        }
+        
         // 1. Is it a Consumable? (Vigor)
         if (ConsumableLedgers.ContainsKey(powerId))
         {
