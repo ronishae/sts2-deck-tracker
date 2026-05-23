@@ -479,8 +479,36 @@ public static class DeckTrackerOverlay
 
     private static void RenderFullScreenRelics()
     {
-        // Placeholder! This will render your `RelicStats` ledger when you build it.
+        // 1. Setup Headers
         _fullScreenHeadersContainer!.AddChild(new Label { Text = "RELIC NAME", CustomMinimumSize = new Vector2(300, 0) });
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "WORK IN PROGRESS...", CustomMinimumSize = new Vector2(300, 0) });
+        
+        string damageHeaderText = _showRunStats ? "RUN DAMAGE" : "COMBAT DAMAGE";
+        _fullScreenHeadersContainer.AddChild(new Label { Text = damageHeaderText, CustomMinimumSize = new Vector2(220, 0) });
+
+        // 2. Fetch, Filter, and Sort Data
+        // We pull directly from the global RelicLedger and filter out 0-damage relics
+        var relicList = CardRegistry.RelicLedger.Values
+            .Where(r => _showRunStats ? r.RunDamage > 0 : r.CombatDamage > 0)
+            .OrderByDescending(r => _showRunStats ? r.RunDamage : r.CombatDamage)
+            .ToList();
+
+        // 3. Render Rows
+        foreach (var relic in relicList)
+        {
+            HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            
+            // Name Column (Uses the base class helper we wrote earlier!)
+            Label nameLabel = new Label { Text = GetEntityDisplayTitle(relic), CustomMinimumSize = new Vector2(300, 0) };
+            
+            // Damage Column
+            decimal damageToShow = _showRunStats ? relic.RunDamage : relic.CombatDamage;
+            Label damageLabel = new Label { Text = damageToShow.ToString("0.##"), CustomMinimumSize = new Vector2(220, 0) };
+            damageLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+
+            row.AddChild(nameLabel);
+            row.AddChild(damageLabel);
+            
+            _fullScreenRowsContainer!.AddChild(row);
+        }
     }
 }
