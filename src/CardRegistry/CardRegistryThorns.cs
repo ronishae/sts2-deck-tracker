@@ -30,9 +30,26 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
+            string trackingId;
+            
+            // 1. Is it from a Card? (e.g., Caltrops)
+            if (cardSource != null)
+            {
+                trackingId = GetTrackingId(cardSource);
+            }
+            // 2. Is it from an executing Relic? (e.g., Bronze Scales)
+            else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+            {
+                trackingId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+            }
+            // 3. Fallback (Enemy debuffs, or un-tracked sources)
+            else
+            {
+                trackingId = "External_Source"; 
+            }
+
             _thornsLedger.Add(new ThornsContribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] LogThornsApply. Card: {trackingId}, Amount: {amount}");
+            GD.Print($"[DeckTracker] LogThornsApply. Source: {trackingId}, Amount: {amount}");
         }
     }
 

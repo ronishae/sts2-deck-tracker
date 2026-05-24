@@ -134,6 +134,9 @@ public static class RelicExecutionManager
             
             // Vigor
             (typeof(Akabeko), nameof(Akabeko.AfterSideTurnStart)),
+            
+            // Thorns
+            (typeof(BronzeScales), nameof(BronzeScales.AfterRoomEntered)),
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)

@@ -245,7 +245,10 @@ internal static class HookPatches
                 CardRegistry.LogRollingBoulderInstance(power, cardSource);
                 break;
             case ThornsPower:
-                if (amount > 0 && target.IsPlayer) CardRegistry.LogThornsApply(cardSource, (int)amount);
+                if (amount > 0 && target.IsPlayer)
+                {
+                    CardRegistry.LogThornsApply(cardSource, (int)amount);
+                }
                 break;
             case FlameBarrierPower:
                 if (amount > 0) CardRegistry.LogFlameBarrierApply(cardSource, (int)amount);
