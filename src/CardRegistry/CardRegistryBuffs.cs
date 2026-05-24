@@ -401,28 +401,38 @@ public static partial class CardRegistry
             return true;
         }
         // 2. Is it a Persistent Buff? (Strength, Accuracy, PhantomBlades)
-        if (PersistentLedgers.ContainsKey(powerId))
+        if (PersistentLedgers.TryGetValue(powerId, out var persistentLedger))
         {
-            // Persistent buffs don't get consumed, so we just read the ledger top-down!
-            foreach (var contribution in PersistentLedgers[powerId])
+            decimal totalPool = 0;
+            foreach (var c in persistentLedger) totalPool += c.Amount;
+        
+            if (totalPool > 0)
             {
-                // To maintain accurate attribution without decimals, we give the entire Peel diff 
-                // to the card that gave the largest contribution, or we can split it proportionally if you prefer. 
-                // For now, we will just give it directly based on their share of the pool.
-                decimal totalPool = 0;
-                foreach(var c in PersistentLedgers[powerId]) totalPool += c.Amount;
-                
-                if (totalPool > 0)
+                decimal remainingToPay = amount;
+            
+                for (int i = 0; i < persistentLedger.Count; i++)
                 {
-                    decimal share = Math.Floor(amount * (contribution.Amount / totalPool));
+                    var contribution = persistentLedger[i];
+                    if (remainingToPay <= 0) break;
+
+                    // If this is the final card/relic in the queue, it catches the remainder!
+                    if (i == persistentLedger.Count - 1)
+                    {
+                        AddDamageById(contribution.TrackingId, remainingToPay);
+                        GD.Print($"[DeckTracker] LIFO Peel Paid {remainingToPay} Additive Buff Damage to {contribution.TrackingId}");
+                        break;
+                    }
+
+                    // Older cards/relics (FIFO) get the rounding priority!
+                    decimal share = Math.Min(remainingToPay, Math.Ceiling(amount * (contribution.Amount / totalPool)));
                     if (share > 0)
                     {
                         AddDamageById(contribution.TrackingId, share);
-                        GD.Print($"[DeckTracker] LIFO Peel Paid {share} Persistent Buff Damage to {contribution.TrackingId}");
+                        GD.Print($"[DeckTracker] LIFO Peel Paid {share} Additive Buff Damage to {contribution.TrackingId}");
+                        remainingToPay -= share;
                     }
                 }
             }
-
             return true;
         }
 
