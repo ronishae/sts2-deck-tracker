@@ -83,6 +83,14 @@ internal static class HookPatches
         }
     }
 
+    public static void AfterSideTurnStartPostfix(
+        ICombatState combatState,
+        CombatSide side,
+        IReadOnlyList<Creature> participants)
+    {
+        CardRegistry.ResetOrbTurnState();
+    }
+
     public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
     {
         CardRegistry.ProcessCombatEnd();
@@ -875,7 +883,23 @@ internal static class HookPatches
         {
             forcingActor = CardRegistry.GetTrackingId(CardRegistry.CurrentPlayingCard);
         }
+        // 4. Natural End-of-Turn Passive
+        else
+        {
+            lock (CardRegistry.SyncRoot)
+            {
+                // Increment the counter for this specific orb
+                int count = CardRegistry.EotPassiveCounts.GetValueOrDefault(__instance, 0) + 1;
+                CardRegistry.EotPassiveCounts[__instance] = count;
 
+                // The first execution is the natural one (credit to Channeler). 
+                // Any execution after the first is the extra loop from Gold Plated Cables!
+                if (count > 1)
+                {
+                    forcingActor = "RELIC_GoldPlatedCables";
+                }
+            }
+        }
         // Bake the Forcing Actor directly into the execution context so the Waterfall doesn't have to guess!
         CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
     }

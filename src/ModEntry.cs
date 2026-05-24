@@ -33,6 +33,7 @@ public static class ModEntry
         // --- Core Lifecycle Hooks ---
         PatchHook(nameof(Hook.AfterRoomEntered), nameof(HookPatches.AfterRoomEnteredPostfix));
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
+        PatchHook(nameof(Hook.AfterSideTurnStart), nameof(HookPatches.AfterSideTurnStartPostfix));
         PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
         
         // --- Damage Hooks ---
