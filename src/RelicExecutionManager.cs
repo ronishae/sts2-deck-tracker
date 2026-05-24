@@ -51,6 +51,20 @@ public static class RelicExecutionManager
         }
     }
     
+    // For Infused Core's + 1 Damage to Lightning Orbs
+    public static readonly AsyncLocal<List<(string relicId, decimal delta)>> PendingOrbModifiers = new();
+
+    public static void ModifyOrbValuePostfix(RelicModel __instance, OrbModel orb, decimal value, ref decimal __result)
+    {
+        // CRITICAL GATE: Only track this if an orb is actively firing in combat!
+        // This prevents the UI tooltips from flooding our math engine.
+        if (CardRegistry.ExecutingOrb != null && __result != value)
+        {
+            PendingOrbModifiers.Value ??= new();
+            PendingOrbModifiers.Value.Add((__instance.GetType().Name, __result - value));
+        }
+    }
+    
     // Call this from your ModEntry.Initialize()
     public static void PatchAllDamageRelics(Harmony harmony)
     {
@@ -94,7 +108,14 @@ public static class RelicExecutionManager
             (typeof(Brimstone), nameof(Brimstone.AfterSideTurnStart)),
             (typeof(ToastyMittens), nameof(ToastyMittens.BeforeHandDraw)),
             (typeof(EmberTea),  nameof(EmberTea.AfterRoomEntered)),
-            (typeof(SwordOfJade), nameof(SwordOfJade.AfterRoomEntered))
+            (typeof(SwordOfJade), nameof(SwordOfJade.AfterRoomEntered)),
+            
+            // Orbs
+            (typeof(DataDisk), nameof(DataDisk.AfterRoomEntered)),
+            (typeof(CrackedCore), nameof(CrackedCore.BeforeSideTurnStart)),
+            (typeof(InfusedCore), nameof(InfusedCore.AfterSideTurnStart)),
+            (typeof(SymbioticVirus), nameof(SymbioticVirus.AfterSideTurnStart)),
+            (typeof(EmotionChip), nameof(EmotionChip.AfterPlayerTurnStart)),
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)

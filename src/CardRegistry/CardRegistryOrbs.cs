@@ -52,7 +52,10 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             // If there is no card, it was channeled by a Relic, a Potion, or an Event
-            string trackingId = sourceCard != null ? GetTrackingId(sourceCard) : "External_Relic";
+            string trackingId = sourceCard != null ? GetTrackingId(sourceCard) : 
+                (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
+                    "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
+                    "External_Relic");
             
             if (IsStormExecuting.Value)
             {
@@ -174,8 +177,10 @@ public static partial class CardRegistry
 
             // 2. STANDARD APPLICATION: (Cards, Relics, or Enemy Debuffs)
             
-            // If no card source, it's either an organic buff or an enemy debuff
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : (amount > 0 ? "External_Buff" : "External_Debuff");
+            string trackingId = cardSource != null ? GetTrackingId(cardSource) : 
+                (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
+                    "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
+                    (amount > 0 ? "External_Buff" : "External_Debuff"));
             
             // Check the Apply trap
             bool isTemp = IsApplyingTemporaryFocus.Value;
@@ -204,6 +209,22 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
+            decimal remainingDamageToDistributeModifyerPeel = totalDamage;
+            decimal totalRelicModifiers = 0m; // NEW: Track the total peeled modifiers!
+
+            // 1. PEEL ORB MODIFIER RELICS (e.g., Infused Core's +1 Lightning)
+            if (RelicExecutionManager.PendingOrbModifiers.Value != null)
+            {
+                foreach (var mod in RelicExecutionManager.PendingOrbModifiers.Value)
+                {
+                    decimal payout = Math.Min(remainingDamageToDistributeModifyerPeel, mod.delta);
+                    AddRelicDamage(mod.relicId, payout);
+                    remainingDamageToDistributeModifyerPeel -= payout;
+                    totalRelicModifiers += mod.delta; // Track what we stripped!
+                }
+                RelicExecutionManager.PendingOrbModifiers.Value.Clear();
+            }
+            
             OrbModel orb = context.Orb;
             
             if (!OrbChannelers.TryGetValue(orb, out string? channelerId))
@@ -214,13 +235,13 @@ public static partial class CardRegistry
                 if (context.IsEvoke && CurrentPlayingCard != null)
                 {
                     string multiEvokerId = GetTrackingId(CurrentPlayingCard);
-                    AddDamageById(multiEvokerId, totalDamage);
-                    GD.Print($"[DeckTracker] Phantom Evoke! Paid {totalDamage:F2} Bonus Evoke Damage to {multiEvokerId}");
+                    AddDamageById(multiEvokerId, remainingDamageToDistributeModifyerPeel);
+                    GD.Print($"[DeckTracker] Phantom Evoke! Paid {remainingDamageToDistributeModifyerPeel:F2} Bonus Evoke Damage to {multiEvokerId}");
                     return;
                 }
                 
                 // If no card is playing, it's a true unaccounted error.
-                UnattributedOrbLogs.Add($"Unattributed {orb.Id.Entry} Orb Damage ({totalDamage}). Cause: No channeling card found.");
+                UnattributedOrbLogs.Add($"Unattributed {orb.Id.Entry} Orb Damage ({remainingDamageToDistributeModifyerPeel}). Cause: No channeling card found.");
                 return;
             }
             
@@ -228,7 +249,7 @@ public static partial class CardRegistry
             {
                 if (DarkOrbLedgers.TryGetValue(orb, out var ledger))
                 {
-                    decimal remainingDamageToDistribute = totalDamage;
+                    decimal remainingDamageToDistribute = remainingDamageToDistributeModifyerPeel;
                     
                     // Walk through the concatenated waves in pure FIFO order
                     foreach (var contribution in ledger)
@@ -252,7 +273,9 @@ public static partial class CardRegistry
             
             decimal currentEngineOrbValue = context.ExpectedValue;
             decimal totalFocus = player.GetPower<FocusPower>()?.Amount ?? 0m;
-            decimal pureBase = currentEngineOrbValue - totalFocus;
+            
+            // CRITICAL FIX: Subtract the relic modifiers from the pure base!
+            decimal pureBase = currentEngineOrbValue - totalFocus - totalRelicModifiers;
 
             decimal channelerPayout;
             decimal focusPayoutTotal;
@@ -260,15 +283,15 @@ public static partial class CardRegistry
             if (totalFocus >= 0)
             {
                 // Standard Waterfall
-                channelerPayout = Math.Min(totalDamage, pureBase);
-                focusPayoutTotal = totalDamage - channelerPayout;
+                channelerPayout = Math.Min(remainingDamageToDistributeModifyerPeel, pureBase);
+                focusPayoutTotal = remainingDamageToDistributeModifyerPeel - channelerPayout;
             }
             else
             {
                 // Negative Focus Waterfall (Damage Debt)
-                decimal theoreticalDamage = totalDamage - totalFocus; 
+                decimal theoreticalDamage = remainingDamageToDistributeModifyerPeel - totalFocus; 
                 channelerPayout = Math.Min(theoreticalDamage, pureBase);
-                focusPayoutTotal = totalDamage - channelerPayout; 
+                focusPayoutTotal = remainingDamageToDistributeModifyerPeel - channelerPayout; 
             }
 
             // 1. Payout the Channeler
@@ -319,7 +342,7 @@ public static partial class CardRegistry
         }
         Publish();
     }
-
+    
     // --- ASYNC WRAPPERS ---
     
     public static async Task AwaitOrbExecutionTaskAsync(Task originalTask, OrbModel orb, bool isEvoke)

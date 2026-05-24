@@ -25,7 +25,11 @@ public static class ModEntry
         var tryModifyPower = AccessTools.Method(typeof(RuinedHelmet), nameof(RuinedHelmet.TryModifyPowerAmountReceived));
         _harmony.Patch(tryModifyPower,
             postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.TryModifyPowerAmountReceivedPostfix))));
-
+    
+        var modifyOrbValue = AccessTools.Method(typeof(InfusedCore), nameof(InfusedCore.ModifyOrbValue));
+        _harmony.Patch(modifyOrbValue,
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.ModifyOrbValuePostfix))));
+        
         // --- Core Lifecycle Hooks ---
         PatchHook(nameof(Hook.AfterRoomEntered), nameof(HookPatches.AfterRoomEnteredPostfix));
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));

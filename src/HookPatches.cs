@@ -865,6 +865,11 @@ internal static class HookPatches
             forcingActor = CardRegistry.CurrentTurnLoopQueue[0];
             CardRegistry.CurrentTurnLoopQueue.RemoveAt(0); // Pop!
         }
+        else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+        {
+            // Catch Emotion Chip!
+            forcingActor = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+        }
         // Otherwise, if Darkness is being played, it gets the credit!
         else if (CardRegistry.CurrentPlayingCard != null)
         {
