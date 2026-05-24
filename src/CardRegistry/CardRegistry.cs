@@ -178,9 +178,6 @@ public static partial class CardRegistry
             _incrementedThisCombat.Clear();
             _currentAct = 1;
             _currentCombatType = "Unknown";
-            
-            // Note: Combat-specific states (Poison, Orbs, etc) are already 
-            // reset at StartCombat, so we don't need to duplicate that here.
         }
         Publish();
     }
@@ -230,34 +227,6 @@ public static partial class CardRegistry
             _currentAct = currentAct;
             _currentCombatType = combatType;
             GD.Print($"[DeckTracker] Starting combat state: {_currentCombatType} (Act: {_currentAct})");
-            _incrementedThisCombat.Clear(); 
-            ForgeHistory.Clear();
-            ConquerorTracker.Clear();
-            BladeReplayModifierTracker.Clear();
-            ResetPoisonState();
-            ResetStrangleState();
-            ResetOblivionState();
-            ResetSerpentFormState();
-            ResetReaperFormState();
-            ResetBlackHoleState();
-            ResetSleightOfFleshState();
-            ResetSpeedsterState();
-            ResetThunderState();
-            ResetStormState();
-            ResetHailstormState();
-            ResetFanOfKnivesState();
-            ResetNecroMasteryState();
-            ResetThornsState();
-            ResetFlameBarrierState();
-            ResetFumesState();
-            ResetDoomState();
-            ResetCountdownState();
-            ResetReflectState();
-            ResetRollingBoulderState();
-            ClearCorrosiveWaveShares();
-            ResetOrbState();
-            ResetBuffState();
-            InstancedPowerSources.Clear();
             
             foreach (var stat in Totals.Values)
             {
@@ -286,7 +255,34 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             _currentCombatType = "Unknown"; // Clear the state
+            _incrementedThisCombat.Clear(); 
             ForgeHistory.Clear();
+            ConquerorTracker.Clear();
+            BladeReplayModifierTracker.Clear();
+            ResetPoisonState();
+            ResetStrangleState();
+            ResetOblivionState();
+            ResetSerpentFormState();
+            ResetReaperFormState();
+            ResetBlackHoleState();
+            ResetSleightOfFleshState();
+            ResetSpeedsterState();
+            ResetThunderState();
+            ResetStormState();
+            ResetHailstormState();
+            ResetFanOfKnivesState();
+            ResetNecroMasteryState();
+            ResetThornsState();
+            ResetFlameBarrierState();
+            ResetFumesState();
+            ResetDoomState();
+            ResetCountdownState();
+            ResetReflectState();
+            ResetRollingBoulderState();
+            ClearCorrosiveWaveShares();
+            ResetOrbState();
+            ResetBuffState();
+            InstancedPowerSources.Clear();
         }
         
         SaveState(); // Lock the victory into the hard drive
