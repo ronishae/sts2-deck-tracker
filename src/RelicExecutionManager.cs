@@ -141,6 +141,9 @@ public static class RelicExecutionManager
             
             // Thorns
             (typeof(BronzeScales), nameof(BronzeScales.AfterRoomEntered)),
+            
+            // Poison
+            (typeof(TwistedFunnel), nameof(TwistedFunnel.BeforeSideTurnStart)),
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)
