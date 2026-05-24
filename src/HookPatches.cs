@@ -419,28 +419,52 @@ internal static class HookPatches
                 break;
             case StrengthPower:
                 if (!target.IsPlayer) break;
-                if (amount > 0)
+                decimal amountToCreditToSource = amount;
+
+                // 1. PASSIVE MODIFIERS (e.g., Ruined Helmet)
+                if (RelicExecutionManager.PendingPowerModifiers.Value != null && RelicExecutionManager.PendingPowerModifiers.Value.Count > 0)
                 {
-                    if (CardRegistry.IsDemonFormExecuting.Value)
+                    GD.Print($"[DeckTracker] StrengthPower Part 1");
+                    foreach (var mod in RelicExecutionManager.PendingPowerModifiers.Value)
                     {
-                        CardRegistry.ProcessDemonFormStrength(amount);
+                        if (mod.powerType == "StrengthPower")
+                        {
+                            // Credit the Relic with the bonus it generated!
+                            CardRegistry.AddPersistentBuffById("StrengthPower", mod.delta, "RELIC_" + mod.relicId);
+                            amountToCreditToSource -= mod.delta; // Deduct it from the total
+                        }
                     }
-                    else if (CardRegistry.IsArsenalExecuting.Value)
+                    RelicExecutionManager.PendingPowerModifiers.Value.Clear();
+                }
+                
+                // 2. PROCESS THE REMAINDER (Cards, Active Relics, or Middlemen)
+                if (amountToCreditToSource > 0)
+                {
+                    GD.Print($"[DeckTracker] StrengthPower Part 1");
+                    if (CardRegistry.IsDemonFormExecuting.Value) 
+                        CardRegistry.ProcessDemonFormStrength(amountToCreditToSource);
+                    else if (CardRegistry.IsArsenalExecuting.Value) 
+                        CardRegistry.ProcessArsenalStrength(amountToCreditToSource);
+                    else if (!string.IsNullOrEmpty(CardRegistry.ExecutingInstancedSource.Value)) 
+                        CardRegistry.AddPersistentBuffById("StrengthPower", amountToCreditToSource, CardRegistry.ExecutingInstancedSource.Value);
+                    
+                    // NEW: Active Relic Appliers (Vajra, Mini Regent)
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
                     {
-                        CardRegistry.ProcessArsenalStrength(amount);
-                    }
-                    else if (!string.IsNullOrEmpty(CardRegistry.ExecutingInstancedSource.Value))
-                    {
-                        // Flawless attribution. We don't need a ledger sweep!
-                        CardRegistry.AddPersistentBuffById("StrengthPower", amount, CardRegistry.ExecutingInstancedSource.Value);
+                        GD.Print($"[DeckTracker] StrengthPower Inside relic check");
+                        CardRegistry.AddPersistentBuffById("StrengthPower", amountToCreditToSource, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
                     }
                     else
                     {
-                        // Standard application (e.g., Inflame, Flex)
-                        CardRegistry.AddPersistentBuff("StrengthPower", amount, cardSource);
+                        GD.Print($"[DeckTracker] StrengthPower Final Card Source");
+                        CardRegistry.AddPersistentBuff("StrengthPower", amountToCreditToSource, cardSource);
                     }
                 }
-                else if (amount < 0) CardRegistry.RemovePersistentBuff("StrengthPower", Math.Abs(amount));
+                else if (amountToCreditToSource < 0) 
+                {
+                    // Handles Monologue cleanup, Red Skull deactivation, Enemy debuffs, etc.
+                    CardRegistry.RemovePersistentBuff("StrengthPower", Math.Abs(amountToCreditToSource));
+                }
                 break;
             case AccuracyPower:
                 if (amount > 0) CardRegistry.AddPersistentBuff("AccuracyPower", amount, cardSource);

@@ -22,5 +22,7 @@ public partial class CardRegistry
             stats.RunDamage += amount;
             GD.Print($"[DeckTracker] Added {amount} damage to Relic: {relicId}");
         }
+
+        Publish();
     }
 }

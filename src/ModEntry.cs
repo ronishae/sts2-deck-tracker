@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Models.Relics;
 
 namespace DeckTracker;
 
@@ -19,7 +20,11 @@ public static class ModEntry
         if (_harmony != null) return;
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
         
-        RelicExecutionManager.PatchAllDirectDamageRelics(_harmony);
+        RelicExecutionManager.PatchAllDamageRelics(_harmony);
+        // Hook the universal Relic power modifier
+        var tryModifyPower = AccessTools.Method(typeof(RuinedHelmet), nameof(RuinedHelmet.TryModifyPowerAmountReceived));
+        _harmony.Patch(tryModifyPower,
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.TryModifyPowerAmountReceivedPostfix))));
 
         // --- Core Lifecycle Hooks ---
         PatchHook(nameof(Hook.AfterRoomEntered), nameof(HookPatches.AfterRoomEnteredPostfix));

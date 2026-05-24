@@ -397,6 +397,18 @@ public static partial class CardRegistry
     
     public static void AddDamageById(string trackingId, decimal amount)
     {
+        if (amount <= 0 || string.IsNullOrEmpty(trackingId)) return;
+
+        // --- NEW: THE ROUTING INTERCEPTOR ---
+        // If the ID starts with RELIC_, strip the prefix and send it to the Relic Ledger!
+        if (trackingId.StartsWith("RELIC_"))
+        {
+            // "RELIC_Vajra" becomes "Vajra"
+            string relicId = trackingId.Substring(6); 
+            AddRelicDamage(relicId, amount);
+            return;
+        }
+        
         lock (SyncRoot)
         {
             if (Totals.TryGetValue(trackingId, out var stat))

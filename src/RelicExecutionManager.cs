@@ -1,4 +1,5 @@
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Relics;
 
@@ -30,8 +31,28 @@ public static class RelicExecutionManager
         __result = WrappedTask(__result);
     }
 
+    // Stores (Relic Class Name, Delta Amount, Power Type)
+    public static readonly AsyncLocal<List<(string relicId, decimal delta, string powerType)>> PendingPowerModifiers = new();
+
+    // A Universal Hook for ANY relic that modifies incoming powers (Ruined Helmet)
+    public static void TryModifyPowerAmountReceivedPostfix(RelicModel __instance, PowerModel canonicalPower, Creature target, decimal amount, Creature? applier, ref decimal modifiedAmount, ref bool __result)
+    {
+        // If the relic successfully changed the amount...
+        if (__result && modifiedAmount != amount)
+        {
+            PendingPowerModifiers.Value ??= new();
+            PendingPowerModifiers.Value.Add((
+                __instance.GetType().Name, 
+                modifiedAmount - amount, 
+                canonicalPower.GetType().Name
+            ));
+            
+            Godot.GD.Print($"[DeckTracker] Relic Modifier Intercepted: {__instance.GetType().Name} added {modifiedAmount - amount} to {canonicalPower.GetType().Name}");
+        }
+    }
+    
     // Call this from your ModEntry.Initialize()
-    public static void PatchAllDirectDamageRelics(Harmony harmony)
+    public static void PatchAllDamageRelics(Harmony harmony)
     {
         var prefix = new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(GenericRelicPrefix)));
         var postfix = new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(GenericRelicPostfix)));
@@ -39,6 +60,7 @@ public static class RelicExecutionManager
         // Just add the Type and Method name for any Relic that deals direct damage!
         var relicMethodsToPatch = new (Type, string)[]
         {
+            // Direct Damage
             (typeof(MercuryHourglass), nameof(MercuryHourglass.AfterPlayerTurnStart)),
             (typeof(FestivePopper), nameof(FestivePopper.AfterPlayerTurnStart)),
             (typeof(MrStruggles), nameof(MrStruggles.AfterPlayerTurnStart)),
@@ -59,11 +81,20 @@ public static class RelicExecutionManager
             (typeof(StoneCalendar), nameof(StoneCalendar.BeforeSideTurnEnd)),
             (typeof(ScreamingFlagon), nameof(ScreamingFlagon.BeforeSideTurnEnd)),
             
-            
-            
-            
-            // (typeof(LetterOpener), nameof(LetterOpener.AfterCardPlayed)),
-            // Add Charon's Ashes, Tingsha, etc. here!
+            // Strength Relics (Ruined Helmet is handled separately)
+            (typeof(Vajra), nameof(Vajra.AfterRoomEntered)),
+            (typeof(RedSkull), nameof(RedSkull.AfterRoomEntered)),
+            (typeof(RedSkull), nameof(RedSkull.AfterCurrentHpChanged)),
+            (typeof(ReptileTrinket), nameof(ReptileTrinket.AfterPotionUsed)),
+            (typeof(SparklingRouge), nameof(SparklingRouge.AfterBlockCleared)),
+            (typeof(Girya), nameof(Girya.AfterRoomEntered)),
+            (typeof(Shuriken), nameof(Shuriken.AfterCardPlayed)),
+            (typeof(MiniRegent), nameof(MiniRegent.AfterStarsSpent)),
+            (typeof(SlingOfCourage), nameof(SlingOfCourage.AfterRoomEntered)),
+            (typeof(Brimstone), nameof(Brimstone.AfterSideTurnStart)),
+            (typeof(ToastyMittens), nameof(ToastyMittens.BeforeHandDraw)),
+            (typeof(EmberTea),  nameof(EmberTea.AfterRoomEntered)),
+            (typeof(SwordOfJade), nameof(SwordOfJade.AfterRoomEntered))
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)
