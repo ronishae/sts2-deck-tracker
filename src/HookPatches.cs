@@ -494,6 +494,11 @@ internal static class HookPatches
                     {
                         CardRegistry.ProcessPrepTimeVigor(amount);
                     }
+                    // NEW: Intercept Akabeko and any future Vigor relics!
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    {
+                        CardRegistry.AddConsumableBuffById("VigorPower", amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                    }
                     else
                     {
                         CardRegistry.AddConsumableBuff("VigorPower", amount, cardSource);

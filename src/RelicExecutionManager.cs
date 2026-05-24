@@ -131,6 +131,9 @@ public static class RelicExecutionManager
             (typeof(InfusedCore), nameof(InfusedCore.AfterSideTurnStart)),
             (typeof(SymbioticVirus), nameof(SymbioticVirus.AfterSideTurnStart)),
             (typeof(EmotionChip), nameof(EmotionChip.AfterPlayerTurnStart)),
+            
+            // Vigor
+            (typeof(Akabeko), nameof(Akabeko.AfterSideTurnStart)),
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)
