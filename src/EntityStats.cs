@@ -21,6 +21,11 @@ public abstract class EntityStats
     public decimal CombatDamage { get; set; }
     public decimal RunDamage { get; set; }
 
+    // Forge specifics
+    public decimal RawForgeCombat { get; set; }
+    public decimal ConnectedForgeCombat { get; set; }
+    public decimal ReceivedForgeCombat { get; set; }
+    
     // Enforce that all subclasses must be able to clone themselves
     public abstract EntityStats Clone();
 
@@ -39,5 +44,8 @@ public abstract class EntityStats
         cloneTarget.Act4 = Act4.Clone();
         cloneTarget.CombatDamage = CombatDamage;
         cloneTarget.RunDamage = RunDamage;
+        cloneTarget.RawForgeCombat = RawForgeCombat;
+        cloneTarget.ConnectedForgeCombat = ConnectedForgeCombat;
+        cloneTarget.ReceivedForgeCombat = ReceivedForgeCombat;
     }
 }

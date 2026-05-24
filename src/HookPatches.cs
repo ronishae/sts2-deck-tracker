@@ -645,6 +645,10 @@ internal static class HookPatches
                 CardRegistry.HandleFurnaceForge(amount);
             }
         }
+        else if (source is RelicModel relic)
+        {
+            CardRegistry.AddForgeById("RELIC_" + relic.GetType().Name, amount);
+        }
     }
     
     // The parameters MUST be named this way, with double underscores or Harmony will have errors. Do not change.

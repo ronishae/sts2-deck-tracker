@@ -482,28 +482,60 @@ public static class DeckTrackerOverlay
         // 1. Setup Headers
         _fullScreenHeadersContainer!.AddChild(new Label { Text = "RELIC NAME", CustomMinimumSize = new Vector2(300, 0) });
         
-        string damageHeaderText = _showRunStats ? "RUN DAMAGE" : "COMBAT DAMAGE";
-        _fullScreenHeadersContainer.AddChild(new Label { Text = damageHeaderText, CustomMinimumSize = new Vector2(220, 0) });
+        string mainColText = _showRawForge ? "RAW FORGE" : (_includeConnectedForge ? "DMG (+FORGE)" : "DAMAGE");
+        string runText = _showRunStats ? "(RUN)" : "(COMBAT)";
+        _fullScreenHeadersContainer.AddChild(new Label { Text = $"{mainColText} {runText}", CustomMinimumSize = new Vector2(220, 0) });
 
         // 2. Fetch, Filter, and Sort Data
-        // We pull directly from the global RelicLedger and filter out 0-damage relics
+        // We use an anonymous object to hold the Stat and Aggregated Data, exactly like the Cards logic!
         var relicList = CardRegistry.RelicLedger.Values
-            .Where(r => _showRunStats ? r.RunDamage > 0 : r.CombatDamage > 0)
-            .OrderByDescending(r => _showRunStats ? r.RunDamage : r.CombatDamage)
+            .Select(r => new { Stat = r, Agg = AggregateActData(r) })
+            .Where(x => {
+                decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
+                
+                // Fallback to RunDamage if ActData isn't fully wired for relics yet
+                decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
+                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                
+                return _showRunStats ? effRun > 0 : effCombat > 0;
+            })
+            .OrderByDescending(x => {
+                decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
+                decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
+                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                
+                return _showRunStats ? effRun : effCombat;
+            })
             .ToList();
 
         // 3. Render Rows
-        foreach (var relic in relicList)
+        foreach (var item in relicList)
         {
+            var stat = item.Stat;
+            var agg = item.Agg;
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             
-            // Name Column (Uses the base class helper we wrote earlier!)
-            Label nameLabel = new Label { Text = GetEntityDisplayTitle(relic), CustomMinimumSize = new Vector2(300, 0) };
+            // Name Column (Uses the base class helper!)
+            Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
             
             // Damage Column
-            decimal damageToShow = _showRunStats ? relic.RunDamage : relic.CombatDamage;
+            decimal baseRunDmg = agg.TotalDamage > 0 ? agg.TotalDamage : stat.RunDamage;
+            decimal damageToShow = _showRunStats ? 
+                (_showRawForge ? agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0))) : 
+                (_showRawForge ? stat.RawForgeCombat : (stat.CombatDamage + (_includeConnectedForge ? stat.ConnectedForgeCombat - stat.ReceivedForgeCombat : 0)));
+            
             Label damageLabel = new Label { Text = damageToShow.ToString("0.##"), CustomMinimumSize = new Vector2(220, 0) };
-            damageLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+            
+            // Visual Polish: Match the Blue/Green color coding from the small UI
+            if (!_showRawForge && _includeConnectedForge)
+            {
+                bool hasForge = _showRunStats ? agg.ConnectedForgeTotal > 0 : stat.ConnectedForgeCombat > 0;
+                damageLabel.AddThemeColorOverride("font_color", hasForge ? new Color("38BDF8") : new Color("4ADE80"));
+            }
+            else
+            {
+                damageLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+            }
 
             row.AddChild(nameLabel);
             row.AddChild(damageLabel);

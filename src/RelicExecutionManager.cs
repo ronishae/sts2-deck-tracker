@@ -144,6 +144,9 @@ public static class RelicExecutionManager
             
             // Poison
             (typeof(TwistedFunnel), nameof(TwistedFunnel.BeforeSideTurnStart)),
+            
+            // Forge
+            (typeof(FencingManual), nameof(FencingManual.AfterSideTurnStart)),
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)

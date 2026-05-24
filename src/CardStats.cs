@@ -6,11 +6,6 @@ public sealed class CardStats : EntityStats
     public string Enchantment { get; set; } = "";
     public int CopiesInDeck { get; set; }
     
-    // Forge specifics
-    public decimal RawForgeCombat { get; set; }
-    public decimal ConnectedForgeCombat { get; set; }
-    public decimal ReceivedForgeCombat { get; set; }
-
     public override EntityStats Clone()
     {
         var clone = new CardStats

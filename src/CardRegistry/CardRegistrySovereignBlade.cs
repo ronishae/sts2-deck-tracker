@@ -14,30 +14,61 @@ public static partial class CardRegistry
     private static readonly List<CardModel?> BladeReplayModifierTracker = [];
     private static readonly List<FurnaceContribution> FurnaceContributions = [];
     
-    public static void AddForge(CardModel card, decimal amount)
+    public static void AddRelicForge(string relicId, decimal rawForge, decimal connectedForge, decimal receivedForge)
     {
-        string uniqueTrackingId = GetTrackingId(card);
         lock (SyncRoot)
         {
-            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            if (!RelicLedger.TryGetValue(relicId, out var stats))
+            {
+                string cleanName = System.Text.RegularExpressions.Regex.Replace(relicId, "([a-z])([A-Z])", "$1 $2");
+                stats = new RelicStats { Id = relicId, DisplayName = cleanName };
+                RelicLedger[relicId] = stats;
+            }
+            
+            stats.RawForgeCombat += rawForge;
+            stats.ConnectedForgeCombat += connectedForge;
+            stats.ReceivedForgeCombat += receivedForge;
+            
+            GD.Print($"[DeckTracker] Added {rawForge} Raw / {connectedForge} Connected Forge to Relic: {relicId}");
+        }
+        Publish(); 
+    }
+    
+    // 2. The Universal Forge Router
+    public static void AddForgeById(string trackingId, decimal amount)
+    {
+        lock (SyncRoot)
+        {
+            // A. Is it a Relic?
+            if (trackingId.StartsWith("RELIC_"))
+            {
+                string relicId = trackingId.Substring(6);
+                AddRelicForge(relicId, amount, 0, 0); // Credit Raw Forge
+                ForgeHistory.Add(new ForgeInstance { TrackingId = trackingId, Amount = amount });
+            }
+            // B. Is it a Card?
+            else if (Totals.TryGetValue(trackingId, out var stat))
             {
                 stat.RawForgeCombat += amount;
                 
                 var actData = GetActData(stat, _currentAct);
                 if (actData != null)
                 {
-                    // Route into specific encounter buckets
                     if (_currentCombatType == "Elite") actData.RawForgeElite += amount;
                     else if (_currentCombatType == "Boss") actData.RawForgeBoss += amount;
                     else if (_currentCombatType == "Hallway") actData.RawForgeHallway += amount;
                 }
-                
-                ForgeHistory.Add(new ForgeInstance { TrackingId = uniqueTrackingId, Amount = amount });
+                ForgeHistory.Add(new ForgeInstance { TrackingId = trackingId, Amount = amount });
             }
         }
         Publish();
     }
-
+    
+    public static void AddForge(CardModel card, decimal amount)
+    {
+        AddForgeById(GetTrackingId(card), amount);
+    }
+    
     public static void UpdateFurnaceHistory(decimal amount, CardModel? cardSource)
     {
         if (cardSource == null) return;
@@ -223,8 +254,14 @@ public static partial class CardRegistry
 
                     var amountToAttribute = Math.Min(damageToDistribute, forgeInstance.Amount);
                     var idToAttribute = forgeInstance.TrackingId;
-
-                    if (Totals.TryGetValue(idToAttribute, out var stat))
+                    
+                    if (idToAttribute.StartsWith("RELIC_"))
+                    {
+                        string relicId = idToAttribute.Substring(6);
+                        GD.Print($"[DeckTracker] Adding connected forge to Relic {relicId} with amount {amountToAttribute}");
+                        AddRelicForge(relicId, 0, amountToAttribute, 0);
+                    }
+                    else if (Totals.TryGetValue(idToAttribute, out var stat))
                     {
                         GD.Print($"adding connected forge to {idToAttribute} with amount {amountToAttribute}");
                         stat.ConnectedForgeCombat += amountToAttribute;
