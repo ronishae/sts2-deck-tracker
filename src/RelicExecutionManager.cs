@@ -47,22 +47,26 @@ public static class RelicExecutionManager
     }
 
     // Stores (Relic Class Name, Delta Amount, Power Type)
-    public static readonly AsyncLocal<List<(string relicId, decimal delta, string powerType)>> PendingPowerModifiers = new();
+    // Stores the latest calculation: Key = Relic Class Name, Value = (Delta Amount, Power Type)
+    public static readonly AsyncLocal<Dictionary<string, (decimal delta, string powerType)>> PendingPowerModifiers = new();
 
-    // A Universal Hook for ANY relic that modifies incoming powers (Ruined Helmet)
     public static void TryModifyPowerAmountReceivedPostfix(RelicModel __instance, PowerModel canonicalPower, Creature target, decimal amount, Creature? applier, ref decimal modifiedAmount, ref bool __result)
     {
-        // If the relic successfully changed the amount...
         if (__result && modifiedAmount != amount)
         {
-            PendingPowerModifiers.Value ??= new();
-            PendingPowerModifiers.Value.Add((
-                __instance.GetType().Name, 
-                modifiedAmount - amount, 
-                canonicalPower.GetType().Name
-            ));
-            
-            Godot.GD.Print($"[DeckTracker] Relic Modifier Intercepted: {__instance.GetType().Name} added {modifiedAmount - amount} to {canonicalPower.GetType().Name}");
+            PendingPowerModifiers.Value ??= new Dictionary<string, (decimal, string)>();
+            // Overwrites the hypothetical math so only the latest calculation survives!
+            PendingPowerModifiers.Value[__instance.GetType().Name] = (modifiedAmount - amount, canonicalPower.GetType().Name);
+        }
+    }
+
+    public static void ModifyPowerAmountGivenPostfix(RelicModel __instance, PowerModel power, Creature giver, decimal amount, Creature? target, CardModel? cardSource, ref decimal __result)
+    {
+        if (__result != amount)
+        {
+            PendingPowerModifiers.Value ??= new Dictionary<string, (decimal, string)>();
+            // Overwrites the hypothetical math so only the latest calculation survives!
+            PendingPowerModifiers.Value[__instance.GetType().Name] = (__result - amount, power.GetType().Name);
         }
     }
     

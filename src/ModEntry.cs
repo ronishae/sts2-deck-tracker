@@ -30,6 +30,11 @@ public static class ModEntry
         _harmony.Patch(modifyOrbValue,
             postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.ModifyOrbValuePostfix))));
         
+        // Hook the universal Relic outgoing power modifier (Snecko Skull)
+        var modifyPowerGiven = AccessTools.Method(typeof(SneckoSkull), nameof(SneckoSkull.ModifyPowerAmountGiven));
+        _harmony.Patch(modifyPowerGiven,
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.ModifyPowerAmountGivenPostfix))));
+        
         // --- Core Lifecycle Hooks ---
         PatchHook(nameof(Hook.AfterRoomEntered), nameof(HookPatches.AfterRoomEnteredPostfix));
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));

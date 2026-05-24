@@ -45,7 +45,7 @@ public static partial class CardRegistry
             {
                 PoisonShares[target].Add(new PoisonContribution { TrackingId = uniqueId, Shares = amount });
             }
-            GD.Print($"[DeckTracker] Chained {amount} Poison shares to Fumes card {uniqueId}.");
+            GD.Print($"[DeckTracker] Chained {amount} Poison shares to card {uniqueId}.");
         }
     }
     

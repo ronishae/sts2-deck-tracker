@@ -267,7 +267,37 @@ internal static class HookPatches
             case PoisonPower:
                 if (amount > 0)
                 {
-                    // Is Fumes currently the thing applying this Poison?
+                    // This is the BASE amount requested by the card/source (e.g., 5)
+                    decimal amountToCreditToSourcePoison = amount;
+
+                    // 1. PASSIVE MODIFIERS (e.g., Snecko Skull)
+                    if (RelicExecutionManager.PendingPowerModifiers.Value != null && RelicExecutionManager.PendingPowerModifiers.Value.Count > 0)
+                    {
+                        var keysToRemove = new List<string>();
+                        foreach (var kvp in RelicExecutionManager.PendingPowerModifiers.Value)
+                        {
+                            if (kvp.Value.powerType == "PoisonPower")
+                            {
+                                // Credit Snecko Skull with the +1 Poison it generated!
+                                CardRegistry.AddPoisonSharesById(target, kvp.Value.delta, "RELIC_" + kvp.Key);
+                                
+                                // CRITICAL FIX: Do NOT subtract the delta from the source amount. 
+                                // The hook 'amount' is already the un-modified base!
+                                
+                                GD.Print($"[DeckTracker] Attributed delta {kvp.Value.delta} to {kvp.Key}");
+                                keysToRemove.Add(kvp.Key); 
+                            }
+                        }
+                        
+                        foreach (var key in keysToRemove)
+                        {
+                            RelicExecutionManager.PendingPowerModifiers.Value.Remove(key);
+                        }
+                    }
+                    
+                    GD.Print($"[DeckTracker] {amountToCreditToSourcePoison} poison left to attribute to source.");
+                    
+                    // 2. MIDDLEMEN MODIFIERS
                     if (CardRegistry.IsNoxiousFumesExecuting.Value)
                     {
                         lock (CardRegistry.SyncRoot)
@@ -275,11 +305,10 @@ internal static class HookPatches
                             decimal totalFumes = CardRegistry.FumesShares.Sum(x => x.Shares);
                             if (totalFumes > 0)
                             {
-                                // Distribute the new Poison proportionally based on who applied the Fumes
                                 foreach (var share in CardRegistry.FumesShares)
                                 {
                                     decimal proportion = share.Shares / totalFumes;
-                                    CardRegistry.AddPoisonSharesById(target, amount * proportion, share.TrackingId);
+                                    CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison * proportion, share.TrackingId);
                                 }
                             }
                         }
@@ -294,20 +323,27 @@ internal static class HookPatches
                                 foreach (var share in CardRegistry.CorrosiveWaveShares)
                                 {
                                     decimal proportion = share.Shares / totalWave;
-                                    CardRegistry.AddPoisonSharesById(target, amount * proportion, share.TrackingId);
+                                    CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison * proportion, share.TrackingId);
                                 }
                             }
                         }
                     }
                     else
                     {
-                        GD.Print($"[DeckTracker] Adding poison power {amount} from card {cardSource?.Id.Entry}.");
-                        CardRegistry.AddPoisonShares(target, amount, cardSource);
+                        // 3. BASE SOURCES
+                        GD.Print($"[DeckTracker] Adding poison power {amountToCreditToSourcePoison} from card {cardSource?.Id.Entry}.");
+                        if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                        {
+                            CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                        }
+                        else
+                        {
+                            CardRegistry.AddPoisonShares(target, amountToCreditToSourcePoison, cardSource);
+                        }
                     }
                 }
                 else if (amount < 0)
                 {
-                    // Amount is negative (e.g., -1), so we use Math.Abs to pass a positive 1 to our math function.
                     CardRegistry.RemovePoisonSharesProportionally(target, Math.Abs(amount));
                 }
                 break;
@@ -436,16 +472,22 @@ internal static class HookPatches
                 if (RelicExecutionManager.PendingPowerModifiers.Value != null && RelicExecutionManager.PendingPowerModifiers.Value.Count > 0)
                 {
                     GD.Print($"[DeckTracker] StrengthPower Part 1");
-                    foreach (var mod in RelicExecutionManager.PendingPowerModifiers.Value)
+                    var keysToRemove = new List<string>();
+                    foreach (var kvp in RelicExecutionManager.PendingPowerModifiers.Value) 
                     {
-                        if (mod.powerType == "StrengthPower")
+                        if (kvp.Value.powerType == "StrengthPower")
                         {
                             // Credit the Relic with the bonus it generated!
-                            CardRegistry.AddPersistentBuffById("StrengthPower", mod.delta, "RELIC_" + mod.relicId);
-                            amountToCreditToSource -= mod.delta; // Deduct it from the total
+                            CardRegistry.AddPersistentBuffById("StrengthPower", kvp.Value.delta, "RELIC_" + kvp.Key);
+                            keysToRemove.Add(kvp.Key);
                         }
                     }
-                    RelicExecutionManager.PendingPowerModifiers.Value.Clear();
+                    
+                    // Clean up only the modifiers we actually consumed
+                    foreach (var key in keysToRemove)
+                    {
+                        RelicExecutionManager.PendingPowerModifiers.Value.Remove(key);
+                    }
                 }
                 
                 // 2. PROCESS THE REMAINDER (Cards, Active Relics, or Middlemen)
