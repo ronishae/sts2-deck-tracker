@@ -168,16 +168,48 @@ public static partial class CardRegistry
 
         return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}";
     }
-    
+
+    private static void ResetInternalsCombat()
+    {
+        _currentCombatType = "Unknown"; // Clear the state
+        _incrementedThisCombat.Clear(); 
+        ForgeHistory.Clear();
+        ConquerorTracker.Clear();
+        BladeReplayModifierTracker.Clear();
+        ResetPoisonState();
+        ResetStrangleState();
+        ResetOblivionState();
+        ResetSerpentFormState();
+        ResetReaperFormState();
+        ResetBlackHoleState();
+        ResetSleightOfFleshState();
+        ResetSpeedsterState();
+        ResetThunderState();
+        ResetStormState();
+        ResetHailstormState();
+        ResetFanOfKnivesState();
+        ResetNecroMasteryState();
+        ResetThornsState();
+        ResetFlameBarrierState();
+        ResetFumesState();
+        ResetDoomState();
+        ResetCountdownState();
+        ResetReflectState();
+        ResetRollingBoulderState();
+        ClearCorrosiveWaveShares();
+        ResetOrbState();
+        ResetBuffState();
+        InstancedPowerSources.Clear();
+    }
     public static void ResetRun()
     {
         lock (SyncRoot)
         {
             Totals.Clear();
-            ForgeHistory.Clear();
-            _incrementedThisCombat.Clear();
             _currentAct = 1;
-            _currentCombatType = "Unknown";
+            ResetInternalsCombat();
+            RelicLedger.Clear();
+            RelicExecutionManager.ResetState();
         }
         Publish();
     }
@@ -254,35 +286,7 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            _currentCombatType = "Unknown"; // Clear the state
-            _incrementedThisCombat.Clear(); 
-            ForgeHistory.Clear();
-            ConquerorTracker.Clear();
-            BladeReplayModifierTracker.Clear();
-            ResetPoisonState();
-            ResetStrangleState();
-            ResetOblivionState();
-            ResetSerpentFormState();
-            ResetReaperFormState();
-            ResetBlackHoleState();
-            ResetSleightOfFleshState();
-            ResetSpeedsterState();
-            ResetThunderState();
-            ResetStormState();
-            ResetHailstormState();
-            ResetFanOfKnivesState();
-            ResetNecroMasteryState();
-            ResetThornsState();
-            ResetFlameBarrierState();
-            ResetFumesState();
-            ResetDoomState();
-            ResetCountdownState();
-            ResetReflectState();
-            ResetRollingBoulderState();
-            ClearCorrosiveWaveShares();
-            ResetOrbState();
-            ResetBuffState();
-            InstancedPowerSources.Clear();
+            ResetInternalsCombat();
         }
         
         SaveState(); // Lock the victory into the hard drive

@@ -9,7 +9,22 @@ public static class RelicExecutionManager
 {
     // Holds the Class Name of the Relic currently executing its action
     public static readonly AsyncLocal<string?> ExecutingRelicId = new();
+    
+    // --- STATE MANAGEMENT ---
+    
+    public static void ResetState()
+    {
+        ExecutingRelicId.Value = null;
+        
+        // Clear and nullify the pending power modifiers
+        PendingPowerModifiers.Value?.Clear();
 
+        // Clear and nullify the pending orb modifiers
+        PendingOrbModifiers.Value?.Clear();
+
+        Godot.GD.Print("[DeckTracker] RelicExecutionManager state fully reset.");
+    }
+    
     // A generic Prefix that grabs the Relic's class name right before it fires
     public static void GenericRelicPrefix(RelicModel __instance)
     {
