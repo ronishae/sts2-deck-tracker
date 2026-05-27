@@ -630,6 +630,12 @@ internal static class HookPatches
                     }
                 }
                 break;
+            case TrashToTreasurePower:
+                if (target.IsPlayer)
+                {
+                    if (amount > 0) CardRegistry.AddTrashToTreasureShares(amount, cardSource);
+                }
+                break;
         }
     }
     
@@ -1132,6 +1138,37 @@ internal static class HookPatches
             finally { CardRegistry.IsEnvenomExecuting.Value = false; }
         }
         
+        __result = WrappedTask(__result);
+    }
+    
+    // Opens the trap and builds the attribution deck!
+    public static void TrashToTreasurePrefix(TrashToTreasurePower __instance)
+    {
+        CardRegistry.IsTrashToTreasureExecuting.Value = true;
+        CardRegistry.TrashToTreasureAttributionQueue.Value = new Queue<string>();
+        
+        lock (CardRegistry.SyncRoot)
+        {
+            // If Card A gave 1 stack and Card B gave 2 stacks, this loop builds a queue: [CardA, CardB, CardB]
+            foreach (var share in CardRegistry.TrashToTreasureShares)
+            {
+                int wholeShares = (int)Math.Round(share.Shares);
+                for (int i = 0; i < wholeShares; i++)
+                {
+                    CardRegistry.TrashToTreasureAttributionQueue.Value.Enqueue(share.TrackingId);
+                }
+            }
+        }
+    }
+
+    // Closes the trap
+    public static void TrashToTreasurePostfix(ref Task __result)
+    {
+        async Task WrappedTask(Task originalTask)
+        {
+            try { await originalTask; }
+            finally { CardRegistry.IsTrashToTreasureExecuting.Value = false; }
+        }
         __result = WrappedTask(__result);
     }
     

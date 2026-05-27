@@ -200,6 +200,7 @@ public static partial class CardRegistry
         EnvenomShares.Clear();
         ResetOrbState();
         ResetBuffState();
+        TrashToTreasureShares.Clear();
         InstancedPowerSources.Clear();
     }
     public static void ResetRun()

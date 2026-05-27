@@ -324,6 +324,12 @@ public static class ModEntry
         var envenomPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.EnvenomPostfix)));
         
         _harmony.Patch(envenomMethod, prefix: envenomPrefix, postfix: envenomPostfix);
+        
+        // Trash to Treasure Execution Hook
+        var t2tMethod = AccessTools.Method(typeof(TrashToTreasurePower), nameof(TrashToTreasurePower.AfterCardGeneratedForCombat));
+        _harmony.Patch(t2tMethod, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TrashToTreasurePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TrashToTreasurePostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)

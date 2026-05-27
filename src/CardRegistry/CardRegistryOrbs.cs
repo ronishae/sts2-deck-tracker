@@ -63,6 +63,17 @@ public static partial class CardRegistry
                 if (stormId != null) trackingId = stormId;
             }
             
+            // Check if Trash to Treasure is executing its loop!
+            if (IsTrashToTreasureExecuting.Value && TrashToTreasureAttributionQueue.Value != null)
+            {
+                // Pop the next ID off the queue!
+                if (TrashToTreasureAttributionQueue.Value.TryDequeue(out string? t2tId))
+                {
+                    trackingId = t2tId;
+                    GD.Print($"[DeckTracker] Routed random channeled orb to Trash to Treasure source: {trackingId}");
+                }
+            }
+            
             OrbChannelers[orb] = trackingId;
             GD.Print($"[DeckTracker] Channeled {orb.Id.Entry} and attributed to {trackingId}");
             
