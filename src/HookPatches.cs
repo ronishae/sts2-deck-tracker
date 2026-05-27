@@ -624,10 +624,6 @@ internal static class HookPatches
                     {
                         CardRegistry.AddEnvenomShares(amount, cardSource);
                     }
-                    else if (amount < 0)
-                    {
-                        CardRegistry.RemoveEnvenomSharesProportionally(Math.Abs(amount));
-                    }
                 }
                 break;
             case TrashToTreasurePower:

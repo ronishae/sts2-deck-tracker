@@ -23,20 +23,4 @@ public partial class CardRegistry
             else EnvenomShares.Add(new PoisonContribution { TrackingId = trackingId, Shares = amount });
         }
     }
-
-    public static void RemoveEnvenomSharesProportionally(decimal amountToRemove)
-    {
-        if (amountToRemove <= 0) return;
-        lock (SyncRoot)
-        {
-            decimal total = EnvenomShares.Sum(x => x.Shares);
-            if (total <= 0) return;
-            foreach (var share in EnvenomShares)
-            {
-                decimal proportion = share.Shares / total;
-                share.Shares -= amountToRemove * proportion;
-            }
-            EnvenomShares.RemoveAll(x => x.Shares <= 0.01m); // Cleanup negligible decimals
-        }
-    }
 }
