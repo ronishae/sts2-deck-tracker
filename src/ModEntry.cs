@@ -318,6 +318,12 @@ public static class ModEntry
         _harmony.Patch(monologueOriginal,
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MonologuePrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MonologuePostfix))));
+        
+        var envenomMethod = AccessTools.Method(typeof(EnvenomPower), nameof(EnvenomPower.AfterDamageGiven));
+        var envenomPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.EnvenomPrefix)));
+        var envenomPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.EnvenomPostfix)));
+        
+        _harmony.Patch(envenomMethod, prefix: envenomPrefix, postfix: envenomPostfix);
     }
 
     private static void PatchHook(string hookName, string postfixName)

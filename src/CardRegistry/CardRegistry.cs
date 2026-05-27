@@ -197,6 +197,7 @@ public static partial class CardRegistry
         ResetReflectState();
         ResetRollingBoulderState();
         ClearCorrosiveWaveShares();
+        EnvenomShares.Clear();
         ResetOrbState();
         ResetBuffState();
         InstancedPowerSources.Clear();

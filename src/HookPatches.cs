@@ -328,6 +328,22 @@ internal static class HookPatches
                             }
                         }
                     }
+                    // Envenom
+                    else if (CardRegistry.IsEnvenomExecuting.Value)
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            decimal totalEnvenom = CardRegistry.EnvenomShares.Sum(x => x.Shares);
+                            if (totalEnvenom > 0)
+                            {
+                                foreach (var share in CardRegistry.EnvenomShares)
+                                {
+                                    decimal proportion = share.Shares / totalEnvenom;
+                                    CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison * proportion, share.TrackingId);
+                                }
+                            }
+                        }
+                    }
                     else
                     {
                         // 3. BASE SOURCES
@@ -599,6 +615,19 @@ internal static class HookPatches
                     // If it ever gets removed or completely wiped, we wipe the ledger as usual.
                     // (Using a full wipe here is safest if a boss cleanses debuffs/buffs)
                     CardRegistry.RemovePersistentBuff("TrackingPower", Math.Abs(amount));
+                }
+                break;
+            case EnvenomPower:
+                if (target.IsPlayer)
+                {
+                    if (amount > 0)
+                    {
+                        CardRegistry.AddEnvenomShares(amount, cardSource);
+                    }
+                    else if (amount < 0)
+                    {
+                        CardRegistry.RemoveEnvenomSharesProportionally(Math.Abs(amount));
+                    }
                 }
                 break;
         }
@@ -1086,6 +1115,24 @@ internal static class HookPatches
     public static void MonologuePostfix(MonologuePower __instance, ref Task __result)
     {
         __result = CardRegistry.AwaitInstancedTaskAsync(__result);
+    }
+    
+    // A Prefix to open the trap right before Envenom executes
+    public static void EnvenomPrefix()
+    {
+        CardRegistry.IsEnvenomExecuting.Value = true;
+    }
+
+    // A Postfix to wrap the async task and close the trap when it finishes applying poison
+    public static void EnvenomPostfix(ref Task __result)
+    {
+        async Task WrappedTask(Task originalTask)
+        {
+            try { await originalTask; }
+            finally { CardRegistry.IsEnvenomExecuting.Value = false; }
+        }
+        
+        __result = WrappedTask(__result);
     }
     
     // Catches all damage dealt
