@@ -284,7 +284,7 @@ public static partial class CardRegistry
     private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer)
     {
         GD.Print($"[DeckTracker] PayoutMultiplierDamage powerId: {powerId}, amount: {amount}");
-        if (RelicLedger.ContainsKey(powerId) || powerId == "PenNib") // Add your relic class names here!
+        if (RelicLedger.ContainsKey(powerId) || powerId == "PEN_NIB") // Add your relic class names here!
         {
             AddRelicDamage(powerId, amount);
             return true;
@@ -374,8 +374,8 @@ public static partial class CardRegistry
     private static bool PayoutAdditiveDamage(string powerId, decimal amount)
     {
         GD.Print($"[DeckTracker] PayoutAdditiveDamage powerId: {powerId}, amount: {amount}");
-        if (RelicLedger.ContainsKey(powerId) || powerId == "StrikeDummy" || powerId == "FakeStrikeDummy" 
-            || powerId == "MysticLighter" || powerId == "MiniatureCannon")
+        if (RelicLedger.ContainsKey(powerId) || powerId == "STRIKE_DUMMY" || powerId == "FAKE_STRIKE_DUMMY" 
+            || powerId == "MYSTIC_LIGHTER" || powerId == "MINIATURE_CANNON")
         {
             AddRelicDamage(powerId, amount);
             return true;

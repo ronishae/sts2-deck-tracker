@@ -33,7 +33,7 @@ public partial class CardRegistry
 
         lock (SyncRoot)
         {
-            if (PersistentLedgers.TryGetValue("PrepTimePower", out var ledger))
+            if (PersistentLedgers.TryGetValue("PREP_TIME_POWER", out var ledger))
             {
                 // Calculate total PrepTime pool
                 decimal totalPool = 0;
@@ -45,14 +45,14 @@ public partial class CardRegistry
                     foreach (var contribution in ledger)
                     {
                         decimal share = amount * (contribution.Amount / totalPool);
-                        if (share > 0) AddConsumableBuffById("VigorPower", share, contribution.TrackingId);
+                        if (share > 0) AddConsumableBuffById("VIGOR_POWER", share, contribution.TrackingId);
                     }
                     return;
                 }
             }
             
             // Fallback just in case the ledger is empty for some reason
-            AddConsumableBuffById("VigorPower", amount, "External_Buff");
+            AddConsumableBuffById("VIGOR_POWER", amount, "External_Buff");
         }
     }
 }

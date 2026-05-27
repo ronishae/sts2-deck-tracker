@@ -276,7 +276,7 @@ internal static class HookPatches
                         var keysToRemove = new List<string>();
                         foreach (var kvp in RelicExecutionManager.PendingPowerModifiers.Value)
                         {
-                            if (kvp.Value.powerType == "PoisonPower")
+                            if (kvp.Value.powerType == "POISON_POWER")
                             {
                                 // Credit Snecko Skull with the +1 Poison it generated!
                                 CardRegistry.AddPoisonSharesById(target, kvp.Value.delta, "RELIC_" + kvp.Key);
@@ -454,15 +454,15 @@ internal static class HookPatches
             case DemonFormPower:
                 if (target.IsPlayer)
                 {
-                    if (amount > 0) CardRegistry.AddPersistentBuff("DemonFormPower", amount, cardSource);
-                    else if (amount < 0) CardRegistry.RemovePersistentBuff("DemonFormPower", Math.Abs(amount));
+                    if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
+                    else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 }
                 break;
             case ArsenalPower:
                 if (target.IsPlayer)
                 {
-                    if (amount > 0) CardRegistry.AddPersistentBuff("ArsenalPower", amount, cardSource);
-                    else if (amount < 0) CardRegistry.RemovePersistentBuff("ArsenalPower", Math.Abs(amount));
+                    if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
+                    else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 }
                 break;
             case MonologuePower:
@@ -491,10 +491,10 @@ internal static class HookPatches
                     var keysToRemove = new List<string>();
                     foreach (var kvp in RelicExecutionManager.PendingPowerModifiers.Value) 
                     {
-                        if (kvp.Value.powerType == "StrengthPower")
+                        if (kvp.Value.powerType == "STRENGTH_POWER")
                         {
                             // Credit the Relic with the bonus it generated!
-                            CardRegistry.AddPersistentBuffById("StrengthPower", kvp.Value.delta, "RELIC_" + kvp.Key);
+                            CardRegistry.AddPersistentBuffById(power.Id.Entry, kvp.Value.delta, "RELIC_" + kvp.Key);
                             keysToRemove.Add(kvp.Key);
                         }
                     }
@@ -515,37 +515,37 @@ internal static class HookPatches
                     else if (CardRegistry.IsArsenalExecuting.Value) 
                         CardRegistry.ProcessArsenalStrength(amountToCreditToSource);
                     else if (!string.IsNullOrEmpty(CardRegistry.ExecutingInstancedSource.Value)) 
-                        CardRegistry.AddPersistentBuffById("StrengthPower", amountToCreditToSource, CardRegistry.ExecutingInstancedSource.Value);
+                        CardRegistry.AddPersistentBuffById(power.Id.Entry, amountToCreditToSource, CardRegistry.ExecutingInstancedSource.Value);
                     
                     // NEW: Active Relic Appliers (Vajra, Mini Regent)
                     else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
                     {
                         GD.Print($"[DeckTracker] StrengthPower Inside relic check");
-                        CardRegistry.AddPersistentBuffById("StrengthPower", amountToCreditToSource, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                        CardRegistry.AddPersistentBuffById(power.Id.Entry, amountToCreditToSource, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
                     }
                     else
                     {
                         GD.Print($"[DeckTracker] StrengthPower Final Card Source");
-                        CardRegistry.AddPersistentBuff("StrengthPower", amountToCreditToSource, cardSource);
+                        CardRegistry.AddPersistentBuff(power.Id.Entry, amountToCreditToSource, cardSource);
                     }
                 }
                 else if (amountToCreditToSource < 0) 
                 {
                     // Handles Monologue cleanup, Red Skull deactivation, Enemy debuffs, etc.
-                    CardRegistry.RemovePersistentBuff("StrengthPower", Math.Abs(amountToCreditToSource));
+                    CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amountToCreditToSource));
                 }
                 break;
             case AccuracyPower:
-                if (amount > 0) CardRegistry.AddPersistentBuff("AccuracyPower", amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff("AccuracyPower", Math.Abs(amount));
+                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 break;
             case PhantomBladesPower:
-                if (amount > 0) CardRegistry.AddPersistentBuff("PhantomBladesPower", amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff("PhantomBladesPower", Math.Abs(amount));
+                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 break;
             case PrepTimePower:
-                if (amount > 0) CardRegistry.AddPersistentBuff("PrepTimePower", amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff("PrepTimePower", Math.Abs(amount));
+                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 break;
             case VigorPower:
                 if (amount > 0)
@@ -558,23 +558,23 @@ internal static class HookPatches
                     // NEW: Intercept Akabeko and any future Vigor relics!
                     else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
                     {
-                        CardRegistry.AddConsumableBuffById("VigorPower", amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                        CardRegistry.AddConsumableBuffById(power.Id.Entry, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
                     }
                     else
                     {
-                        CardRegistry.AddConsumableBuff("VigorPower", amount, cardSource);
+                        CardRegistry.AddConsumableBuff(power.Id.Entry, amount, cardSource);
                     }
                 }
-                else if (amount < 0) CardRegistry.RemoveConsumableBuff("VigorPower", Math.Abs(amount));
+                else if (amount < 0) CardRegistry.RemoveConsumableBuff(power.Id.Entry, Math.Abs(amount));
                 break;
             case VulnerablePower:
                 // Note we changed AddEnemyDebuff to AddDurationBuff
-                if (amount > 0) CardRegistry.AddDurationBuff(target, "VulnerablePower", amount, CardRegistry.GetTrackingId(cardSource));
-                else if (amount < 0) CardRegistry.RemoveDurationBuff(target, "VulnerablePower", Math.Abs(amount));
+                if (amount > 0) CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
+                else if (amount < 0) CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
                 break;
             case ShadowStepPower:
-                if (amount > 0) CardRegistry.AddPersistentBuff("ShadowStepPower", amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff("ShadowStepPower", Math.Abs(amount));
+                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
+                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 break;
 
             case DoubleDamagePower:
@@ -586,20 +586,20 @@ internal static class HookPatches
                     }
                     else
                     {
-                        CardRegistry.AddDurationBuff(target, "DoubleDamagePower", amount, CardRegistry.GetTrackingId(cardSource));
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
                     }
                 }
                 else if (amount < 0) 
                 {
-                    CardRegistry.RemoveDurationBuff(target, "DoubleDamagePower", Math.Abs(amount));
+                    CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
                 }
                 break;
             case TrackingPower:
                 if (amount > 0) 
                 {
                     // Check if this is the very first time Tracking is being applied
-                    bool isFirstApplication = !CardRegistry.PersistentLedgers.ContainsKey("TrackingPower") || 
-                                              CardRegistry.PersistentLedgers["TrackingPower"].Count == 0;
+                    bool isFirstApplication = !CardRegistry.PersistentLedgers.ContainsKey(power.Id.Entry) || 
+                                              CardRegistry.PersistentLedgers[power.Id.Entry].Count == 0;
                 
                     // The first application gives 2 stacks, but 1 of those is the inherent 1.0x base.
                     // We only want to log the actual BONUS multiplier delta into the ledger!
@@ -607,14 +607,14 @@ internal static class HookPatches
                 
                     if (loggedAmount > 0) 
                     {
-                        CardRegistry.AddPersistentBuff("TrackingPower", loggedAmount, cardSource);
+                        CardRegistry.AddPersistentBuff(power.Id.Entry, loggedAmount, cardSource);
                     }
                 }
                 else if (amount < 0) 
                 {
                     // If it ever gets removed or completely wiped, we wipe the ledger as usual.
                     // (Using a full wipe here is safest if a boss cleanses debuffs/buffs)
-                    CardRegistry.RemovePersistentBuff("TrackingPower", Math.Abs(amount));
+                    CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 }
                 break;
             case EnvenomPower:

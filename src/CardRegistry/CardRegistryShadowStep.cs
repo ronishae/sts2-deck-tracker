@@ -19,7 +19,7 @@ public partial class CardRegistry
         if (amount <= 0) return;
         lock (SyncRoot)
         {
-            if (PersistentLedgers.TryGetValue("ShadowStepPower", out var ledger))
+            if (PersistentLedgers.TryGetValue("SHADOW_STEP_POWER", out var ledger))
             {
                 // EXACT FIFO HANDOFF (No Proportional Math!)
                 // If ShadowStep A gave 1, and B gave 2, we just clone that exact integer order into DoubleDamage!
@@ -29,12 +29,12 @@ public partial class CardRegistry
                     if (remainingToHandOff <= 0) break;
                     decimal handoffAmount = Math.Min(remainingToHandOff, contribution.Amount);
                     
-                    AddDurationBuff(player, "DoubleDamagePower", handoffAmount, contribution.TrackingId);
+                    AddDurationBuff(player, "DOUBLE_DAMAGE_POWER", handoffAmount, contribution.TrackingId);
                     remainingToHandOff -= handoffAmount;
                 }
                 return;
             }
-            AddDurationBuff(player, "DoubleDamagePower", amount, "External_Buff");
+            AddDurationBuff(player, "DOUBLE_DAMAGE_POWER", amount, "External_Buff");
         }
     }
 }

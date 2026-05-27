@@ -15,7 +15,7 @@ public partial class CardRegistry
         if (amount <= 0) return;
         lock (SyncRoot)
         {
-            if (PersistentLedgers.TryGetValue("DemonFormPower", out var ledger))
+            if (PersistentLedgers.TryGetValue("DEMON_FORM_POWER", out var ledger))
             {
                 // EXACT FIFO HANDOFF
                 // Maps the generated Strength perfectly 1-to-1 with who owns the Demon Form stacks!
@@ -25,13 +25,13 @@ public partial class CardRegistry
                     if (remainingToHandOff <= 0) break;
                     decimal handoffAmount = Math.Min(remainingToHandOff, contribution.Amount);
                     
-                    AddPersistentBuffById("StrengthPower", handoffAmount, contribution.TrackingId);
+                    AddPersistentBuffById("STRENGTH_POWER", handoffAmount, contribution.TrackingId);
                     remainingToHandOff -= handoffAmount;
                 }
                 return;
             }
             // Fallback just in case
-            AddPersistentBuffById("StrengthPower", amount, "External_Buff");
+            AddPersistentBuffById("STRENGTH_POWER", amount, "External_Buff");
         }
     }
 }
