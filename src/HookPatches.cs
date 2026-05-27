@@ -1169,6 +1169,15 @@ internal static class HookPatches
         __result = WrappedTask(__result);
     }
     
+    public static void PlayerAddRelicPostfix(RelicModel relic)
+    {
+        if (relic != null)
+        {
+            CardRegistry.RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
+            Godot.GD.Print($"[DeckTracker] Cached localized name for {relic.Id.Entry}: {CardRegistry.RelicNameCache[relic.Id.Entry]}");
+        }
+    }
+    
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {

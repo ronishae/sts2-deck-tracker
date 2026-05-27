@@ -28,10 +28,20 @@ public partial class CardRegistry
     {
         if (!RelicLedger.TryGetValue(relicId, out var stats))
         {
-            // Check the cache first, otherwise use Regex fallback
-            string displayName = RelicNameCache.TryGetValue(relicId, out var cachedName)
-                ? cachedName
-                : System.Text.RegularExpressions.Regex.Replace(relicId, "([a-z])([A-Z])", "$1 $2");
+            string displayName;
+            
+            if (RelicNameCache.TryGetValue(relicId, out var cachedName))
+            {
+                displayName = cachedName;
+            }
+            else
+            {
+                // Fallback 1: SCREAMING_SNAKE_CASE to Title Case (e.g., "STRIKE_DUMMY" -> "Strike Dummy")
+                displayName = System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(relicId.ToLower().Replace('_', ' '));
+                
+                // Fallback 2: PascalCase to Title Case (Kept for legacy tracking variables)
+                displayName = System.Text.RegularExpressions.Regex.Replace(displayName, "([a-z])([A-Z])", "$1 $2");
+            }
 
             stats = new RelicStats { Id = relicId, DisplayName = displayName };
             RelicLedger[relicId] = stats;

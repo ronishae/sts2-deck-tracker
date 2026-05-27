@@ -20,6 +20,11 @@ public static class ModEntry
         if (_harmony != null) return;
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
         
+        var addRelicMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Entities.Players.Player), nameof(MegaCrit.Sts2.Core.Entities.Players.Player.AddRelicInternal));
+        var addRelicPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PlayerAddRelicPostfix)));
+        
+        _harmony.Patch(addRelicMethod, postfix: addRelicPostfix);
+        
         RelicExecutionManager.PatchAllDamageRelics(_harmony);
         // Hook the universal Relic power modifier
         var tryModifyPower = AccessTools.Method(typeof(RuinedHelmet), nameof(RuinedHelmet.TryModifyPowerAmountReceived));
