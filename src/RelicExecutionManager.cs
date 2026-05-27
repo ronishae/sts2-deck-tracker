@@ -28,7 +28,8 @@ public static class RelicExecutionManager
     // A generic Prefix that grabs the Relic's class name right before it fires
     public static void GenericRelicPrefix(RelicModel __instance)
     {
-        ExecutingRelicId.Value = __instance.GetType().Name;
+        ExecutingRelicId.Value = __instance.Id.Entry;
+        CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
     }
 
     // A generic Postfix that clears it after the task finishes
@@ -46,17 +47,18 @@ public static class RelicExecutionManager
         __result = WrappedTask(__result);
     }
 
-    // Stores (Relic Class Name, Delta Amount, Power Type)
-    // Stores the latest calculation: Key = Relic Class Name, Value = (Delta Amount, Power Type)
+    // Stores (Relic ID, Delta Amount, Power Type)
+    // Stores the latest calculation: Key = Relic ID, Value = (Delta Amount, Power Type)
     public static readonly AsyncLocal<Dictionary<string, (decimal delta, string powerType)>> PendingPowerModifiers = new();
 
     public static void TryModifyPowerAmountReceivedPostfix(RelicModel __instance, PowerModel canonicalPower, Creature target, decimal amount, Creature? applier, ref decimal modifiedAmount, ref bool __result)
     {
         if (__result && modifiedAmount != amount)
         {
+            CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
             PendingPowerModifiers.Value ??= new Dictionary<string, (decimal, string)>();
             // Overwrites the hypothetical math so only the latest calculation survives!
-            PendingPowerModifiers.Value[__instance.GetType().Name] = (modifiedAmount - amount, canonicalPower.GetType().Name);
+            PendingPowerModifiers.Value[__instance.Id.Entry] = (modifiedAmount - amount, canonicalPower.Id.Entry);
         }
     }
 
@@ -64,9 +66,10 @@ public static class RelicExecutionManager
     {
         if (__result != amount)
         {
+            CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
             PendingPowerModifiers.Value ??= new Dictionary<string, (decimal, string)>();
             // Overwrites the hypothetical math so only the latest calculation survives!
-            PendingPowerModifiers.Value[__instance.GetType().Name] = (__result - amount, power.GetType().Name);
+            PendingPowerModifiers.Value[__instance.Id.Entry] = (__result - amount, power.Id.Entry);
         }
     }
     
@@ -80,7 +83,7 @@ public static class RelicExecutionManager
         if (CardRegistry.ExecutingOrb != null && __result != value)
         {
             PendingOrbModifiers.Value ??= new();
-            PendingOrbModifiers.Value.Add((__instance.GetType().Name, __result - value));
+            PendingOrbModifiers.Value.Add((__instance.Id.Entry, __result - value));
         }
     }
     

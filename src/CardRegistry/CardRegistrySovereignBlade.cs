@@ -18,12 +18,7 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            if (!RelicLedger.TryGetValue(relicId, out var stats))
-            {
-                string cleanName = System.Text.RegularExpressions.Regex.Replace(relicId, "([a-z])([A-Z])", "$1 $2");
-                stats = new RelicStats { Id = relicId, DisplayName = cleanName };
-                RelicLedger[relicId] = stats;
-            }
+            var stats = GetOrCreateRelicStats(relicId);
             
             stats.RawForgeCombat += rawForge;
             stats.ConnectedForgeCombat += connectedForge;

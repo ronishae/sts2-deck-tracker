@@ -156,7 +156,7 @@ internal static class HookPatches
             if (addAmount > 0)
             {
                 snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot {
-                    PowerId = mod.GetType().Name,
+                    PowerId = mod.Id.Entry,
                     Amount = addAmount
                 });
             }
@@ -168,10 +168,10 @@ internal static class HookPatches
             if (multAmount != 1m && multAmount != 0m)
             {
                 snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot {
-                    PowerId = mod.GetType().Name,
+                    PowerId = mod.Id.Entry,
                     Amount = multAmount
                 });
-                GD.Print($"[DeckTracker] Logged Multiplier: {mod.GetType().Name} with {multAmount}x");
+                GD.Print($"[DeckTracker] Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
             }
         }
         CardRegistry.CurrentAttackSnapshot.Value = snapshot;
@@ -678,7 +678,8 @@ internal static class HookPatches
         }
         else if (source is RelicModel relic)
         {
-            CardRegistry.AddForgeById("RELIC_" + relic.GetType().Name, amount);
+            CardRegistry.RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
+            CardRegistry.AddForgeById("RELIC_" + relic.Id.Entry, amount);
         }
     }
     
