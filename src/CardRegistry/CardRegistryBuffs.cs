@@ -23,6 +23,7 @@ public static partial class CardRegistry
     {
         public string PowerId { get; set; } = "";
         public decimal Amount { get; set; }
+        public PowerModel? PowerInstance { get; set; }
     }
 
     public class DamageSnapshot
@@ -260,7 +261,7 @@ public static partial class CardRegistry
 
                         if (awarded > 0)
                         {
-                            bool paid = PayoutMultiplierDamage(id, awarded, snapshot.Target, snapshot.Dealer);
+                            bool paid = PayoutMultiplierDamage(id, awarded, snapshot.Target, snapshot.Dealer, multMod.PowerInstance);
                             if (!paid)
                             {
                                 extraDamage += awarded;
@@ -343,12 +344,20 @@ public static partial class CardRegistry
     }
     
     // Returns true if it found a card to payout to, false if it did not (un-attributed environmental damage -- e.g. slow)
-    private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer)
+    private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer, PowerModel? powerInstance = null)
     {
         GD.Print($"[DeckTracker] PayoutMultiplierDamage powerId: {powerId}, amount: {amount}");
         if (RelicLedger.ContainsKey(powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG") // Add your relic class names here!
         {
             AddRelicDamage(powerId, amount);
+            return true;
+        }
+        
+        // 0. Instanced Power Precision Routing (Flanking & Knockdown)
+        if (powerInstance != null && InstancedPowerSources.TryGetValue(powerInstance, out var instancedTrackingId))
+        {
+            AddDamageById(instancedTrackingId, amount);
+            GD.Print($"[DeckTracker] Instanced Power Paid {amount} to {instancedTrackingId}");
             return true;
         }
         

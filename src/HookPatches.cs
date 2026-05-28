@@ -170,7 +170,8 @@ internal static class HookPatches
             {
                 snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot {
                     PowerId = mod.Id.Entry,
-                    Amount = multAmount
+                    Amount = multAmount,
+                    PowerInstance = mod as PowerModel
                 });
                 GD.Print($"[DeckTracker] Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
             }
@@ -646,6 +647,15 @@ internal static class HookPatches
             case DebilitatePower:
                 if (amount > 0) CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
                 else if (amount < 0) CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
+                break;
+            case FlankingPower:
+                // let FlankingPower and KnockdownPower share the same code
+            case KnockdownPower:
+                if (amount > 0) 
+                {
+                    CardRegistry.InstancedPowerSources[power] = CardRegistry.GetTrackingId(cardSource);
+                    GD.Print($"[DeckTracker] Mapped Instanced {power.Id.Entry} to {CardRegistry.GetTrackingId(cardSource)}");
+                }
                 break;
         }
     }
