@@ -49,6 +49,14 @@ public static class DeckTrackerOverlay
     private static bool _smallUIVisibleInternal = true;
     private static bool _hWasPressed;
     private static bool _tabWasPressed;
+    
+    // --- Sort State (NEW) ---
+    private class SortState
+    {
+        public string Column { get; set; } = "ALL_DMG";
+        public bool Ascending { get; set; } = false;
+    }
+    private static SortState _currentSort = new SortState();
 
     public static void EnsureCreated()
     {
@@ -332,6 +340,44 @@ public static class DeckTrackerOverlay
     }
 
     // --- Modularized UI Redraw Methods ---
+    
+    private static Button CreateSortableHeader(string text, string sortKey, float minWidth)
+    {
+        string displayText = text;
+        if (_currentSort.Column == sortKey)
+        {
+            displayText += _currentSort.Ascending ? " ▲" : " ▼";
+        }
+
+        Button btn = new Button 
+        { 
+            Text = displayText, 
+            CustomMinimumSize = new Vector2(minWidth, 0),
+            FocusMode = Control.FocusModeEnum.None,
+            Flat = true, // Make it look more like a label
+            Alignment = HorizontalAlignment.Left
+        };
+        
+        btn.AddThemeColorOverride("font_color", new Color("FACC15"));
+
+        btn.Pressed += () => 
+        {
+            if (_currentSort.Column == sortKey)
+            {
+                _currentSort.Ascending = !_currentSort.Ascending;
+            }
+            else
+            {
+                _currentSort.Column = sortKey;
+                // Default to descending for numbers, ascending for strings (like names)
+                _currentSort.Ascending = sortKey == "NAME"; 
+            }
+            RedrawUI(_latestStats);
+        };
+
+        return btn;
+    }
+
     private static void RedrawUI(List<CardStats> stats)
     {
         UpdateSmallUI(stats);
@@ -402,22 +448,72 @@ public static class DeckTrackerOverlay
     
     private static void RenderFullScreenCards(List<CardStats> stats)
     {
-        _fullScreenHeadersContainer!.AddChild(new Label { Text = "CARD NAME", CustomMinimumSize = new Vector2(300, 0) });
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "% PLAYED", CustomMinimumSize = new Vector2(150, 0) });
+        _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("CARD NAME", "NAME", 300));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("% PLAYED", "PLAY_RATE", 150));
         string mainColText = _showRawForge ? "ALL FORGE (AVG) (#)" : "ALL DMG (AVG) (#)";
-        _fullScreenHeadersContainer.AddChild(new Label { Text = mainColText, CustomMinimumSize = new Vector2(220, 0) });
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(mainColText, "ALL_DMG", 220));
         
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "HALLWAY (AVG) (#)", CustomMinimumSize = new Vector2(200, 0) });
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "ELITE (AVG) (#)", CustomMinimumSize = new Vector2(200, 0) });
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "BOSS (AVG) (#)", CustomMinimumSize = new Vector2(200, 0) });
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "ADDED", CustomMinimumSize = new Vector2(80, 0) });
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "REMOVED", CustomMinimumSize = new Vector2(90, 0) });
-        _fullScreenHeadersContainer.AddChild(new Label { Text = "LEFT", CustomMinimumSize = new Vector2(80, 0) });
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 200));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ELITE (AVG) (#)", "ELITE_DMG", 200));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("BOSS (AVG) (#)", "BOSS_DMG", 200));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ADDED", "ADDED", 80));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("LEFT", "LEFT", 80));
 
-        var allCards = stats.Where(s => s.CardType != "Status")
+        var unsortedList = stats.Where(s => s.CardType != "Status")
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
-            .OrderByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)))
-            .ThenBy(x => x.Stat.FloorAdded).ToList();
+            .ToList();
+
+        // Sort logic
+        var sortedList = _currentSort.Column switch
+        {
+            "NAME" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat)) 
+                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
+                
+            "PLAY_RATE" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.Agg.PlayRate) 
+                : unsortedList.OrderByDescending(x => x.Agg.PlayRate),
+                
+            "ALL_DMG" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)))
+                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))),
+                
+            "HALLWAY_DMG" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeHallway : (x.Agg.DamageHallway + (_includeConnectedForge ? x.Agg.ConnectedForgeHallway - x.Agg.ReceivedForgeHallway : 0)))
+                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeHallway : (x.Agg.DamageHallway + (_includeConnectedForge ? x.Agg.ConnectedForgeHallway - x.Agg.ReceivedForgeHallway : 0))),
+                
+            "ELITE_DMG" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeElite : (x.Agg.DamageElite + (_includeConnectedForge ? x.Agg.ConnectedForgeElite - x.Agg.ReceivedForgeElite : 0)))
+                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeElite : (x.Agg.DamageElite + (_includeConnectedForge ? x.Agg.ConnectedForgeElite - x.Agg.ReceivedForgeElite : 0))),
+                
+            "BOSS_DMG" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeBoss : (x.Agg.DamageBoss + (_includeConnectedForge ? x.Agg.ConnectedForgeBoss - x.Agg.ReceivedForgeBoss : 0)))
+                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeBoss : (x.Agg.DamageBoss + (_includeConnectedForge ? x.Agg.ConnectedForgeBoss - x.Agg.ReceivedForgeBoss : 0))),
+                
+            "ADDED" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.Stat.FloorAdded) // 0 (GEN) will be at the top when ascending
+                : unsortedList.OrderByDescending(x => x.Stat.FloorAdded),
+                
+            "REMOVED" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.Stat.FloorRemoved) // -1 (N/A) will be at the top when ascending
+                : unsortedList.OrderByDescending(x => x.Stat.FloorRemoved),
+                
+            "LEFT" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.Stat.FloorLeftDeck) // 0 (N/A) will be at the top when ascending
+                : unsortedList.OrderByDescending(x => x.Stat.FloorLeftDeck),
+
+            _ => unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) // Fallback
+        };
+        
+        var finalSort = sortedList;
+        if (_currentSort.Column != "ALL_DMG")
+        {
+            finalSort = finalSort.ThenByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)));
+        }
+
+        // Always apply FloorAdded as a secondary sort to keep things deterministic if values are tied
+        var allCards = finalSort.ThenBy(x => x.Stat.FloorAdded).ToList();
         
         foreach (var item in allCards)
         {
@@ -480,15 +576,15 @@ public static class DeckTrackerOverlay
     private static void RenderFullScreenRelics()
     {
         // 1. Setup Headers
-        _fullScreenHeadersContainer!.AddChild(new Label { Text = "RELIC NAME", CustomMinimumSize = new Vector2(300, 0) });
+        _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("RELIC NAME", "NAME", 300));
         
         string mainColText = _showRawForge ? "RAW FORGE" : (_includeConnectedForge ? "DMG (+FORGE)" : "DAMAGE");
         string runText = _showRunStats ? "(RUN)" : "(COMBAT)";
-        _fullScreenHeadersContainer.AddChild(new Label { Text = $"{mainColText} {runText}", CustomMinimumSize = new Vector2(220, 0) });
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader($"{mainColText} {runText}", "ALL_DMG", 220));
 
         // 2. Fetch, Filter, and Sort Data
         // We use an anonymous object to hold the Stat and Aggregated Data, exactly like the Cards logic!
-        var relicList = CardRegistry.RelicLedger.Values
+        var unsortedList = CardRegistry.RelicLedger.Values
             .Select(r => new { Stat = r, Agg = AggregateActData(r) })
             .Where(x => {
                 decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
@@ -499,14 +595,48 @@ public static class DeckTrackerOverlay
                 
                 return _showRunStats ? effRun > 0 : effCombat > 0;
             })
-            .OrderByDescending(x => {
+            .ToList();
+
+        var sortedList = _currentSort.Column switch
+        {
+            "NAME" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat)) 
+                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
+                
+            "ALL_DMG" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => {
+                    decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
+                    decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
+                    decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                    return _showRunStats ? effRun : effCombat;
+                })
+                : unsortedList.OrderByDescending(x => {
+                    decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
+                    decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
+                    decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                    return _showRunStats ? effRun : effCombat;
+                }),
+                
+            _ => unsortedList.OrderByDescending(x => {
                 decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
                 decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
                 decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
-                
                 return _showRunStats ? effRun : effCombat;
             })
-            .ToList();
+        };
+
+        var finalSort = sortedList;
+        if (_currentSort.Column != "ALL_DMG")
+        {
+            finalSort = finalSort.ThenByDescending(x => {
+                decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
+                decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
+                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                return _showRunStats ? effRun : effCombat;
+            });
+        }
+
+        var relicList = finalSort.ToList();
 
         // 3. Render Rows
         foreach (var item in relicList)
