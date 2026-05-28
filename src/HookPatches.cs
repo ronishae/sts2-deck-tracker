@@ -146,6 +146,7 @@ internal static class HookPatches
             BaseDamage = damage, 
             CardSource = cardSource,
             Target = target,
+            Props = props,
             Dealer = dealer
         };
 
@@ -631,6 +632,20 @@ internal static class HookPatches
                 {
                     if (amount > 0) CardRegistry.AddTrashToTreasureShares(amount, cardSource);
                 }
+                break;
+            // Cruelty acts like Strength (stacks infinitely, persists on Player)
+            case CrueltyPower:
+                if (target != null && target.IsPlayer)
+                {
+                    if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
+                    else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
+                }
+                break;
+
+            // Debilitate acts like Weak (duration counts down, FIFO queue on Enemy)
+            case DebilitatePower:
+                if (amount > 0) CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
+                else if (amount < 0) CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
                 break;
         }
     }

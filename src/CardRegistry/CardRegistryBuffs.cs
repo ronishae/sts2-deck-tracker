@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Threading;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Models.Relics;
 
 namespace DeckTracker;
 
@@ -29,6 +31,7 @@ public static partial class CardRegistry
         public Creature? Target { get; set; }
         public Creature? Dealer { get; set; }
         public decimal BaseDamage { get; set; }
+        public MegaCrit.Sts2.Core.ValueProps.ValueProp Props { get; set; }
         public List<DamageModifierSnapshot> AdditiveModifiers { get; set; } = new();
         public List<DamageModifierSnapshot> MultiplicativeModifiers { get; set; } = new();
     }
@@ -215,12 +218,75 @@ public static partial class CardRegistry
         {
             var multMod = snapshot.MultiplicativeModifiers[i];
 
+            // NEW: Special Decomposition for Vulnerable!
+            // NEW: Special Decomposition for Vulnerable!
+            if (multMod.PowerId == "VULNERABLE_POWER")
+            {
+                // 1. Grab the active game objects
+                var vulnPower = snapshot.Target?.GetPower<VulnerablePower>();
+                var phrog = snapshot.Dealer?.Player?.GetRelic<PaperPhrog>();
+                var cruelty = snapshot.Dealer?.GetPower<CrueltyPower>();
+                var debilitate = snapshot.Target?.GetPower<DebilitatePower>();
+
+                // 2. Dynamically fetch the base Vulnerable value (Usually 1.5m, but grabs the true DynamicVar!)
+                decimal m_base = vulnPower != null ? vulnPower.DynamicVars["DamageIncrease"].BaseValue : 1.5m;
+                
+                // 3. Chain the Native Game Methods!
+                decimal m_phrog = phrog != null 
+                    ? phrog.ModifyVulnerableMultiplier(snapshot.Target!, m_base, snapshot.Props, snapshot.Dealer, snapshot.CardSource) 
+                    : m_base;
+                    
+                decimal m_cruel = cruelty != null 
+                    ? cruelty.ModifyVulnerableMultiplier(snapshot.Target!, m_phrog, snapshot.Props, snapshot.Dealer, snapshot.CardSource) 
+                    : m_phrog;
+                    
+                // decimal m_deb = debilitate != null 
+                //     ? debilitate.ModifyVulnerableMultiplier(snapshot.Target!, m_cruel, snapshot.Props, snapshot.Dealer, snapshot.CardSource) 
+                //     : m_cruel;
+
+                decimal multsWithoutVuln = activeMultipliers / multMod.Amount;
+
+                // Helper to cleanly peel a sub-layer and pass the Diff
+                void PeelSubMultiplier(string id, decimal multWithout)
+                {
+                    decimal dmgWithout = Math.Max(0, Math.Floor(basePlusAdditives * (multsWithoutVuln * multWithout)));
+                    decimal diff = currentCalculatedDamage - dmgWithout;
+
+                    if (diff > 0)
+                    {
+                        decimal penalty = Math.Min(diff, overkill);
+                        decimal awarded = diff - penalty;
+                        overkill -= penalty;
+
+                        if (awarded > 0)
+                        {
+                            bool paid = PayoutMultiplierDamage(id, awarded, snapshot.Target, snapshot.Dealer);
+                            if (!paid)
+                            {
+                                extraDamage += awarded;
+                                GD.Print($"[DeckTracker] Unattributed {awarded} damage from {id} routed to Base Card.");
+                            }
+                        }
+                    }
+                    currentCalculatedDamage = dmgWithout;
+                }
+
+                // 4. Reverse Execution Order: Debilitate -> Cruelty -> Phrog -> Base
+                if (debilitate != null) PeelSubMultiplier("DEBILITATE_POWER", m_cruel);
+                if (cruelty != null) PeelSubMultiplier("CRUELTY_POWER", m_phrog);
+                if (phrog != null) PeelSubMultiplier("PAPER_PHROG", m_base);
+                PeelSubMultiplier("VULNERABLE_POWER", 1m);
+
+                activeMultipliers = multsWithoutVuln;
+                continue; 
+            }
+
+            // STANDARD PEEL
             decimal multsWithout = activeMultipliers / multMod.Amount;
             decimal damageWithout = Math.Max(0, Math.Floor(basePlusAdditives * multsWithout));
             
             decimal theoreticalDiff = currentCalculatedDamage - damageWithout;
 
-            // Buffs (>1) have a positive diff. Debuffs (<1) have a negative diff.
             if (theoreticalDiff > 0)
             {
                 decimal penalty = Math.Min(theoreticalDiff, overkill);
@@ -232,20 +298,16 @@ public static partial class CardRegistry
                     var paid = PayoutMultiplierDamage(multMod.PowerId, awardedDamage, snapshot.Target, snapshot.Dealer);
                     if (!paid)
                     {
-                        // UNTRACKED POWER DETECTED! Route it back to the Base Card!
                         extraDamage += awardedDamage;
                         GD.Print($"[DeckTracker] Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
                     }
                 }
                 
-                // We successfully peeled a Buff. Update the stack!
                 currentCalculatedDamage = damageWithout;
                 activeMultipliers = multsWithout; 
             }
-            // If Diff <= 0, it was a Debuff! We skip it. 
-            // `activeMultipliers` keeps the 0.75x penalty for the next phase.
         }
-
+        
         // --- ADDITIVE PEEL (Second) ---
         for (int i = snapshot.AdditiveModifiers.Count - 1; i >= 0; i--)
         {
@@ -284,7 +346,7 @@ public static partial class CardRegistry
     private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer)
     {
         GD.Print($"[DeckTracker] PayoutMultiplierDamage powerId: {powerId}, amount: {amount}");
-        if (RelicLedger.ContainsKey(powerId) || powerId == "PEN_NIB") // Add your relic class names here!
+        if (RelicLedger.ContainsKey(powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG") // Add your relic class names here!
         {
             AddRelicDamage(powerId, amount);
             return true;
@@ -366,6 +428,8 @@ public static partial class CardRegistry
                     }
                 }
             }
+
+            return true;
         }
 
         return false;
