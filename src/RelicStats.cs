@@ -1,3 +1,5 @@
+using MegaCrit.Sts2.Core.Models;
+
 namespace DeckTracker;
 public sealed class RelicStats : EntityStats
 {

@@ -1,9 +1,15 @@
+using MegaCrit.Sts2.Core.Models;
+
 namespace DeckTracker;
 
 public abstract class EntityStats
 {
     public string Id { get; set; } = "";
     public string DisplayName { get; set; } = "";
+    
+    // NOTE: for cards, the CardModel represents the master deck version, but the cards played
+    // are cloned at the start of combat, so these will not represent the live played cards
+    public AbstractModel? Model { get; set; }
     
     // Run Lifecycle
     public int FloorAdded { get; set; }
@@ -47,5 +53,6 @@ public abstract class EntityStats
         cloneTarget.RawForgeCombat = RawForgeCombat;
         cloneTarget.ConnectedForgeCombat = ConnectedForgeCombat;
         cloneTarget.ReceivedForgeCombat = ReceivedForgeCombat;
+        cloneTarget.Model = Model;
     }
 }

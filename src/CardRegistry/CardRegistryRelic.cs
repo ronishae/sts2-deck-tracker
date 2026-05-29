@@ -50,7 +50,7 @@ public partial class CardRegistry
         Publish();
     }
 
-    private static RelicStats GetOrCreateRelicStats(string relicId)
+    public static RelicStats GetOrCreateRelicStats(string relicId)
     {
         if (!RelicLedger.TryGetValue(relicId, out var stats))
         {

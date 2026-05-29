@@ -1189,6 +1189,8 @@ internal static class HookPatches
         if (relic != null)
         {
             CardRegistry.RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
+            var stats = CardRegistry.GetOrCreateRelicStats(relic.Id.Entry);
+            stats.Model = relic;
             Godot.GD.Print($"[DeckTracker] Cached localized name for {relic.Id.Entry}: {CardRegistry.RelicNameCache[relic.Id.Entry]}");
         }
     }

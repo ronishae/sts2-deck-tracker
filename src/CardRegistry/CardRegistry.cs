@@ -212,6 +212,8 @@ public static partial class CardRegistry
             ResetInternalsCombat();
             RelicLedger.Clear();
             RelicExecutionManager.ResetState();
+            RelicLedger.Clear(); 
+            RelicNameCache.Clear();
         }
         Publish();
     }
@@ -344,6 +346,7 @@ public static partial class CardRegistry
                 { 
                     Id = uniqueTrackingId, 
                     DisplayName = displayName,
+                    Model = card,
                     CardType = sourceCard.Type.ToString(),
                     Enchantment = enchantName,
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
