@@ -18,6 +18,32 @@ public partial class CardRegistry
             var stats = GetOrCreateRelicStats(relicId);
             stats.CombatDamage += amount;
             stats.RunDamage += amount;
+
+            var actData = _currentAct switch
+            {
+                1 => stats.Act1,
+                2 => stats.Act2,
+                3 => stats.Act3,
+                4 => stats.Act4,
+                _ => null
+            };
+
+            if (actData != null)
+            {
+                switch (_currentCombatType)
+                {
+                    case "Elite":
+                        actData.DamageElite += amount;
+                        break;
+                    case "Boss":
+                        actData.DamageBoss += amount;
+                        break;
+                    case "Hallway":
+                        actData.DamageHallway += amount;
+                        break;
+                }
+            }
+
             GD.Print($"[DeckTracker] Added {amount} damage to Relic: {relicId}");
         }
 
