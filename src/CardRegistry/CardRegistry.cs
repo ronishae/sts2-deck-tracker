@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Godot;
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
@@ -108,6 +109,8 @@ public static partial class CardRegistry
                 GD.Print($"[DeckTracker] Starting fresh tracker for new run seed: {runSeed}");
                 ResetRun();
             }
+            // CLEAN ARCHITECTURE: Re-map the live memory objects immediately after a Load or Reset!
+            RestoreLiveInstances();
         }
         Publish();
     }
@@ -253,6 +256,47 @@ public static partial class CardRegistry
         Publish(); // Instantly update the UI, even outside of combat!
     }
     
+    private static MegaCrit.Sts2.Core.Runs.RunState? GetLiveRunState()
+    {
+        // Uses Harmony to securely fetch the private 'State' property from RunManager
+        var stateProperty = AccessTools.Property(typeof(MegaCrit.Sts2.Core.Runs.RunManager), "State");
+        
+        if (stateProperty != null)
+        {
+            return stateProperty.GetValue(MegaCrit.Sts2.Core.Runs.RunManager.Instance) as MegaCrit.Sts2.Core.Runs.RunState;
+        }
+        return null;
+    }
+    
+    private static void RestoreLiveInstances()
+    {
+        var run = GetLiveRunState();
+        if (run == null) return;
+
+        foreach (var player in run.Players)
+        {
+            // 1. Restore Relic Instances
+            foreach (var relic in player.Relics)
+            {
+                RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
+                var stats = GetOrCreateRelicStats(relic.Id.Entry);
+                stats.Model = relic;
+                stats.IsActive = true; 
+            }
+
+            // 2. Restore Master Deck Card Instances (Fixes the JSON load issue for cards too!)
+            foreach (var card in player.Deck.Cards)
+            {
+                string trackingId = GetTrackingId(card);
+                if (Totals.TryGetValue(trackingId, out var cardStats))
+                {
+                    cardStats.Model = card;
+                }
+            }
+        }
+        Godot.GD.Print("[DeckTracker] Restored live object instances to the ledger.");
+    }
+    
     public static void StartCombat(string combatType, int currentFloor, int currentAct, List<string> activeDeckIds)
     {
         // Diff the deck immediately before processing encounters
@@ -302,6 +346,7 @@ public static partial class CardRegistry
                 }
             }
         }
+        Publish();
     }
     
     public static void ProcessCombatEnd()
