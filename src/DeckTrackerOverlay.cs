@@ -53,7 +53,7 @@ public static class DeckTrackerOverlay
     // --- Sort State (NEW) ---
     private class SortState
     {
-        public string Column { get; set; } = "ALL_DMG";
+        public string Column { get; set; } = "TOTAL_DMG";
         public bool Ascending { get; set; } = false;
     }
     private static SortState _currentSort = new SortState();
@@ -470,8 +470,9 @@ public static class DeckTrackerOverlay
     {
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("CARD NAME", "NAME", 300));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("% PLAYED", "PLAY_RATE", 150));
-        string mainColText = _showRawForge ? "ALL FORGE (AVG) (#)" : "ALL DMG (AVG) (#)";
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(mainColText, "ALL_DMG", 220));
+        string totalColText = _showRawForge ? "TOTAL FORGE" : "TOTAL DMG";
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 110));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("AVG (#)", "AVG_DMG", 130));
         
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 200));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ELITE (AVG) (#)", "ELITE_DMG", 200));
@@ -495,9 +496,13 @@ public static class DeckTrackerOverlay
                 ? unsortedList.OrderBy(x => x.Agg.PlayRate) 
                 : unsortedList.OrderByDescending(x => x.Agg.PlayRate),
                 
-            "ALL_DMG" => _currentSort.Ascending 
+            "TOTAL_DMG" => _currentSort.Ascending 
                 ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)))
                 : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))),
+
+            "AVG_DMG" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.Agg.EncountersSeenTotal > 0 ? (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) / x.Agg.EncountersSeenTotal : 0)
+                : unsortedList.OrderByDescending(x => x.Agg.EncountersSeenTotal > 0 ? (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) / x.Agg.EncountersSeenTotal : 0),
                 
             "HALLWAY_DMG" => _currentSort.Ascending 
                 ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeHallway : (x.Agg.DamageHallway + (_includeConnectedForge ? x.Agg.ConnectedForgeHallway - x.Agg.ReceivedForgeHallway : 0)))
@@ -527,7 +532,7 @@ public static class DeckTrackerOverlay
         };
         
         var finalSort = sortedList;
-        if (_currentSort.Column != "ALL_DMG")
+        if (_currentSort.Column != "TOTAL_DMG")
         {
             finalSort = finalSort.ThenByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)));
         }
@@ -560,8 +565,11 @@ public static class DeckTrackerOverlay
             
             Color statColor = new Color("A0A8B4");
             
-            Label allDataLabel = new Label { Text = $"{valTotal:0.##} ({avgTotal:0.#}) (#{agg.EncountersSeenTotal})", CustomMinimumSize = new Vector2(220, 0) };
-            allDataLabel.AddThemeColorOverride("font_color", statColor);
+            Label totalDataLabel = new Label { Text = $"{valTotal:0.##}", CustomMinimumSize = new Vector2(110, 0) };
+            totalDataLabel.AddThemeColorOverride("font_color", statColor);
+
+            Label avgDataLabel = new Label { Text = $"({avgTotal:0.#}) (#{agg.EncountersSeenTotal})", CustomMinimumSize = new Vector2(130, 0) };
+            avgDataLabel.AddThemeColorOverride("font_color", statColor);
 
             Label hallwayLabel = new Label { Text = $"{valHallway:0.##} ({avgHallway:0.#}) (#{agg.EncountersSeenHallway})", CustomMinimumSize = new Vector2(200, 0) };
             hallwayLabel.AddThemeColorOverride("font_color", statColor);
@@ -587,7 +595,8 @@ public static class DeckTrackerOverlay
             leftLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
             
             row.AddChild(nameLabel); row.AddChild(playRateLabel);
-            row.AddChild(allDataLabel); row.AddChild(hallwayLabel); row.AddChild(eliteLabel); row.AddChild(bossLabel);
+            row.AddChild(totalDataLabel); row.AddChild(avgDataLabel); 
+            row.AddChild(hallwayLabel); row.AddChild(eliteLabel); row.AddChild(bossLabel);
             row.AddChild(addedLabel); row.AddChild(removedLabel); row.AddChild(leftLabel);
             
             _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
