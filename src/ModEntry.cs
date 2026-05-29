@@ -20,6 +20,30 @@ public static class ModEntry
         if (_harmony != null) return;
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
         
+        var cleanUpMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.CleanUp));
+        var cleanUpPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RunManagerCleanUpPrefix)));
+        _harmony.Patch(cleanUpMethod, prefix: cleanUpPrefix);
+        
+        // 1. Potion Procured
+        var afterPotionProcuredMethod = AccessTools.Method(typeof(Hook), nameof(Hook.AfterPotionProcured));
+        var afterPotionProcuredPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.AfterPotionProcuredPrefix)));
+        _harmony.Patch(afterPotionProcuredMethod, prefix: afterPotionProcuredPrefix);
+
+        // 2. Potion Discarded
+        var afterPotionDiscardedMethod = AccessTools.Method(typeof(Hook), nameof(Hook.AfterPotionDiscarded));
+        var afterPotionDiscardedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.AfterPotionDiscardedPrefix)));
+        _harmony.Patch(afterPotionDiscardedMethod, prefix: afterPotionDiscardedPrefix);
+
+        // 3. Before Potion Used (Opens the Trap)
+        var beforePotionUsedMethod = AccessTools.Method(typeof(Hook), nameof(Hook.BeforePotionUsed));
+        var beforePotionUsedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePotionUsedPrefix)));
+        _harmony.Patch(beforePotionUsedMethod, prefix: beforePotionUsedPrefix);
+
+        // 4. After Potion Used (Closes the Trap)
+        var afterPotionUsedMethod = AccessTools.Method(typeof(Hook), nameof(Hook.AfterPotionUsed));
+        var afterPotionUsedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.AfterPotionUsedPrefix)));
+        _harmony.Patch(afterPotionUsedMethod, prefix: afterPotionUsedPrefix);
+        
         var afterObtainedMethod = AccessTools.Method(typeof(RelicModel), nameof(RelicModel.AfterObtained));
         var afterObtainedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RelicAfterObtainedPrefix)));
         

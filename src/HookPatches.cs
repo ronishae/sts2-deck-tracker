@@ -1,4 +1,5 @@
 using Godot;
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
@@ -1316,11 +1317,26 @@ internal static class HookPatches
             CardRegistry.DistributeRollingBoulderDamage(results.TotalDamage);
             return;
         }
-
+        
         if (cardSource == null)
         {
-            GD.Print($"[DeckTracker] CardSource is null and not poison or supported orb. Returning..." +
-                     $"with value: {CardRegistry.ExecutingOrb} and damage: {results.TotalDamage}");
+            var activePotion = CardRegistry.CurrentPlayingPotion;
+            if (activePotion != null)
+            {
+                // FOUL POTION CHECK: Ignore self-damage!
+                if (target != null && !target.IsPlayer)
+                {
+                    if (CardRegistry.PotionInstanceIds.TryGetValue(activePotion, out var potionId))
+                    {
+                        CardRegistry.AddDamageById(potionId, results.TotalDamage);
+                        GD.Print($"[DeckTracker] Routed {results.TotalDamage} damage to {potionId}.");
+                        return; // Successfully routed to the potion!
+                    }
+                }
+            }
+            
+            // If it wasn't a potion, fallback to your existing poison/orb checks
+            GD.Print("[DeckTracker] CardSource is null and not potion or supported orb. Returning...");
             return;
         }
         
@@ -1348,6 +1364,38 @@ internal static class HookPatches
         {
             CardRegistry.AddDamage(cardSource, baseCardDamage); 
         }
+    }
+    
+    // --- POTION HOOKS ---
+    public static void AfterPotionProcuredPrefix(PotionModel potion)
+    {
+        int currentFloor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        CardRegistry.RegisterPotionProcured(potion, currentFloor);
+        GD.Print($"[DeckTracker] Potion {potion.Id.Entry} has been procured");
+    }
+    
+    public static void AfterPotionDiscardedPrefix(PotionModel potion)
+    {
+        int currentFloor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        CardRegistry.MarkPotionDiscarded(potion, currentFloor);
+        GD.Print($"[DeckTracker] Potion {potion.Id.Entry} has been discarded");
+    }
+
+    public static void BeforePotionUsedPrefix(PotionModel potion)
+    {
+        int currentFloor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        CardRegistry.MarkPotionUsed(potion, currentFloor);
+        
+        // OPEN THE TRAP: Any un-sourced damage that happens next belongs to this potion!
+        CardRegistry.SetPlayingPotion(potion);
+        GD.Print($"[DeckTracker] (before) Potion {potion.Id.Entry} has been used");
+    }
+    
+    public static void AfterPotionUsedPrefix(PotionModel potion)
+    {
+        // CLOSE THE TRAP
+        CardRegistry.SetPlayingPotion(null);
+        GD.Print($"[DeckTracker] (after) Potion {potion.Id.Entry} has been used");
     }
 
     // --- HELPERS & EXTRACTORS ---
@@ -1420,6 +1468,11 @@ internal static class HookPatches
         }
     }
 
+    public static void RunManagerCleanUpPrefix()
+    {
+        CardRegistry.ClearSession();
+    }
+    
     private static System.Collections.IEnumerable? GetEnumerableProperty(object obj, string propertyName)
     {
         return obj.GetType().GetProperty(propertyName)?.GetValue(obj) as System.Collections.IEnumerable;

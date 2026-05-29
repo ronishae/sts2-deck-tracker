@@ -127,7 +127,9 @@ public static partial class CardRegistry
                 state = new SavedRunState
                 {
                     RunSeed = _currentRunSeed,
-                    Totals = Totals.ToDictionary(kvp => kvp.Key, kvp => (CardStats)kvp.Value.Clone())
+                    Totals = Totals.ToDictionary(kvp => kvp.Key, kvp => (CardStats)kvp.Value.Clone()),
+                    // Save the potions!
+                    Potions = PotionLedger.ToDictionary(kvp => kvp.Key, kvp => (PotionStats)kvp.Value.Clone())
                 };
             }
 
@@ -152,6 +154,7 @@ public static partial class CardRegistry
             if (state == null || state.RunSeed != targetSeed) return false;
 
             Totals = state.Totals;
+            PotionLedger = state.Potions ?? new Dictionary<string, PotionStats>();
             return true;
         }
         catch
@@ -206,6 +209,16 @@ public static partial class CardRegistry
         TrashToTreasureShares.Clear();
         InstancedPowerSources.Clear();
     }
+    
+    public static void ClearSession()
+    {
+        lock (SyncRoot)
+        {
+            _currentRunSeed = "";
+            Godot.GD.Print("[DeckTracker] Session cleared. Ready for next run/continue.");
+        }
+    }
+    
     public static void ResetRun()
     {
         lock (SyncRoot)
@@ -217,6 +230,9 @@ public static partial class CardRegistry
             RelicExecutionManager.ResetState();
             RelicLedger.Clear(); 
             RelicNameCache.Clear();
+            PotionLedger.Clear();
+            PotionInstanceIds.Clear();
+            _potionCounter = 0;
         }
         Publish();
     }
@@ -256,7 +272,7 @@ public static partial class CardRegistry
         Publish(); // Instantly update the UI, even outside of combat!
     }
     
-    private static MegaCrit.Sts2.Core.Runs.RunState? GetLiveRunState()
+    public static MegaCrit.Sts2.Core.Runs.RunState? GetLiveRunState()
     {
         // Uses Harmony to securely fetch the private 'State' property from RunManager
         var stateProperty = AccessTools.Property(typeof(MegaCrit.Sts2.Core.Runs.RunManager), "State");
@@ -292,6 +308,44 @@ public static partial class CardRegistry
                 {
                     cardStats.Model = card;
                 }
+            }
+            
+            // 3. Restore Potion Instances cleanly
+            for (int i = 0; i < player.PotionSlots.Count; i++)
+            {
+                var potion = player.PotionSlots[i];
+                if (potion == null) continue;
+
+                // Find if this live object already has a tracked ID mapped
+                string? existingId = PotionInstanceIds.FirstOrDefault(kvp => kvp.Key == potion).Value;
+
+                if (string.IsNullOrEmpty(existingId))
+                {
+                    // If it's not mapped in memory, check if a ledger entry from JSON matches this potion type and lacks an instance
+                    existingId = PotionLedger.Values.FirstOrDefault(p => p.Model == null && p.Id.Contains(potion.Id.Entry))?.Id;
+                    
+                    if (string.IsNullOrEmpty(existingId))
+                    {
+                        // Fresh Run Startup: It's a Neow potion!
+                        _potionCounter++;
+                        existingId = $"POTION_{potion.Id.Entry}_{_potionCounter}";
+                        
+                        string displayName = potion.Title?.GetFormattedText() ?? potion.Id.Entry ?? "Unknown Potion";
+                        PotionLedger[existingId] = new PotionStats
+                        {
+                            Id = existingId,
+                            DisplayName = displayName,
+                            FloorObtained = 1, // Guaranteed Floor 1 on clean startups
+                            IsActive = true
+                        };
+                    }
+                    
+                    // Map the live memory reference to the ID
+                    PotionInstanceIds[potion] = existingId;
+                }
+
+                // Bind the live instance back to the stats object
+                PotionLedger[existingId].Model = potion;
             }
         }
         Godot.GD.Print("[DeckTracker] Restored live object instances to the ledger.");
@@ -478,6 +532,33 @@ public static partial class CardRegistry
             // "RELIC_Vajra" becomes "Vajra"
             string relicId = trackingId.Substring(6); 
             AddRelicDamage(relicId, amount);
+            return;
+        }
+        
+        // NEW: Intercept Potion Damage!
+        if (trackingId.StartsWith("POTION_"))
+        {
+            lock (SyncRoot)
+            {
+                if (PotionLedger.TryGetValue(trackingId, out var stat))
+                {
+                    stat.CombatDamage += amount;
+                    stat.RunDamage += amount;
+                    GD.Print($"Added {amount} damage to Potion: {trackingId}.");
+                    
+                    var actData = GetActData(stat, _currentAct);
+                    if (actData != null)
+                    {
+                        switch (_currentCombatType)
+                        {
+                            case "Elite": actData.DamageElite += amount; break;
+                            case "Boss": actData.DamageBoss += amount; break;
+                            case "Hallway": actData.DamageHallway += amount; break;
+                        }
+                    }
+                }
+            }
+            Publish();
             return;
         }
         

@@ -30,6 +30,7 @@ public static class DeckTrackerOverlay
     private static Button? _cardsTabBtn;
     private static Button? _relicsTabBtn;
     private static string _activeTab = "Cards";
+    private static Button? _potionsTabBtn;
     
     // --- State & Data ---
     // Note: Kept as CardStats queue for now to maintain existing CardRegistry contract.
@@ -185,12 +186,15 @@ public static class DeckTrackerOverlay
         
         _cardsTabBtn = new Button { Text = "Cards", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, ButtonPressed = true };
         _relicsTabBtn = new Button { Text = "Relics", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, ButtonPressed = false };
+        _potionsTabBtn = new Button { Text = "Potions", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, ButtonPressed = false };
         
         _cardsTabBtn.Pressed += () => SetActiveTab("Cards");
         _relicsTabBtn.Pressed += () => SetActiveTab("Relics");
+        _potionsTabBtn.Pressed += () => SetActiveTab("Potions");
         
         tabsContainer.AddChild(_cardsTabBtn);
         tabsContainer.AddChild(_relicsTabBtn);
+        tabsContainer.AddChild(_potionsTabBtn);
         mainCol.AddChild(tabsContainer);
 
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
@@ -217,6 +221,7 @@ public static class DeckTrackerOverlay
         _activeTab = tabName;
         if (_cardsTabBtn != null) _cardsTabBtn.ButtonPressed = (tabName == "Cards");
         if (_relicsTabBtn != null) _relicsTabBtn.ButtonPressed = (tabName == "Relics");
+        if (_potionsTabBtn != null) _potionsTabBtn.ButtonPressed = (tabName == "Potions");
         RedrawUI(_latestStats);
     }
     
@@ -467,6 +472,10 @@ public static class DeckTrackerOverlay
         else if (_activeTab == "Relics")
         {
             RenderFullScreenRelics();
+        }
+        else if (_activeTab == "Potions")
+        {
+            RenderFullScreenPotions();
         }
     }
 
@@ -764,6 +773,78 @@ public static class DeckTrackerOverlay
             row.AddChild(bossLabel);
             row.AddChild(addedLabel); 
             row.AddChild(removedLabel);
+            
+            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
+        }
+    }
+    
+    private static void RenderFullScreenPotions()
+    {
+        // 1. Setup Headers
+        _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("POTION NAME", "NAME", 300));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("TOTAL DMG", "TOTAL_DMG", 180));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("OBTAINED", "ADDED", 100));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("USED", "USED", 100));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("DISCARDED", "REMOVED", 100));
+
+        // 2. Fetch and Sort Data
+        var unsortedList = CardRegistry.PotionLedger.Values.Cast<PotionStats>().ToList();
+
+        var sortedList = _currentSort.Column switch
+        {
+            "NAME" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x)) 
+                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x)),
+                
+            "TOTAL_DMG" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.RunDamage)
+                : unsortedList.OrderByDescending(x => x.RunDamage),
+                
+            "ADDED" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.FloorObtained) 
+                : unsortedList.OrderByDescending(x => x.FloorObtained),
+                
+            "USED" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.FloorUsed) 
+                : unsortedList.OrderByDescending(x => x.FloorUsed),
+                
+            "REMOVED" => _currentSort.Ascending 
+                ? unsortedList.OrderBy(x => x.FloorDiscarded) 
+                : unsortedList.OrderByDescending(x => x.FloorDiscarded),
+                
+            _ => unsortedList.OrderByDescending(x => x.RunDamage) // Fallback
+        };
+
+        // Secondary sort to keep multiple instances ordered chronologically
+        var potionList = sortedList.ThenBy(x => x.FloorObtained).ToList();
+
+        // 3. Render Rows
+        foreach (var stat in potionList)
+        {
+            HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            
+            Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
+            
+            Label totalDataLabel = new Label { Text = $"{stat.RunDamage:0.##}", CustomMinimumSize = new Vector2(180, 0) };
+            totalDataLabel.AddThemeColorOverride("font_color", new Color("4ADE80")); 
+            
+            string obtainedText = stat.FloorObtained < 0 ? "N/A" : stat.FloorObtained.ToString();
+            Label obtainedLabel = new Label { Text = obtainedText, CustomMinimumSize = new Vector2(100, 0) };
+            obtainedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
+
+            string usedText = stat.FloorUsed < 0 ? "N/A" : stat.FloorUsed.ToString();
+            Label usedLabel = new Label { Text = usedText, CustomMinimumSize = new Vector2(100, 0) };
+            usedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+
+            string discardedText = stat.FloorDiscarded < 0 ? "N/A" : stat.FloorDiscarded.ToString();
+            Label discardedLabel = new Label { Text = discardedText, CustomMinimumSize = new Vector2(100, 0) };
+            discardedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+            
+            row.AddChild(nameLabel);
+            row.AddChild(totalDataLabel); 
+            row.AddChild(obtainedLabel); 
+            row.AddChild(usedLabel); 
+            row.AddChild(discardedLabel); 
             
             _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
         }
