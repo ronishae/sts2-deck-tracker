@@ -350,7 +350,11 @@ internal static class HookPatches
                     {
                         // 3. BASE SOURCES
                         GD.Print($"[DeckTracker] Adding poison power {amountToCreditToSourcePoison} from card {cardSource?.Id.Entry}.");
-                        if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                        if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                        {
+                            CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison, potionId);
+                        }
+                        else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
                         {
                             CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
                         }
@@ -431,7 +435,19 @@ internal static class HookPatches
                         }
                     }
                     else {
-                        CardRegistry.AddDoomHistory(target, amount, cardSource);
+                        if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                        {
+                            CardRegistry.AddDoomHistoryById(target, amount, potionId);
+                        }
+                        // NOTE: this doesn't proc on any relic in the game currently, but added just for the future
+                        else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                        {
+                            CardRegistry.AddDoomHistoryById(target, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                        }
+                        else
+                        {
+                            CardRegistry.AddDoomHistory(target, amount, cardSource);
+                        }
                     }
                 }
                 break;
@@ -614,7 +630,23 @@ internal static class HookPatches
                 break;
             case VulnerablePower:
                 // Note we changed AddEnemyDebuff to AddDurationBuff
-                if (amount > 0) CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
+                if (amount > 0)
+                {
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    {
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, potionId);
+                    }
+                    // NOTE: this should only proc on drill, which is not yet implemented
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    {
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                    }
+                    else
+                    {
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount,
+                            CardRegistry.GetTrackingId(cardSource));
+                    }
+                }
                 else if (amount < 0) CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
                 break;
             case ShadowStepPower:
