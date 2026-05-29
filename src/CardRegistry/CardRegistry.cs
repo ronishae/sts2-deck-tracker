@@ -71,7 +71,7 @@ public static partial class CardRegistry
         _deferredDraws.Value.Clear();
     }
 
-    private static ActData? GetActData(CardStats stat, int actNum)
+    private static ActData? GetActData(EntityStats stat, int actNum)
     {
         return actNum switch
         {
@@ -290,6 +290,16 @@ public static partial class CardRegistry
                 stat.RawForgeCombat = 0;
                 stat.ConnectedForgeCombat = 0;
                 stat.ReceivedForgeCombat = 0;
+
+                if (!stat.IsActive) continue;
+
+                var actData = GetActData(stat, _currentAct);
+                if (actData != null)
+                {
+                    if (combatType == "Elite") actData.EncountersSeenElite++;
+                    else if (combatType == "Boss") actData.EncountersSeenBoss++;
+                    else actData.EncountersSeenHallway++;
+                }
             }
         }
     }

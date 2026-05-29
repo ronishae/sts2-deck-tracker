@@ -1184,17 +1184,25 @@ internal static class HookPatches
         __result = WrappedTask(__result);
     }
     
-    public static void PlayerAddRelicPostfix(RelicModel relic)
+    public static void RelicAfterObtainedPrefix(RelicModel __instance)
+    {
+        CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
+        var stats = CardRegistry.GetOrCreateRelicStats(__instance.Id.Entry);
+        stats.FloorAdded = __instance.FloorAddedToDeck;
+        stats.IsActive = true;
+        Godot.GD.Print($"[DeckTracker] Cached localized name for {__instance.Id.Entry}: {CardRegistry.RelicNameCache[__instance.Id.Entry]} added on floor {stats.FloorAdded}");
+    }
+
+    public static void PlayerRemoveRelicPostfix(MegaCrit.Sts2.Core.Entities.Players.Player __instance, RelicModel relic)
     {
         if (relic != null)
         {
-            CardRegistry.RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
-            var stats = CardRegistry.GetOrCreateRelicStats(relic.Id.Entry);
-            stats.Model = relic;
-            Godot.GD.Print($"[DeckTracker] Cached localized name for {relic.Id.Entry}: {CardRegistry.RelicNameCache[relic.Id.Entry]}");
+            var currentFloor = ExtractFloorNum(__instance.RunState);
+            CardRegistry.HandleRelicRemove(relic, currentFloor);
         }
     }
-    
+
+    // Catches all damage dealt
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {

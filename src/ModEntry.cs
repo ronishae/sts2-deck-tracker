@@ -20,10 +20,15 @@ public static class ModEntry
         if (_harmony != null) return;
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
         
-        var addRelicMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Entities.Players.Player), nameof(MegaCrit.Sts2.Core.Entities.Players.Player.AddRelicInternal));
-        var addRelicPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PlayerAddRelicPostfix)));
+        var afterObtainedMethod = AccessTools.Method(typeof(RelicModel), nameof(RelicModel.AfterObtained));
+        var afterObtainedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RelicAfterObtainedPrefix)));
         
-        _harmony.Patch(addRelicMethod, postfix: addRelicPostfix);
+        _harmony.Patch(afterObtainedMethod, prefix: afterObtainedPrefix);
+
+        var removeRelicMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Entities.Players.Player), nameof(MegaCrit.Sts2.Core.Entities.Players.Player.RemoveRelicInternal));
+        var removeRelicPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PlayerRemoveRelicPostfix)));
+        
+        _harmony.Patch(removeRelicMethod, postfix: removeRelicPostfix);
         
         RelicExecutionManager.PatchAllDamageRelics(_harmony);
         // Hook the universal Relic power modifier

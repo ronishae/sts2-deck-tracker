@@ -50,6 +50,20 @@ public partial class CardRegistry
         Publish();
     }
 
+    public static void HandleRelicRemove(RelicModel relic, int floorRemoved)
+    {
+        lock (SyncRoot)
+        {
+            if (RelicLedger.TryGetValue(relic.Id.Entry, out var stat))
+            {
+                stat.FloorRemoved = floorRemoved;
+                stat.IsActive = false;
+                GD.Print($"[DeckTracker] Handled removal for Relic: {relic.Id.Entry} on floor {floorRemoved}");
+            }
+        }
+        Publish();
+    }
+
     public static RelicStats GetOrCreateRelicStats(string relicId)
     {
         if (!RelicLedger.TryGetValue(relicId, out var stats))
