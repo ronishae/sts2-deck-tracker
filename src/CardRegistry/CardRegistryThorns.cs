@@ -43,6 +43,10 @@ public static partial class CardRegistry
                 trackingId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
             }
             // 3. Fallback (Enemy debuffs, or un-tracked sources)
+            else if (cardSource == null && CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potionId))
+            {
+                trackingId = potionId;
+            }
             else
             {
                 trackingId = "External_Source"; 

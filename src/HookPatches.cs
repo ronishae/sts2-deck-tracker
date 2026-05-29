@@ -261,6 +261,7 @@ internal static class HookPatches
             case ThornsPower:
                 if (amount > 0 && target.IsPlayer)
                 {
+                    // Relic, Card, and Potion differences are split inside the function
                     CardRegistry.LogThornsApply(cardSource, (int)amount);
                 }
                 break;
