@@ -54,6 +54,11 @@ public static class ModEntry
         
         _harmony.Patch(removeRelicMethod, postfix: removeRelicPostfix);
         
+        var ritualTurnEndMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.RitualPower), nameof(MegaCrit.Sts2.Core.Models.Powers.RitualPower.AfterSideTurnEnd));
+        _harmony.Patch(ritualTurnEndMethod, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPostfix))));
+        
         RelicExecutionManager.PatchAllDamageRelics(_harmony);
         // Hook the universal Relic power modifier
         var tryModifyPower = AccessTools.Method(typeof(RuinedHelmet), nameof(RuinedHelmet.TryModifyPowerAmountReceived));

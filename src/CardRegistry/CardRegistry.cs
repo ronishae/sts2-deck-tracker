@@ -208,6 +208,7 @@ public static partial class CardRegistry
         ResetBuffState();
         TrashToTreasureShares.Clear();
         InstancedPowerSources.Clear();
+        ResetRitualState();
     }
     
     public static void ClearSession()

@@ -511,14 +511,29 @@ internal static class HookPatches
                 // 2. PROCESS THE REMAINDER (Cards, Active Relics, or Middlemen)
                 if (amountToCreditToSource > 0)
                 {
-                    GD.Print($"[DeckTracker] StrengthPower Part 1");
+                    GD.Print($"[DeckTracker] StrengthPower Part 2");
                     if (CardRegistry.IsDemonFormExecuting.Value) 
                         CardRegistry.ProcessDemonFormStrength(amountToCreditToSource);
                     else if (CardRegistry.IsArsenalExecuting.Value) 
                         CardRegistry.ProcessArsenalStrength(amountToCreditToSource);
                     else if (!string.IsNullOrEmpty(CardRegistry.ExecutingInstancedSource.Value)) 
                         CardRegistry.AddPersistentBuffById(power.Id.Entry, amountToCreditToSource, CardRegistry.ExecutingInstancedSource.Value);
-                    
+                    else if (CardRegistry.IsRitualTriggering.Value)
+                    {
+                        foreach (var source in CardRegistry.RitualSources)
+                        {
+                            if (source.Value > 0)
+                            {
+                                CardRegistry.AddPersistentBuffById(power.Id.Entry, source.Value, source.Key);
+                                GD.Print($"[DeckTracker] Ritual triggered! Routed {source.Value} STRENGTH_POWER to {source.Key}");
+                            }
+                        }
+                    }
+                    // Strength potion, flex potion
+                    else if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    {
+                        CardRegistry.AddPersistentBuffById(power.Id.Entry, amountToCreditToSource, potionId);
+                    }
                     // NEW: Active Relic Appliers (Vajra, Mini Regent)
                     else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
                     {
@@ -537,6 +552,34 @@ internal static class HookPatches
                     CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amountToCreditToSource));
                 }
                 break;
+            case RitualPower:
+                if (amount > 0 && target.IsPlayer)
+                {
+                    string sourceId = "";
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    {
+                        sourceId = potionId;
+                    }
+                    else if (cardSource != null)
+                    {
+                        sourceId = CardRegistry.GetTrackingId(cardSource);
+                    }
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    {
+                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                    }
+                
+                    if (!string.IsNullOrEmpty(sourceId))
+                    {
+                        if (!CardRegistry.RitualSources.ContainsKey(sourceId)) 
+                            CardRegistry.RitualSources[sourceId] = 0;
+                    
+                        CardRegistry.RitualSources[sourceId] += amount;
+                        Godot.GD.Print($"[DeckTracker] Logged {amount} RITUAL_POWER from {sourceId}");
+                    }
+                }
+                break;
+            
             case AccuracyPower:
                 if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
                 else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
@@ -1398,6 +1441,17 @@ internal static class HookPatches
         GD.Print($"[DeckTracker] (after) Potion {potion.Id.Entry} has been used");
     }
 
+    // --- RITUAL MIDDLEMAN ---
+    public static void RitualPowerTurnEndPrefix()
+    {
+        CardRegistry.IsRitualTriggering.Value = true;
+    }
+
+    public static void RitualPowerTurnEndPostfix()
+    {
+        CardRegistry.IsRitualTriggering.Value = false;
+    }
+    
     // --- HELPERS & EXTRACTORS ---
     private static int ExtractFloorNum(IRunState? runState)
     {
