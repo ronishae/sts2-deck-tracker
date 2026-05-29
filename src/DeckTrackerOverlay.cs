@@ -378,6 +378,26 @@ public static class DeckTrackerOverlay
         return btn;
     }
 
+    private static PanelContainer CreateHoverableRow(Control content)
+    {
+        PanelContainer panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        panel.MouseFilter = Control.MouseFilterEnum.Pass; 
+
+        StyleBoxFlat style = new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0) };
+        panel.AddThemeStyleboxOverride("panel", style);
+
+        panel.MouseEntered += () => {
+            style.BgColor = new Color(1, 1, 1, 0.05f); // Subtle highlight
+        };
+
+        panel.MouseExited += () => {
+            style.BgColor = new Color(0, 0, 0, 0);
+        };
+
+        panel.AddChild(content);
+        return panel;
+    }
+
     private static void RedrawUI(List<CardStats> stats)
     {
         UpdateSmallUI(stats);
@@ -569,7 +589,8 @@ public static class DeckTrackerOverlay
             row.AddChild(nameLabel); row.AddChild(playRateLabel);
             row.AddChild(allDataLabel); row.AddChild(hallwayLabel); row.AddChild(eliteLabel); row.AddChild(bossLabel);
             row.AddChild(addedLabel); row.AddChild(removedLabel); row.AddChild(leftLabel);
-            _fullScreenRowsContainer!.AddChild(row);
+            
+            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
         }
     }
 
@@ -670,7 +691,7 @@ public static class DeckTrackerOverlay
             row.AddChild(nameLabel);
             row.AddChild(damageLabel);
             
-            _fullScreenRowsContainer!.AddChild(row);
+            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
         }
     }
 }
