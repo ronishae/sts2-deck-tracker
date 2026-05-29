@@ -159,6 +159,17 @@ public static partial class CardRegistry
     
     public static void LogFocusChange(CardModel? cardSource, decimal amount)
     {
+        // 2. STANDARD APPLICATION: (Cards, Relics, or Enemy Debuffs)
+        string trackingId = cardSource != null ? GetTrackingId(cardSource) : 
+            (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
+                "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
+                (amount > 0 ? "External_Buff" : "External_Debuff"));
+        
+        LogFocusChangeById(trackingId, amount);
+    }
+
+    public static void LogFocusChangeById(string trackingId, decimal amount)
+    {
         if (amount == 0) return;
 
         lock (SyncRoot)
@@ -185,13 +196,6 @@ public static partial class CardRegistry
                 GD.Print("[DeckTracker] Erased expired temporary focus from the ledger.");
                 return;
             }
-
-            // 2. STANDARD APPLICATION: (Cards, Relics, or Enemy Debuffs)
-            
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : 
-                (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
-                    "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
-                    (amount > 0 ? "External_Buff" : "External_Debuff"));
             
             // Check the Apply trap
             bool isTemp = IsApplyingTemporaryFocus.Value;

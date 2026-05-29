@@ -452,7 +452,15 @@ internal static class HookPatches
                 }
                 break;
             case FocusPower:
-                CardRegistry.LogFocusChange(cardSource, amount);
+                if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionIdFocus))
+                {
+                    CardRegistry.LogFocusChangeById(potionIdFocus, amount);
+                }
+                // Relics and Cards are both routed here, logic in LogFocusChange handles relic vs card.
+                else
+                {
+                    CardRegistry.LogFocusChange(cardSource, amount);
+                }
                 break;
             case LoopPower:
                 if (amount > 0) CardRegistry.AddLoop(amount, cardSource);
