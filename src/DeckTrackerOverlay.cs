@@ -618,10 +618,7 @@ public static class DeckTrackerOverlay
             .Select(r => new { Stat = r, Agg = AggregateActData(r) })
             .Where(x => {
                 decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
-                
-                // Fallback to RunDamage if ActData isn't fully wired for relics yet
-                decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
-                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
                 
                 return _showRunStats ? effRun > 0 : effCombat > 0;
             })
@@ -636,21 +633,18 @@ public static class DeckTrackerOverlay
             "ALL_DMG" => _currentSort.Ascending 
                 ? unsortedList.OrderBy(x => {
                     decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
-                    decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
-                    decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                    decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
                     return _showRunStats ? effRun : effCombat;
                 })
                 : unsortedList.OrderByDescending(x => {
                     decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
-                    decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
-                    decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                    decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
                     return _showRunStats ? effRun : effCombat;
                 }),
                 
             _ => unsortedList.OrderByDescending(x => {
                 decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
-                decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
-                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
                 return _showRunStats ? effRun : effCombat;
             })
         };
@@ -660,8 +654,7 @@ public static class DeckTrackerOverlay
         {
             finalSort = finalSort.ThenByDescending(x => {
                 decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
-                decimal baseRunDmg = x.Agg.TotalDamage > 0 ? x.Agg.TotalDamage : x.Stat.RunDamage;
-                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
+                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0));
                 return _showRunStats ? effRun : effCombat;
             });
         }
@@ -679,9 +672,8 @@ public static class DeckTrackerOverlay
             Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
             
             // Damage Column
-            decimal baseRunDmg = agg.TotalDamage > 0 ? agg.TotalDamage : stat.RunDamage;
             decimal damageToShow = _showRunStats ? 
-                (_showRawForge ? agg.RawForgeTotal : (baseRunDmg + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0))) : 
+                (_showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0))) : 
                 (_showRawForge ? stat.RawForgeCombat : (stat.CombatDamage + (_includeConnectedForge ? stat.ConnectedForgeCombat - stat.ReceivedForgeCombat : 0)));
             
             Label damageLabel = new Label { Text = damageToShow.ToString("0.##"), CustomMinimumSize = new Vector2(220, 0) };

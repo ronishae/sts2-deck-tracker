@@ -281,6 +281,14 @@ public static partial class CardRegistry
 
                 _incrementedThisCombat.Add(stat.Id);
             }
+
+            foreach (var stat in RelicLedger.Values)
+            {
+                stat.CombatDamage = 0;
+                stat.RawForgeCombat = 0;
+                stat.ConnectedForgeCombat = 0;
+                stat.ReceivedForgeCombat = 0;
+            }
         }
     }
     
