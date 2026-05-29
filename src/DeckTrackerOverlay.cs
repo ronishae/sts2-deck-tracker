@@ -21,6 +21,7 @@ public static class DeckTrackerOverlay
     private static HBoxContainer? _fullScreenHeadersContainer;
     private static Button? _toggleForgeDmgBtnLarge;
     private static Button? _toggleRawForgeBtnLarge;
+    private static Button? _toggleRunCombatBtnLarge;
     private static CheckBox? _act1Check;
     private static CheckBox? _act2Check;
     private static CheckBox? _act3Check;
@@ -159,6 +160,9 @@ public static class DeckTrackerOverlay
         _toggleRawForgeBtnLarge = new Button { Text = "Show Raw Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleRawForgeBtnLarge.Pressed += ToggleRawForge;
 
+        _toggleRunCombatBtnLarge = new Button { Text = "Show Run Stats", FocusMode = Control.FocusModeEnum.None };
+        _toggleRunCombatBtnLarge.Pressed += OnTogglePressed;
+
         _toggleForgeDmgBtnLarge = new Button { Text = "Include Connected Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnLarge.Pressed += ToggleForgeDamage;
 
@@ -171,6 +175,7 @@ public static class DeckTrackerOverlay
         header.AddChild(_act2Check);
         header.AddChild(_act3Check);
         header.AddChild(_toggleRawForgeBtnLarge);
+        header.AddChild(_toggleRunCombatBtnLarge);
         header.AddChild(_toggleForgeDmgBtnLarge);
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
@@ -236,6 +241,7 @@ public static class DeckTrackerOverlay
         _showRunStats = !_showRunStats;
         if (_titleLabel != null) _titleLabel.Text = _showRunStats ? "Tracker (Run)" : "Tracker (Combat)";
         if (_toggleBtn != null) _toggleBtn.Text = _showRunStats ? "Combat" : "Run";
+        if (_toggleRunCombatBtnLarge != null) _toggleRunCombatBtnLarge.Text = _showRunStats ? "Show Combat Stats" : "Show Run Stats";
         RedrawUI(_latestStats);
     }
 
@@ -470,8 +476,8 @@ public static class DeckTrackerOverlay
     {
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("CARD NAME", "NAME", 300));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("% PLAYED", "PLAY_RATE", 150));
-        string totalColText = _showRawForge ? "TOTAL FORGE" : "TOTAL DMG";
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 130));
+        string totalColText = (_showRunStats ? "RUN" : "COMBAT") + (_showRawForge ? " FORGE" : " DAMAGE");
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 180));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("AVG (#)", "AVG_DMG", 130));
         
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 200));
@@ -564,8 +570,8 @@ public static class DeckTrackerOverlay
             decimal avgBoss = agg.EncountersSeenBoss > 0 ? valBoss / agg.EncountersSeenBoss : 0;
             
             Color statColor = new Color("A0A8B4");
-            
-            Label totalDataLabel = new Label { Text = $"{valTotal:0.##}", CustomMinimumSize = new Vector2(130, 0) };
+
+            Label totalDataLabel = new Label { Text = $"{valTotal:0.##}", CustomMinimumSize = new Vector2(180, 0) };
             totalDataLabel.AddThemeColorOverride("font_color", statColor);
 
             Label avgDataLabel = new Label { Text = $"({avgTotal:0.#}) (#{agg.EncountersSeenTotal})", CustomMinimumSize = new Vector2(130, 0) };
@@ -608,8 +614,8 @@ public static class DeckTrackerOverlay
         // 1. Setup Headers
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("RELIC NAME", "NAME", 300));
         
-        string totalColText = _showRawForge ? "TOTAL FORGE" : "TOTAL DMG";
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 110));
+        string totalColText = (_showRunStats ? "RUN" : "COMBAT") + (_showRawForge ? " FORGE" : " DAMAGE");
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 180));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("AVG (#)", "AVG_DMG", 130));
         
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 200));
@@ -718,7 +724,7 @@ public static class DeckTrackerOverlay
             decimal damageToShow = _showRunStats ? valTotal : 
                 (_showRawForge ? stat.RawForgeCombat : (stat.CombatDamage + (_includeConnectedForge ? stat.ConnectedForgeCombat - stat.ReceivedForgeCombat : 0)));
             
-            Label totalDataLabel = new Label { Text = $"{damageToShow:0.##}", CustomMinimumSize = new Vector2(110, 0) };
+            Label totalDataLabel = new Label { Text = $"{damageToShow:0.##}", CustomMinimumSize = new Vector2(180, 0) };
             if (!_showRawForge && _includeConnectedForge)
             {
                 bool hasForge = _showRunStats ? agg.ConnectedForgeTotal > 0 : stat.ConnectedForgeCombat > 0;
