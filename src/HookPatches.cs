@@ -60,10 +60,22 @@ internal static class HookPatches
         catch { /* Fails silently if Pile data is missing */ }
     }
     
-    public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
+    public static void BeforeRoomEnteredPrefix(IRunState? runState, AbstractRoom room)
     {
         var seed = ExtractRunSeed(runState);
-        CardRegistry.SyncRun(seed);
+        
+        // This will trigger ResetRun and RestoreLiveInstances on the very first room,
+        // and safely abort on every subsequent room!
+        CardRegistry.SyncRun(seed); 
+    }
+    
+    public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
+    {
+        // (Optional: You can leave SyncRun here as a fallback just in case you 
+        // load a save directly into mid-combat, it will just instantly return 
+        // if BeforeRoomEntered already handled it!)
+        // var seed = ExtractRunSeed(runState);
+        // CardRegistry.SyncRun(seed);
     
         var currentFloor = ExtractFloorNum(runState);
         var currentAct = ExtractActNum(runState);

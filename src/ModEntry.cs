@@ -80,6 +80,10 @@ public static class ModEntry
         PatchHook(nameof(Hook.AfterSideTurnStart), nameof(HookPatches.AfterSideTurnStartPostfix));
         PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
         
+        var beforeRoomEnteredMethod = AccessTools.Method(typeof(Hook), nameof(Hook.BeforeRoomEntered));
+        var beforeRoomEnteredPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforeRoomEnteredPrefix)));
+        _harmony.Patch(beforeRoomEnteredMethod, prefix: beforeRoomEnteredPrefix);
+        
         // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
         PatchHook(nameof(Hook.AfterForge), nameof(HookPatches.AfterForgePostfix));
