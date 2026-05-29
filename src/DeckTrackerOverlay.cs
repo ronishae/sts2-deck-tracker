@@ -174,8 +174,8 @@ public static class DeckTrackerOverlay
         header.AddChild(_act1Check);
         header.AddChild(_act2Check);
         header.AddChild(_act3Check);
-        header.AddChild(_toggleRawForgeBtnLarge);
         header.AddChild(_toggleRunCombatBtnLarge);
+        header.AddChild(_toggleRawForgeBtnLarge);
         header.AddChild(_toggleForgeDmgBtnLarge);
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
