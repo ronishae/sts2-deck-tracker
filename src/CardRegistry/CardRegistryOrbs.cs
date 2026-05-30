@@ -74,6 +74,12 @@ public static partial class CardRegistry
                 }
             }
             
+            if (IsLightningRodExecuting.Value && LightningRodQueue.Count > 0)
+            {
+                trackingId = LightningRodQueue.Dequeue();
+                GD.Print($"[DeckTracker] Routed Lightning Rod channeled orb to: {trackingId}");
+            }
+            
             if (sourceCard == null && CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potionId))
             {
                 trackingId = potionId;

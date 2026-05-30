@@ -378,6 +378,11 @@ public static class ModEntry
         _harmony.Patch(demiseTurnEndMethod, 
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemisePowerTurnEndPrefix))), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemisePowerTurnEndPostfix))));
+        
+        var lightningRodMethod = AccessTools.Method(typeof(LightningRodPower), nameof(LightningRodPower.AfterEnergyReset));
+        _harmony.Patch(lightningRodMethod, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LightningRodTurnStartPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LightningRodTurnStartPostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)

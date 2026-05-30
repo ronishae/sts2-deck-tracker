@@ -791,6 +791,37 @@ internal static class HookPatches
                     CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
                 }
                 break;
+            case LightningRodPower:
+                if (amount > 0)
+                {
+                    string sourceId = "";
+                
+                    // NOTE: this should never trigger based on current potions
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                        sourceId = potionId;
+                    // NOTE: this should never trigger based on current relics
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                    // Card
+                    else if (cardSource != null)
+                        sourceId = CardRegistry.GetTrackingId(cardSource);
+
+                    if (!string.IsNullOrEmpty(sourceId))
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            // Enqueue 1 ticket for every stack of power applied
+                            for (int i = 0; i < amount; i++)
+                            {
+                                CardRegistry.LightningRodQueue.Enqueue(sourceId);
+                            }
+                        }
+                        Godot.GD.Print($"[DeckTracker] Enqueued {amount} Lightning Rod charges for {sourceId}");
+                    }
+                }
+                // we don't handle negative amount since when the orb is channeled, we dequeue from our queue
+                // automatically, so don't need to check for the decrement event
+                break;
         }
     }
     
@@ -1337,6 +1368,17 @@ internal static class HookPatches
     public static void DemisePowerTurnEndPostfix()
     {
         CardRegistry.IsDemiseExecuting.Value = false;
+    }
+    
+    // --- LIGHTNING ROD MIDDLEMAN ---
+    public static void LightningRodTurnStartPrefix()
+    {
+        CardRegistry.IsLightningRodExecuting.Value = true;
+    }
+
+    public static void LightningRodTurnStartPostfix()
+    {
+        CardRegistry.IsLightningRodExecuting.Value = false;
     }
     
     public static void RelicAfterObtainedPrefix(RelicModel __instance)

@@ -211,6 +211,8 @@ public static partial class CardRegistry
         ResetRitualState();
         DemiseLedgers.Clear();
         IsDemiseExecuting.Value = false;
+        LightningRodQueue.Clear();
+        IsLightningRodExecuting.Value = false;
     }
     
     public static void ClearSession()
