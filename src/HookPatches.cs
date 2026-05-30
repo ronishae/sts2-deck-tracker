@@ -1693,6 +1693,17 @@ internal static class HookPatches
         CardRegistry.IsRitualTriggering.Value = false;
     }
     
+    // --- HAND DRILL TRAP ---
+    public static void HandDrillAfterDamagePrefix()
+    {
+        RelicExecutionManager.ExecutingRelicId.Value = "HAND_DRILL";
+    }
+
+    public static void HandDrillAfterDamagePostfix()
+    {
+        RelicExecutionManager.ExecutingRelicId.Value = null;
+    }
+    
     // --- HELPERS & EXTRACTORS ---
     private static int ExtractFloorNum(IRunState? runState)
     {

@@ -388,6 +388,12 @@ public static class ModEntry
         _harmony.Patch(spinnerMethod, 
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpinnerTurnStartPrefix))), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpinnerTurnStartPostfix))));
+        
+        var handDrillMethod = AccessTools.Method(typeof(HandDrill), nameof(HandDrill.AfterDamageGiven));
+    
+        _harmony.Patch(handDrillMethod, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)
