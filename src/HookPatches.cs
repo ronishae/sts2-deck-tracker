@@ -770,6 +770,27 @@ internal static class HookPatches
                     CardRegistry.RemoveDemiseSharesProportionally(target, Math.Abs(amount));
                 }
                 break;
+            case GigantificationPower:
+                if (amount > 0 && target != null && target.IsPlayer)
+                {
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    {
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, potionId);
+                    }
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    {
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                    }
+                    else if (cardSource != null)
+                    {
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
+                    }
+                }
+                else if (amount < 0 && target != null)
+                {
+                    CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
+                }
+                break;
         }
     }
     
