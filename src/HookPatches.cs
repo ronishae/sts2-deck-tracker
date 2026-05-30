@@ -1464,18 +1464,28 @@ internal static class HookPatches
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
-        GD.Print($"[DeckTracker] AfterDamageGivePostfix triggered");
+        // Floor the total damage immediately!
+        var damageAmount = results.TotalDamage;
+        GD.Print($"[DeckTracker] AfterDamageGivePostfix triggered. Floored TotalDamage to {damageAmount}");
+        
+        if (CardRegistry.PendingBootDamage.Value > 0)
+        {
+            damageAmount -= CardRegistry.PendingBootDamage.Value;
+            CardRegistry.PendingBootDamage.Value = 0; 
+            GD.Print($"[DeckTracker] The Boot reduced waterfall damage amount value in AfterDamageGivenPostfix");
+        }
+        
         if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
         {
             string executingRelic = RelicExecutionManager.ExecutingRelicId.Value;
-            CardRegistry.AddRelicDamage(executingRelic, results.TotalDamage);
+            CardRegistry.AddRelicDamage(executingRelic, damageAmount);
             return; 
         }
         
-        if (CardRegistry.CurrentPoisonTarget.Value == target && results.TotalDamage > 0)
+        if (CardRegistry.CurrentPoisonTarget.Value == target && damageAmount > 0)
         {
             GD.Print($"[DeckTracker] Poison detected");
-            CardRegistry.DistributePoisonDamage(target, results.TotalDamage);
+            CardRegistry.DistributePoisonDamage(target, damageAmount);
             
             if (!target.IsAlive) 
                 CardRegistry.ClearStateForTarget(target);
@@ -1484,94 +1494,94 @@ internal static class HookPatches
         }
         
         // ORB INTERCEPT
-        if (CardRegistry.ExecutingOrb != null && results.TotalDamage > 0)
+        if (CardRegistry.ExecutingOrb != null && damageAmount > 0)
         {
             Creature player = combatState.Players[0].Creature;
-            CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb, results.TotalDamage, player);
+            CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb, damageAmount, player);
             return; 
         }
 
-        if (CardRegistry.IsStrangleExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsStrangleExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeStrangleDamage(target, results.TotalDamage);
+            CardRegistry.DistributeStrangleDamage(target, damageAmount);
             return;
         }
 
-        if (CardRegistry.IsSerpentFormExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsSerpentFormExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeSerpentFormDamage(results.TotalDamage);
+            CardRegistry.DistributeSerpentFormDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsBlackHoleExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsBlackHoleExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeBlackHoleDamage(results.TotalDamage);
+            CardRegistry.DistributeBlackHoleDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsSleightOfFleshExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsSleightOfFleshExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeSleightOfFleshDamage(results.TotalDamage);
+            CardRegistry.DistributeSleightOfFleshDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsHauntExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsHauntExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeHauntDamage(results.TotalDamage);
+            CardRegistry.DistributeHauntDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsHailstormExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsHailstormExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeHailstormDamage(results.TotalDamage);
+            CardRegistry.DistributeHailstormDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsSpeedsterExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsSpeedsterExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeSpeedsterDamage(results.TotalDamage);
+            CardRegistry.DistributeSpeedsterDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsThunderExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsThunderExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeThunderDamage(results.TotalDamage);
+            CardRegistry.DistributeThunderDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsJuggernautExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsJuggernautExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeJuggernautDamage(results.TotalDamage);
+            CardRegistry.DistributeJuggernautDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsNecroMasteryExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsNecroMasteryExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeNecroMasteryDamage(results.TotalDamage);
+            CardRegistry.DistributeNecroMasteryDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsThornsExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsThornsExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeThornsDamage(results.TotalDamage);
+            CardRegistry.DistributeThornsDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsFlameBarrierExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsFlameBarrierExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeFlameBarrierDamage(results.TotalDamage);
+            CardRegistry.DistributeFlameBarrierDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.IsReflectExecuting && results.TotalDamage > 0)
+        if (CardRegistry.IsReflectExecuting && damageAmount > 0)
         {
-            CardRegistry.DistributeReflectDamage(results.TotalDamage);
+            CardRegistry.DistributeReflectDamage(damageAmount);
             return;
         }
 
-        if (CardRegistry.ExecutingBoulder != null && results.TotalDamage > 0)
+        if (CardRegistry.ExecutingBoulder != null && damageAmount > 0)
         {
-            CardRegistry.DistributeRollingBoulderDamage(results.TotalDamage);
+            CardRegistry.DistributeRollingBoulderDamage(damageAmount);
             return;
         }
         
@@ -1585,8 +1595,8 @@ internal static class HookPatches
                 {
                     if (CardRegistry.PotionInstanceIds.TryGetValue(activePotion, out var potionId))
                     {
-                        CardRegistry.AddDamageById(potionId, results.TotalDamage);
-                        GD.Print($"[DeckTracker] Routed {results.TotalDamage} damage to {potionId}.");
+                        CardRegistry.AddDamageById(potionId, damageAmount);
+                        GD.Print($"[DeckTracker] Routed {damageAmount} damage to {potionId}.");
                         return; // Successfully routed to the potion!
                     }
                 }
@@ -1607,7 +1617,7 @@ internal static class HookPatches
                         foreach (var share in ledger)
                         {
                             decimal proportion = share.Shares / totalShares;
-                            decimal attributedDamage = results.TotalDamage * proportion;
+                            decimal attributedDamage = damageAmount * proportion;
                         
                             if (attributedDamage > 0)
                             {
@@ -1624,15 +1634,15 @@ internal static class HookPatches
             return;
         }
         
-        decimal baseCardDamage = results.TotalDamage;
+        decimal baseCardDamage = damageAmount;
         if (CardRegistry.CurrentAttackSnapshot.Value != null && 
             CardRegistry.CurrentAttackSnapshot.Value.CardSource == cardSource)
         {
-            baseCardDamage = CardRegistry.ProcessDamageSnapshot(CardRegistry.CurrentAttackSnapshot.Value, results.TotalDamage);
+            baseCardDamage = CardRegistry.ProcessDamageSnapshot(CardRegistry.CurrentAttackSnapshot.Value, damageAmount);
         }
         
         // If the card is Sovereign Blade, process the forge distribution!
-        GD.Print($"[DeckTracker] Card {cardSource.Id.Entry} did {results.TotalDamage} damage to {target.Name} with target type {cardSource.TargetType}");
+        GD.Print($"[DeckTracker] Card {cardSource.Id.Entry} did {damageAmount} damage to {target.Name} with target type {cardSource.TargetType}");
         GD.Print($"[DeckTracker] {combatState.Enemies.Count} enemies in the combat via after damage");
         if (cardSource.Id.Entry.Equals("SOVEREIGN_BLADE")) 
         {
@@ -1702,6 +1712,24 @@ internal static class HookPatches
     public static void HandDrillAfterDamagePostfix()
     {
         RelicExecutionManager.ExecutingRelicId.Value = null;
+    }
+    
+    // --- THE BOOT TRAP ---
+    public static void TheBootModifyHpPostfix(MegaCrit.Sts2.Core.Models.Relics.TheBoot __instance, decimal amount, ref decimal __result)
+    {
+        if (__result > amount)
+        {
+            // Floor the incoming decimal to match integer HP logic!
+            var flooredAmount = (int)Math.Floor(amount);
+            var bootDamage = (int)Math.Floor(__result - flooredAmount);
+            
+            string relicId = "RELIC_" + (__instance.Id.Entry ?? "THE_BOOT");
+            CardRegistry.AddDamageById(relicId, bootDamage);
+            
+            CardRegistry.PendingBootDamage.Value += bootDamage;
+            
+            GD.Print($"[DeckTracker] The Boot increased damage from {flooredAmount} to {__result}. Awarded {bootDamage} damage.");
+        }
     }
     
     // --- HELPERS & EXTRACTORS ---

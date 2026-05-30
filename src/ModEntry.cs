@@ -394,6 +394,9 @@ public static class ModEntry
         _harmony.Patch(handDrillMethod, 
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePrefix))), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePostfix))));
+        
+        var theBootMethod = AccessTools.Method(typeof(TheBoot), nameof(TheBoot.ModifyHpLostAfterOstyLate));
+        _harmony.Patch(theBootMethod, postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TheBootModifyHpPostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)
