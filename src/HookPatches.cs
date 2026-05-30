@@ -744,6 +744,32 @@ internal static class HookPatches
                 if (amount > 0) CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
                 else if (amount < 0) CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
                 break;
+            
+            case DemisePower:
+                if (amount > 0)
+                {
+                    string sourceId = "";
+                
+                    // Route to Active Potion (Powdered Demise)
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                        sourceId = potionId;
+                    // Route to Relic (does not exist)
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                    // Route to Card (only Misery can trigger this currently)
+                    else if (cardSource != null)
+                        sourceId = CardRegistry.GetTrackingId(cardSource);
+
+                    if (!string.IsNullOrEmpty(sourceId))
+                    {
+                        CardRegistry.AddDemiseSharesById(target, amount, sourceId);
+                    }
+                }
+                else if (amount < 0)
+                {
+                    CardRegistry.RemoveDemiseSharesProportionally(target, Math.Abs(amount));
+                }
+                break;
         }
     }
     
@@ -1281,6 +1307,17 @@ internal static class HookPatches
         __result = WrappedTask(__result);
     }
     
+    // --- DEMISE MIDDLEMAN ---
+    public static void DemisePowerTurnEndPrefix()
+    {
+        CardRegistry.IsDemiseExecuting.Value = true;
+    }
+
+    public static void DemisePowerTurnEndPostfix()
+    {
+        CardRegistry.IsDemiseExecuting.Value = false;
+    }
+    
     public static void RelicAfterObtainedPrefix(RelicModel __instance)
     {
         CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
@@ -1427,6 +1464,33 @@ internal static class HookPatches
                         CardRegistry.AddDamageById(potionId, results.TotalDamage);
                         GD.Print($"[DeckTracker] Routed {results.TotalDamage} damage to {potionId}.");
                         return; // Successfully routed to the potion!
+                    }
+                }
+            }
+            
+            // NOTE: this check falls outside the activePotion != null branch since Powdered Demise potion
+            // will not be playing while the damage ticks. Damage ticks rely on the IsDemiseExecuting value
+            // TODO: simplify logic -- it should never need to use proportional logic
+            // since Powdered Demise is discrete and monotonically increasing
+            if (CardRegistry.IsDemiseExecuting.Value && target != null)
+            {
+                if (CardRegistry.DemiseLedgers.TryGetValue(target, out var ledger))
+                {
+                    GD.Print($"[DeckTracker] PowderedDemise detected");
+                    decimal totalShares = ledger.Sum(x => x.Shares);
+                    if (totalShares > 0)
+                    {
+                        foreach (var share in ledger)
+                        {
+                            decimal proportion = share.Shares / totalShares;
+                            decimal attributedDamage = results.TotalDamage * proportion;
+                        
+                            if (attributedDamage > 0)
+                            {
+                                CardRegistry.AddDamageById(share.TrackingId, attributedDamage);
+                            }
+                        }
+                        return; // Successfully routed the Demise damage!
                     }
                 }
             }

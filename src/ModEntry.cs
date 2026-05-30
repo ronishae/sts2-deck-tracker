@@ -373,6 +373,11 @@ public static class ModEntry
         _harmony.Patch(t2tMethod, 
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TrashToTreasurePrefix))), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TrashToTreasurePostfix))));
+        
+        var demiseTurnEndMethod = AccessTools.Method(typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd));
+        _harmony.Patch(demiseTurnEndMethod, 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemisePowerTurnEndPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemisePowerTurnEndPostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)

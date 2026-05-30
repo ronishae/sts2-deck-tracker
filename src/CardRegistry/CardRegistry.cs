@@ -209,6 +209,8 @@ public static partial class CardRegistry
         TrashToTreasureShares.Clear();
         InstancedPowerSources.Clear();
         ResetRitualState();
+        DemiseLedgers.Clear();
+        IsDemiseExecuting.Value = false;
     }
     
     public static void ClearSession()
