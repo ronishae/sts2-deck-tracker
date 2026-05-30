@@ -74,6 +74,12 @@ public static partial class CardRegistry
                 }
             }
             
+            if (sourceCard == null && CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potionId))
+            {
+                trackingId = potionId;
+                GD.Print($"[DeckTracker] Tagging channeled Orb to Potion: {trackingId}");
+            }
+            
             OrbChannelers[orb] = trackingId;
             GD.Print($"[DeckTracker] Channeled {orb.Id.Entry} and attributed to {trackingId}");
             
