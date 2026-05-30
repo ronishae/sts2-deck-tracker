@@ -213,6 +213,9 @@ public static partial class CardRegistry
         IsDemiseExecuting.Value = false;
         LightningRodQueue.Clear();
         IsLightningRodExecuting.Value = false;
+        SpinnerSources.Clear();
+        IsSpinnerExecuting.Value = false;
+        SpinnerExecutionIndex = 0;
     }
     
     public static void ClearSession()

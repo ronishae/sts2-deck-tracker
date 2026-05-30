@@ -822,6 +822,55 @@ internal static class HookPatches
                 // we don't handle negative amount since when the orb is channeled, we dequeue from our queue
                 // automatically, so don't need to check for the decrement event
                 break;
+            case SpinnerPower:
+                if (amount > 0)
+                {
+                    string sourceId = "";
+                
+                    // should never be triggered by potion
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null &&
+                        CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    {
+                        sourceId = potionId;
+                        GD.Print($"[DeckTracker] Warning: spinner power applied from potion");
+                    }
+                    // should never be triggered by relic
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    {
+                        GD.Print($"[DeckTracker] Warning: spinner power applied from relic");
+                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                    }
+                    // Card
+                    else if (cardSource != null)
+                    {
+                        sourceId = CardRegistry.GetTrackingId(cardSource);
+                    }
+
+                    if (!string.IsNullOrEmpty(sourceId))
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            // Add 1 permanent ticket for every stack of power applied
+                            for (int i = 0; i < amount; i++)
+                            {
+                                CardRegistry.SpinnerSources.Add(sourceId);
+                            }
+                        }
+                        GD.Print($"[DeckTracker] Added {amount} Spinner charges for {sourceId}");
+                    }
+                }
+                // This should never occur, so handle it kinda messily in case some random event decrements this
+                else if (amount < 0)
+                {
+                    // If an enemy cleanses the buff (or a specific amount of it), pop from the end of the list (LIFO removal)
+                    lock (CardRegistry.SyncRoot)
+                    {
+                        GD.Print($"[DeckTracker] Warning: spinner power was decremented");
+                        int removeCount = (int)Math.Min(CardRegistry.SpinnerSources.Count, Math.Abs(amount));
+                        CardRegistry.SpinnerSources.RemoveRange(CardRegistry.SpinnerSources.Count - removeCount, removeCount);
+                    }
+                }
+                break;
         }
     }
     
@@ -1379,6 +1428,18 @@ internal static class HookPatches
     public static void LightningRodTurnStartPostfix()
     {
         CardRegistry.IsLightningRodExecuting.Value = false;
+    }
+    
+    // --- SPINNER MIDDLEMAN ---
+    public static void SpinnerTurnStartPrefix()
+    {
+        CardRegistry.IsSpinnerExecuting.Value = true;
+        CardRegistry.SpinnerExecutionIndex = 0; // Reset the pointer every turn!
+    }
+
+    public static void SpinnerTurnStartPostfix()
+    {
+        CardRegistry.IsSpinnerExecuting.Value = false;
     }
     
     public static void RelicAfterObtainedPrefix(RelicModel __instance)

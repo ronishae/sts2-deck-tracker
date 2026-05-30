@@ -80,6 +80,13 @@ public static partial class CardRegistry
                 GD.Print($"[DeckTracker] Routed Lightning Rod channeled orb to: {trackingId}");
             }
             
+            if (IsSpinnerExecuting.Value && SpinnerExecutionIndex < SpinnerSources.Count)
+            {
+                trackingId = SpinnerSources[SpinnerExecutionIndex];
+                SpinnerExecutionIndex++; // Move pointer to the next one in line
+                GD.Print($"[DeckTracker] Routed Spinner channeled orb to: {trackingId}");
+            }
+            
             if (sourceCard == null && CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potionId))
             {
                 trackingId = potionId;
