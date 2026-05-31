@@ -286,10 +286,10 @@ internal static class HookPatches
                     decimal amountToCreditToSourcePoison = amount;
 
                     // 1. PASSIVE MODIFIERS (e.g., Snecko Skull)
-                    if (RelicExecutionManager.PendingPowerModifiers.Value != null && RelicExecutionManager.PendingPowerModifiers.Value.Count > 0)
+                    if (RelicExecutionManager.PendingPowerModifiers.Count > 0)
                     {
                         var keysToRemove = new List<string>();
-                        foreach (var kvp in RelicExecutionManager.PendingPowerModifiers.Value)
+                        foreach (var kvp in RelicExecutionManager.PendingPowerModifiers)
                         {
                             if (kvp.Value.powerType == "POISON_POWER")
                             {
@@ -306,7 +306,7 @@ internal static class HookPatches
                         
                         foreach (var key in keysToRemove)
                         {
-                            RelicExecutionManager.PendingPowerModifiers.Value.Remove(key);
+                            RelicExecutionManager.PendingPowerModifiers.Remove(key);
                         }
                     }
                     
@@ -522,30 +522,8 @@ internal static class HookPatches
             case StrengthPower:
                 if (!target.IsPlayer) break;
                 decimal amountToCreditToSource = amount;
-
-                // 1. PASSIVE MODIFIERS (e.g., Ruined Helmet)
-                if (RelicExecutionManager.PendingPowerModifiers.Value != null && RelicExecutionManager.PendingPowerModifiers.Value.Count > 0)
-                {
-                    GD.Print($"[DeckTracker] StrengthPower Part 1");
-                    var keysToRemove = new List<string>();
-                    foreach (var kvp in RelicExecutionManager.PendingPowerModifiers.Value) 
-                    {
-                        if (kvp.Value.powerType == "STRENGTH_POWER")
-                        {
-                            // Credit the Relic with the bonus it generated!
-                            CardRegistry.AddPersistentBuffById(power.Id.Entry, kvp.Value.delta, "RELIC_" + kvp.Key);
-                            keysToRemove.Add(kvp.Key);
-                        }
-                    }
-                    
-                    // Clean up only the modifiers we actually consumed
-                    foreach (var key in keysToRemove)
-                    {
-                        RelicExecutionManager.PendingPowerModifiers.Value.Remove(key);
-                    }
-                }
                 
-                // 2. PROCESS THE REMAINDER (Cards, Active Relics, or Middlemen)
+                // 1. PROCESS THE REMAINDER (Cards, Active Relics, or Middlemen)
                 if (amountToCreditToSource > 0)
                 {
                     GD.Print($"[DeckTracker] StrengthPower Part 2");

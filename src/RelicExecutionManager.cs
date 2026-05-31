@@ -1,3 +1,4 @@
+using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
@@ -17,7 +18,7 @@ public static class RelicExecutionManager
         ExecutingRelicId.Value = null;
         
         // Clear and nullify the pending power modifiers
-        PendingPowerModifiers.Value?.Clear();
+        PendingPowerModifiers.Clear();
 
         // Clear and nullify the pending orb modifiers
         PendingOrbModifiers.Value?.Clear();
@@ -49,16 +50,28 @@ public static class RelicExecutionManager
 
     // Stores (Relic ID, Delta Amount, Power Type)
     // Stores the latest calculation: Key = Relic ID, Value = (Delta Amount, Power Type)
-    public static readonly AsyncLocal<Dictionary<string, (decimal delta, string powerType)>> PendingPowerModifiers = new();
+    public static readonly Dictionary<string, (decimal delta, string powerType)> PendingPowerModifiers = new();
 
     public static void TryModifyPowerAmountReceivedPostfix(RelicModel __instance, PowerModel canonicalPower, Creature target, decimal amount, Creature? applier, ref decimal modifiedAmount, ref bool __result)
     {
-        if (__result && modifiedAmount != amount)
+        if (__result && modifiedAmount > amount)
         {
             CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
-            PendingPowerModifiers.Value ??= new Dictionary<string, (decimal, string)>();
-            // Overwrites the hypothetical math so only the latest calculation survives!
-            PendingPowerModifiers.Value[__instance.Id.Entry] = (modifiedAmount - amount, canonicalPower.Id.Entry);
+            decimal delta = modifiedAmount - amount;
+            string relicId = "RELIC_" + __instance.Id.Entry;
+            string powerId = canonicalPower.Id.Entry ?? "";
+
+            GD.Print($"[DeckTracker] {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
+
+            // Directly inject the relic's contribution into the correct ledger!
+            if (powerId == "STRENGTH_POWER")
+            {
+                CardRegistry.AddPersistentBuffById(powerId, delta, relicId);
+            }
+            else
+            {
+                GD.Print($"[DeckTracker] Warning: TryModifyPowerAmountReceivedPostfix encountered unsupported power amount modification.");
+            }
         }
     }
 
@@ -67,9 +80,8 @@ public static class RelicExecutionManager
         if (__result != amount)
         {
             CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
-            PendingPowerModifiers.Value ??= new Dictionary<string, (decimal, string)>();
             // Overwrites the hypothetical math so only the latest calculation survives!
-            PendingPowerModifiers.Value[__instance.Id.Entry] = (__result - amount, power.Id.Entry);
+            PendingPowerModifiers[__instance.Id.Entry] = (__result - amount, power.Id.Entry);
         }
     }
     
