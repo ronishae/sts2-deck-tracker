@@ -285,33 +285,6 @@ internal static class HookPatches
                     // This is the BASE amount requested by the card/source (e.g., 5)
                     decimal amountToCreditToSourcePoison = amount;
 
-                    // 1. PASSIVE MODIFIERS (e.g., Snecko Skull)
-                    if (RelicExecutionManager.PendingPowerModifiers.Count > 0)
-                    {
-                        var keysToRemove = new List<string>();
-                        foreach (var kvp in RelicExecutionManager.PendingPowerModifiers)
-                        {
-                            if (kvp.Value.powerType == "POISON_POWER")
-                            {
-                                // Credit Snecko Skull with the +1 Poison it generated!
-                                CardRegistry.AddPoisonSharesById(target, kvp.Value.delta, "RELIC_" + kvp.Key);
-                                
-                                // CRITICAL FIX: Do NOT subtract the delta from the source amount. 
-                                // The hook 'amount' is already the un-modified base!
-                                
-                                GD.Print($"[DeckTracker] Attributed delta {kvp.Value.delta} to {kvp.Key}");
-                                keysToRemove.Add(kvp.Key); 
-                            }
-                        }
-                        
-                        foreach (var key in keysToRemove)
-                        {
-                            RelicExecutionManager.PendingPowerModifiers.Remove(key);
-                        }
-                    }
-                    
-                    GD.Print($"[DeckTracker] {amountToCreditToSourcePoison} poison left to attribute to source.");
-                    
                     // 2. MIDDLEMEN MODIFIERS
                     if (CardRegistry.IsNoxiousFumesExecuting.Value)
                     {

@@ -16,9 +16,6 @@ public static class RelicExecutionManager
     public static void ResetState()
     {
         ExecutingRelicId.Value = null;
-        
-        // Clear and nullify the pending power modifiers
-        PendingPowerModifiers.Clear();
 
         // Clear and nullify the pending orb modifiers
         PendingOrbModifiers.Value?.Clear();
@@ -47,11 +44,7 @@ public static class RelicExecutionManager
         
         __result = WrappedTask(__result);
     }
-
-    // Stores (Relic ID, Delta Amount, Power Type)
-    // Stores the latest calculation: Key = Relic ID, Value = (Delta Amount, Power Type)
-    public static readonly Dictionary<string, (decimal delta, string powerType)> PendingPowerModifiers = new();
-
+    
     public static void TryModifyPowerAmountReceivedPostfix(RelicModel __instance, PowerModel canonicalPower, Creature target, decimal amount, Creature? applier, ref decimal modifiedAmount, ref bool __result)
     {
         if (__result && modifiedAmount > amount)
@@ -77,11 +70,23 @@ public static class RelicExecutionManager
 
     public static void ModifyPowerAmountGivenPostfix(RelicModel __instance, PowerModel power, Creature giver, decimal amount, Creature? target, CardModel? cardSource, ref decimal __result)
     {
-        if (__result != amount)
+        if (__result > amount)
         {
             CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
-            // Overwrites the hypothetical math so only the latest calculation survives!
-            PendingPowerModifiers[__instance.Id.Entry] = (__result - amount, power.Id.Entry);
+            decimal delta = __result - amount;
+            string relicId = "RELIC_" + __instance.Id.Entry;
+            string powerId = power.Id.Entry ?? "";
+
+            // Direct Injection! No dictionary needed.
+            if (powerId == "POISON_POWER" && target != null)
+            {
+                CardRegistry.AddPoisonSharesById(target, delta, relicId);
+                GD.Print($"[DeckTracker] {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
+            }
+            else
+            {
+                GD.Print($"[DeckTracker] Warning: ModifyPowerAmountReceivedPostfix (the poison one) encountered unsupported power amount modification.");
+            }
         }
     }
     
