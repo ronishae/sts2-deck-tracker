@@ -220,7 +220,8 @@ public static partial class CardRegistry
         IsInfernoExecuting.Value = false;
         IsOutbreakExecuting.Value = false;
         IsSmokestackExecuting.Value = false;
-        ExecutingPanache = new();
+        IsRuptureExecuting.Value = false;
+        RuptureLedger.Clear();
         InfernoLedger.Clear();
         OutbreakLedger.Clear();
         SmokestackLedger.Clear();

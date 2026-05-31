@@ -566,6 +566,27 @@ internal static class HookPatches
                             }
                         }
                     }
+                    else if (CardRegistry.IsRuptureExecuting.Value)
+                    {
+                        lock (CardRegistry.SyncRoot)
+                        {
+                            decimal totalRupture = CardRegistry.RuptureLedger.Sum(x => x.Shares);
+                            if (totalRupture > 0)
+                            {
+                                foreach (var share in CardRegistry.RuptureLedger)
+                                {
+                                    decimal proportion = share.Shares / totalRupture;
+                                    decimal attributedStrength = amountToCreditToSource * proportion;
+                                
+                                    if (attributedStrength > 0)
+                                    {
+                                        CardRegistry.AddPersistentBuffById(power.Id.Entry, attributedStrength, share.TrackingId);
+                                        GD.Print($"[DeckTracker] Rupture triggered! Routed {attributedStrength} STRENGTH_POWER to {share.TrackingId}");
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // Strength potion, flex potion
                     else if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
                     {
@@ -886,6 +907,7 @@ internal static class HookPatches
             case InfernoPower:
         case OutbreakPower:
         case SmokestackPower:
+        case RupturePower:
         case PanachePower:
             if (amount > 0)
             {
@@ -903,6 +925,7 @@ internal static class HookPatches
                     if (power is InfernoPower) CardRegistry.AddProportionalShare(CardRegistry.InfernoLedger, amount, sourceId);
                     else if (power is OutbreakPower) CardRegistry.AddProportionalShare(CardRegistry.OutbreakLedger, amount, sourceId);
                     else if (power is SmokestackPower) CardRegistry.AddProportionalShare(CardRegistry.SmokestackLedger, amount, sourceId);
+                    else if (power is RupturePower) CardRegistry.AddProportionalShare(CardRegistry.RuptureLedger, amount, sourceId); // NEW
                     else if (power is PanachePower panacheInst) CardRegistry.PanacheLedgers[panacheInst] = sourceId; // Directly map the instance!
                 }
             }
@@ -911,6 +934,7 @@ internal static class HookPatches
                 if (power is InfernoPower) CardRegistry.RemoveProportionalShare(CardRegistry.InfernoLedger, Math.Abs(amount));
                 else if (power is OutbreakPower) CardRegistry.RemoveProportionalShare(CardRegistry.OutbreakLedger, Math.Abs(amount));
                 else if (power is SmokestackPower) CardRegistry.RemoveProportionalShare(CardRegistry.SmokestackLedger, Math.Abs(amount));
+                else if (power is RupturePower) CardRegistry.RemoveProportionalShare(CardRegistry.RuptureLedger, Math.Abs(amount)); // NEW
                 // Panache is instanced, so we don't decrement shares. The engine will just garbage collect it when combat ends.
             }
             break;
@@ -940,7 +964,6 @@ internal static class HookPatches
 
                     if (!string.IsNullOrEmpty(sourceId))
                     {
-                        // Push into the exact same persistent ledger used for Strength
                         CardRegistry.AddPersistentBuff("CALCIFY_POWER", amount, cardSource);
                         GD.Print($"[DeckTracker] Added {amount} CALCIFY_POWER to persistent ledger for {sourceId}");
                     }
@@ -1889,6 +1912,10 @@ internal static class HookPatches
     // --- SMOKESTACK ---
     public static void SmokestackPrefix() { CardRegistry.IsSmokestackExecuting.Value = true; }
     public static void SmokestackPostfix() { CardRegistry.IsSmokestackExecuting.Value = false; }
+    
+    // --- RUPTURE MIDDLEMAN ---
+    public static void RupturePrefix() { CardRegistry.IsRuptureExecuting.Value = true; }
+    public static void RupturePostfix() { CardRegistry.IsRuptureExecuting.Value = false; }
     
     private static string GetCombatType(IRunState? runState)
     {

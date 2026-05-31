@@ -6,8 +6,8 @@ public partial class CardRegistry
     public static readonly AsyncLocal<bool> IsInfernoExecuting = new();
     public static readonly AsyncLocal<bool> IsOutbreakExecuting = new();
     public static readonly AsyncLocal<bool> IsSmokestackExecuting = new();
-    public static AsyncLocal<MegaCrit.Sts2.Core.Models.Powers.PanachePower> ExecutingPanache = new();
-
+    public static readonly AsyncLocal<bool> IsRuptureExecuting = new();
+    
     // --- PROPORTIONAL LEDGERS (Player Buffs) ---
     public class PowerShare
     {
@@ -18,6 +18,7 @@ public partial class CardRegistry
     public static List<PowerShare> InfernoLedger = new();
     public static List<PowerShare> OutbreakLedger = new();
     public static List<PowerShare> SmokestackLedger = new();
+    public static List<PowerShare> RuptureLedger = new();
     
     // --- INSTANCED LEDGER ---
     public static Dictionary<MegaCrit.Sts2.Core.Models.Powers.PanachePower, string> PanacheLedgers = new();

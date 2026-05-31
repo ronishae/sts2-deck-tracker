@@ -407,6 +407,16 @@ public static class ModEntry
 
     // Smokestack trigger
     _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.SmokestackPower), nameof(MegaCrit.Sts2.Core.Models.Powers.SmokestackPower.AfterCardGeneratedForCombat)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SmokestackPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SmokestackPostfix)))); 
+    
+    // Rupture trigger 1: Damage outside of a card play
+    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.RupturePower), nameof(MegaCrit.Sts2.Core.Models.Powers.RupturePower.AfterDamageReceived)), 
+        prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePrefix))), 
+        postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePostfix))));
+
+    // Rupture trigger 2: Delayed damage during a card play
+    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.RupturePower), nameof(MegaCrit.Sts2.Core.Models.Powers.RupturePower.AfterCardPlayed)), 
+        prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePrefix))), 
+        postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)
