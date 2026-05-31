@@ -871,6 +871,18 @@ internal static class HookPatches
                     }
                 }
                 break;
+            case LethalityPower:
+                if (amount > 0 && target.IsPlayer)
+                {
+                    CardRegistry.AddPersistentBuff("LETHALITY_POWER", amount, cardSource);
+                }
+                else if (amount < 0 && target.IsPlayer)
+                {
+                    // In case an enemy or event cleanses the buff
+                    CardRegistry.RemovePersistentBuff("LETHALITY_POWER", Math.Abs(amount));
+                    GD.Print($"[DeckTracker] Warning: Removed {amount} LETHALITY_POWER buff");
+                }
+                break;
         }
     }
     
