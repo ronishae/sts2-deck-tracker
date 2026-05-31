@@ -914,6 +914,43 @@ internal static class HookPatches
                 // Panache is instanced, so we don't decrement shares. The engine will just garbage collect it when combat ends.
             }
             break;
+            
+            case CalcifyPower:
+                if (amount > 0 && target != null && target.IsPlayer)
+                {
+                    string sourceId = "";
+                
+                    // Route to Active Potion
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    {
+                        GD.Print($"[DeckTracker] Warning: potion applied calcify power");
+                        sourceId = potionId;
+                    }
+                    // Route to Relic
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    {
+                        GD.Print($"[DeckTracker] Warning: relic applied calcify power");
+                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                    }
+                    // Route to Card
+                    else if (cardSource != null)
+                    {
+                        sourceId = CardRegistry.GetTrackingId(cardSource);
+                    }
+
+                    if (!string.IsNullOrEmpty(sourceId))
+                    {
+                        // Push into the exact same persistent ledger used for Strength
+                        CardRegistry.AddPersistentBuff("CALCIFY_POWER", amount, cardSource);
+                        GD.Print($"[DeckTracker] Added {amount} CALCIFY_POWER to persistent ledger for {sourceId}");
+                    }
+                }
+                else if (amount < 0 && target != null && target.IsPlayer)
+                {
+                    // In case an enemy or event cleanses the buff
+                    CardRegistry.RemovePersistentBuff("CALCIFY_POWER", Math.Abs(amount));
+                }
+                break;
         }
     }
     
