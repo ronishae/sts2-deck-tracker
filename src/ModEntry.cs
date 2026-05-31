@@ -397,6 +397,16 @@ public static class ModEntry
         
         var theBootMethod = AccessTools.Method(typeof(TheBoot), nameof(TheBoot.ModifyHpLostAfterOstyLate));
         _harmony.Patch(theBootMethod, postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TheBootModifyHpPostfix))));
+        
+        // Inferno triggers
+    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower), nameof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower.AfterPlayerTurnStart)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPostfix))));
+    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower), nameof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower.AfterDamageReceived)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPostfix))));
+
+    // Outbreak trigger
+    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.OutbreakPower), nameof(MegaCrit.Sts2.Core.Models.Powers.OutbreakPower.AfterPowerAmountChanged)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OutbreakPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OutbreakPostfix))));
+
+    // Smokestack trigger
+    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.SmokestackPower), nameof(MegaCrit.Sts2.Core.Models.Powers.SmokestackPower.AfterCardGeneratedForCombat)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SmokestackPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SmokestackPostfix)))); 
     }
 
     private static void PatchHook(string hookName, string postfixName)

@@ -883,6 +883,37 @@ internal static class HookPatches
                     GD.Print($"[DeckTracker] Warning: Removed {amount} LETHALITY_POWER buff");
                 }
                 break;
+            case InfernoPower:
+        case OutbreakPower:
+        case SmokestackPower:
+        case PanachePower:
+            if (amount > 0)
+            {
+                string sourceId = "";
+                
+                if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    sourceId = potionId;
+                else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                else if (cardSource != null)
+                    sourceId = CardRegistry.GetTrackingId(cardSource);
+
+                if (!string.IsNullOrEmpty(sourceId))
+                {
+                    if (power is InfernoPower) CardRegistry.AddProportionalShare(CardRegistry.InfernoLedger, amount, sourceId);
+                    else if (power is OutbreakPower) CardRegistry.AddProportionalShare(CardRegistry.OutbreakLedger, amount, sourceId);
+                    else if (power is SmokestackPower) CardRegistry.AddProportionalShare(CardRegistry.SmokestackLedger, amount, sourceId);
+                    else if (power is PanachePower panacheInst) CardRegistry.PanacheLedgers[panacheInst] = sourceId; // Directly map the instance!
+                }
+            }
+            else if (amount < 0)
+            {
+                if (power is InfernoPower) CardRegistry.RemoveProportionalShare(CardRegistry.InfernoLedger, Math.Abs(amount));
+                else if (power is OutbreakPower) CardRegistry.RemoveProportionalShare(CardRegistry.OutbreakLedger, Math.Abs(amount));
+                else if (power is SmokestackPower) CardRegistry.RemoveProportionalShare(CardRegistry.SmokestackLedger, Math.Abs(amount));
+                // Panache is instanced, so we don't decrement shares. The engine will just garbage collect it when combat ends.
+            }
+            break;
         }
     }
     
@@ -1476,6 +1507,9 @@ internal static class HookPatches
     // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
+        // Do not log any self-damage
+        if (target.IsPlayer) return;
+        
         // Floor the total damage immediately!
         var damageAmount = results.TotalDamage;
         GD.Print($"[DeckTracker] AfterDamageGivePostfix triggered. Floored TotalDamage to {damageAmount}");
@@ -1595,6 +1629,54 @@ internal static class HookPatches
         {
             CardRegistry.DistributeRollingBoulderDamage(damageAmount);
             return;
+        }
+
+        if (cardSource == null)
+        {
+            // 1. INSTANCED PANACHE PAYOUT
+            if (dealer != null && dealer.IsPlayer)
+            {
+                // Find any tracked Panache instance that is currently waiting or dealing damage!
+                var firingPanache = CardRegistry.PanacheLedgers.Keys.FirstOrDefault(p => 
+                    p.DynamicVars["CardsLeft"].IntValue <= 0);
+                
+                if (firingPanache != null)
+                {
+                    if (CardRegistry.PanacheLedgers.TryGetValue(firingPanache, out var panacheSourceId))
+                    {
+                        CardRegistry.AddDamageById(panacheSourceId, damageAmount);
+                        GD.Print($"[DeckTracker] Routed {damageAmount} damage to Panache: {panacheSourceId}");
+                        return;
+                    }
+                }
+            }
+            GD.Print($"[DeckTracker] After panache check");
+            
+            // 2. PROPORTIONAL LEDGER PAYOUTS
+            List<CardRegistry.PowerShare>? activeLedger = null;
+        
+            if (CardRegistry.IsInfernoExecuting.Value) activeLedger = CardRegistry.InfernoLedger;
+            else if (CardRegistry.IsOutbreakExecuting.Value) activeLedger = CardRegistry.OutbreakLedger;
+            else if (CardRegistry.IsSmokestackExecuting.Value) activeLedger = CardRegistry.SmokestackLedger;
+
+            if (activeLedger != null && activeLedger.Count > 0)
+            {
+                decimal totalShares = activeLedger.Sum(x => x.Shares);
+                if (totalShares > 0)
+                {
+                    foreach (var share in activeLedger)
+                    {
+                        decimal proportion = share.Shares / totalShares;
+                        decimal attributedDamage = damageAmount * proportion;
+                
+                        if (attributedDamage > 0)
+                        {
+                            CardRegistry.AddDamageById(share.TrackingId, attributedDamage);
+                        }
+                    }
+                    return; // Successfully routed the proportional damage!
+                }
+            }
         }
         
         if (cardSource == null)
@@ -1757,6 +1839,19 @@ internal static class HookPatches
         // CurrentActIndex is 0-based (Act 1 = 0), so we add 1 to match our 1-based registry.
         return runState.CurrentActIndex + 1;
     }
+    
+    
+    // --- INFERNO ---
+    public static void InfernoPrefix() { CardRegistry.IsInfernoExecuting.Value = true; }
+    public static void InfernoPostfix() { CardRegistry.IsInfernoExecuting.Value = false; }
+
+    // --- OUTBREAK ---
+    public static void OutbreakPrefix() { CardRegistry.IsOutbreakExecuting.Value = true; }
+    public static void OutbreakPostfix() { CardRegistry.IsOutbreakExecuting.Value = false; }
+
+    // --- SMOKESTACK ---
+    public static void SmokestackPrefix() { CardRegistry.IsSmokestackExecuting.Value = true; }
+    public static void SmokestackPostfix() { CardRegistry.IsSmokestackExecuting.Value = false; }
     
     private static string GetCombatType(IRunState? runState)
     {

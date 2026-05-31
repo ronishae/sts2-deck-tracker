@@ -8,6 +8,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace DeckTracker;
 
@@ -216,6 +217,13 @@ public static partial class CardRegistry
         SpinnerSources.Clear();
         IsSpinnerExecuting.Value = false;
         SpinnerExecutionIndex = 0;
+        IsInfernoExecuting.Value = false;
+        IsOutbreakExecuting.Value = false;
+        IsSmokestackExecuting.Value = false;
+        ExecutingPanache = new();
+        InfernoLedger.Clear();
+        OutbreakLedger.Clear();
+        SmokestackLedger.Clear();
     }
     
     public static void ClearSession()
