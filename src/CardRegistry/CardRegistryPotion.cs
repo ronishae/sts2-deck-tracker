@@ -8,7 +8,6 @@ namespace DeckTracker;
 
 public partial class CardRegistry
 {
-    public static Dictionary<string, PotionStats> PotionLedger = new();
 
     // We use a ConditionalWeakTable or Dictionary to map the live object to our unique ID
     // since the player can have 3 of the exact same potion!
@@ -29,7 +28,7 @@ public partial class CardRegistry
             // Note: Relies on localization being loaded, fallback to raw ID if not
             string displayName = potion.Title?.GetFormattedText() ?? potion.Id.Entry ?? "Unknown Potion";
 
-            PotionLedger[id] = new PotionStats
+            EntityLedger[id] = new PotionStats
             {
                 Id = id,
                 DisplayName = displayName,
@@ -47,7 +46,8 @@ public partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            if (PotionInstanceIds.TryGetValue(potion, out var id) && PotionLedger.TryGetValue(id, out var stat))
+            if (PotionInstanceIds.TryGetValue(potion, out var id)
+                && EntityLedger.TryGetValue(id, out var entity) && entity is PotionStats stat)
             {
                 stat.FloorUsed = floor;
                 stat.IsActive = false;
@@ -61,7 +61,8 @@ public partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            if (PotionInstanceIds.TryGetValue(potion, out var id) && PotionLedger.TryGetValue(id, out var stat))
+            if (PotionInstanceIds.TryGetValue(potion, out var id)
+                && EntityLedger.TryGetValue(id, out var entity) && entity is PotionStats stat)
             {
                 stat.FloorDiscarded = floor;
                 stat.IsActive = false;

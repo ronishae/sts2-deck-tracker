@@ -6,8 +6,6 @@ namespace DeckTracker;
 public partial class CardRegistry
 {
     // --- RELIC TRACKING ---
-    // Maps a Relic Class Name (e.g. "PenNib", "MercuryHourglass") to its stats
-    public static readonly Dictionary<string, RelicStats> RelicLedger = new();
     public static readonly Dictionary<string, string> RelicNameCache = new();
 
     public static void AddRelicDamage(string relicId, decimal amount)
@@ -15,38 +13,10 @@ public partial class CardRegistry
         if (amount <= 0) return;
         lock (SyncRoot)
         {
-            var stats = GetOrCreateRelicStats(relicId);
-            stats.CombatDamage += amount;
-            stats.RunDamage += amount;
-
-            var actData = _currentAct switch
-            {
-                1 => stats.Act1,
-                2 => stats.Act2,
-                3 => stats.Act3,
-                4 => stats.Act4,
-                _ => null
-            };
-
-            if (actData != null)
-            {
-                switch (_currentCombatType)
-                {
-                    case "Elite":
-                        actData.DamageElite += amount;
-                        break;
-                    case "Boss":
-                        actData.DamageBoss += amount;
-                        break;
-                    case "Hallway":
-                        actData.DamageHallway += amount;
-                        break;
-                }
-            }
-
+            // GetOrCreateRelicStats ensures the entry exists in EntityLedger before AddCombatDamage runs.
+            GetOrCreateRelicStats(relicId).AddCombatDamage(amount, _currentAct, _currentCombatType);
             GD.Print($"[DeckTracker] Added {amount} damage to Relic: {relicId}");
         }
-
         Publish();
     }
 
@@ -54,10 +24,11 @@ public partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            if (RelicLedger.TryGetValue(relic.Id.Entry, out var stat))
+            var key = "RELIC_" + relic.Id.Entry;
+            if (EntityLedger.TryGetValue(key, out var entity))
             {
-                stat.FloorRemoved = floorRemoved;
-                stat.IsActive = false;
+                entity.FloorRemoved = floorRemoved;
+                entity.IsActive = false;
                 GD.Print($"[DeckTracker] Handled removal for Relic: {relic.Id.Entry} on floor {floorRemoved}");
             }
         }
@@ -66,10 +37,11 @@ public partial class CardRegistry
 
     public static RelicStats GetOrCreateRelicStats(string relicId)
     {
-        if (!RelicLedger.TryGetValue(relicId, out var stats))
+        var key = "RELIC_" + relicId;
+        if (!EntityLedger.TryGetValue(key, out var entity) || entity is not RelicStats stats)
         {
             string displayName;
-            
+
             if (RelicNameCache.TryGetValue(relicId, out var cachedName))
             {
                 displayName = cachedName;
@@ -78,13 +50,13 @@ public partial class CardRegistry
             {
                 // Fallback 1: SCREAMING_SNAKE_CASE to Title Case (e.g., "STRIKE_DUMMY" -> "Strike Dummy")
                 displayName = System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(relicId.ToLower().Replace('_', ' '));
-                
+
                 // Fallback 2: PascalCase to Title Case (Kept for legacy tracking variables)
                 displayName = System.Text.RegularExpressions.Regex.Replace(displayName, "([a-z])([A-Z])", "$1 $2");
             }
 
             stats = new RelicStats { Id = relicId, DisplayName = displayName };
-            RelicLedger[relicId] = stats;
+            EntityLedger[key] = stats;
         }
         return stats;
     }

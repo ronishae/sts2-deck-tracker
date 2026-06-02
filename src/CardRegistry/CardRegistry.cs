@@ -16,7 +16,7 @@ public static partial class CardRegistry
 {
     public static readonly object SyncRoot = new();
     
-    private static Dictionary<string, CardStats> Totals = new();
+    public static Dictionary<string, EntityStats> EntityLedger = new();
     private static string _currentRunSeed = "";
     
     private static int _currentAct = 1;
@@ -92,18 +92,6 @@ public static partial class CardRegistry
         _deferredDraws.Value.Clear();
     }
 
-    private static ActData? GetActData(EntityStats stat, int actNum)
-    {
-        switch (actNum)
-        {
-            case 1: return stat.Act1;
-            case 2: return stat.Act2;
-            case 3: return stat.Act3;
-            case 4: return stat.Act4;
-            default: return null;
-        }
-    }
-    
     private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
 
     public static event Action<List<CardStats>>? Changed;
@@ -155,8 +143,10 @@ public static partial class CardRegistry
                 state = new SavedRunState
                 {
                     RunSeed = _currentRunSeed,
-                    Totals = Totals.ToDictionary(kvp => kvp.Key, kvp => (CardStats)kvp.Value.Clone()),
-                    Potions = PotionLedger.ToDictionary(kvp => kvp.Key, kvp => (PotionStats)kvp.Value.Clone())
+                    Totals = EntityLedger.Values.OfType<CardStats>()
+                        .ToDictionary(s => s.Id, s => (CardStats)s.Clone()),
+                    Potions = EntityLedger.Values.OfType<PotionStats>()
+                        .ToDictionary(s => s.Id, s => (PotionStats)s.Clone())
                 };
             }
 
@@ -187,8 +177,9 @@ public static partial class CardRegistry
                 return false;
             }
 
-            Totals = state.Totals;
-            PotionLedger = state.Potions ?? new Dictionary<string, PotionStats>();
+            EntityLedger.Clear();
+            foreach (var kvp in state.Totals) EntityLedger[kvp.Key] = kvp.Value;
+            foreach (var kvp in state.Potions ?? new Dictionary<string, PotionStats>()) EntityLedger[kvp.Key] = kvp.Value;
             return true;
         }
         catch
@@ -211,6 +202,15 @@ public static partial class CardRegistry
         string enchant = sourceCard.Enchantment?.Id.Entry ?? "None";
 
         return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}";
+    }
+
+    // Resolves the active source ID: card first, then executing relic, then active potion, then fallback.
+    public static string GetCurrentSourceId(CardModel? cardSource = null, string fallback = "External_Source")
+    {
+        if (cardSource != null) return GetTrackingId(cardSource);
+        if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value)) return "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+        if (CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potId)) return potId;
+        return fallback;
     }
 
     // --- UNIFIED TRACKER REGISTRY ---
@@ -313,13 +313,11 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            Totals.Clear();
+            EntityLedger.Clear();
             _currentAct = 1;
             ResetInternalsCombat();
-            RelicLedger.Clear();
             RelicExecutionManager.ResetState();
             RelicNameCache.Clear();
-            PotionLedger.Clear();
             PotionInstanceIds.Clear();
             _potionCounter = 0;
             GD.Print("[DeckTracker] ResetRun. Run state cleared.");
@@ -335,7 +333,7 @@ public static partial class CardRegistry
             HashSet<string> uniqueActiveIds = new HashSet<string>(activeDeckIds);
             
             GD.Print($"[DeckTracker] SyncDeckState. Floor: {currentFloor}, Active Count: {activeDeckIds.Count}");
-            foreach (var stat in Totals.Values)
+            foreach (var stat in EntityLedger.Values.OfType<CardStats>())
             {
                 if (stat.IsActive && !uniqueActiveIds.Contains(stat.Id))
                 {
@@ -390,12 +388,12 @@ public static partial class CardRegistry
             foreach (var card in player.Deck.Cards)
             {
                 string trackingId = GetTrackingId(card);
-                if (Totals.TryGetValue(trackingId, out var cardStats))
+                if (EntityLedger.TryGetValue(trackingId, out var entity))
                 {
-                    cardStats.Model = card;
+                    entity.Model = card;
                 }
             }
-            
+
             for (int i = 0; i < player.PotionSlots.Count; i++)
             {
                 var potion = player.PotionSlots[i];
@@ -408,15 +406,16 @@ public static partial class CardRegistry
 
                 if (string.IsNullOrEmpty(existingId))
                 {
-                    existingId = PotionLedger.Values.FirstOrDefault(p => p.Model == null && p.Id.Contains(potion.Id.Entry))?.Id;
-                    
+                    existingId = EntityLedger.Values.OfType<PotionStats>()
+                        .FirstOrDefault(p => p.Model == null && p.Id.Contains(potion.Id.Entry))?.Id;
+
                     if (string.IsNullOrEmpty(existingId))
                     {
                         _potionCounter++;
                         existingId = $"POTION_{potion.Id.Entry}_{_potionCounter}";
-                        
+
                         string displayName = potion.Title?.GetFormattedText() ?? potion.Id.Entry ?? "Unknown Potion";
-                        PotionLedger[existingId] = new PotionStats
+                        EntityLedger[existingId] = new PotionStats
                         {
                             Id = existingId,
                             DisplayName = displayName,
@@ -426,7 +425,7 @@ public static partial class CardRegistry
                     }
                     PotionInstanceIds[potion] = existingId;
                 }
-                PotionLedger[existingId].Model = potion;
+                ((PotionStats)EntityLedger[existingId]).Model = potion;
             }
         }
         GD.Print("[DeckTracker] RestoreLiveInstances. Live object references restored.");
@@ -442,46 +441,23 @@ public static partial class CardRegistry
             _currentCombatType = combatType;
             GD.Print($"[DeckTracker] StartCombat. Type: {_currentCombatType}, Act: {_currentAct}");
             
-            foreach (var stat in Totals.Values)
+            foreach (var entity in EntityLedger.Values)
             {
-                stat.CombatDamage = 0;
-                stat.RawForgeCombat = 0;
-                stat.ConnectedForgeCombat = 0;
-                stat.ReceivedForgeCombat = 0;
-                
-                if (!stat.IsActive)
-                {
-                    continue;
-                }
-                
-                var actData = GetActData(stat, _currentAct);
-                if (actData != null)
-                {
-                    if (combatType == "Elite") actData.EncountersSeenElite++;
-                    else if (combatType == "Boss") actData.EncountersSeenBoss++;
-                    else actData.EncountersSeenHallway++;
-                }
-                _incrementedThisCombat.Add(stat.Id);
-            }
+                entity.CombatDamage = 0;
+                entity.RawForgeCombat = 0;
+                entity.ConnectedForgeCombat = 0;
+                entity.ReceivedForgeCombat = 0;
 
-            foreach (var stat in RelicLedger.Values)
-            {
-                stat.CombatDamage = 0;
-                stat.RawForgeCombat = 0;
-                stat.ConnectedForgeCombat = 0;
-                stat.ReceivedForgeCombat = 0;
-
-                if (!stat.IsActive)
+                if (!entity.IsActive || entity is PotionStats)
                 {
                     continue;
                 }
 
-                var actData = GetActData(stat, _currentAct);
-                if (actData != null)
+                entity.GetAct(_currentAct)?.AddEncounterSeen(combatType);
+
+                if (entity is CardStats)
                 {
-                    if (combatType == "Elite") actData.EncountersSeenElite++;
-                    else if (combatType == "Boss") actData.EncountersSeenBoss++;
-                    else actData.EncountersSeenHallway++;
+                    _incrementedThisCombat.Add(entity.Id);
                 }
             }
         }
@@ -504,7 +480,7 @@ public static partial class CardRegistry
         string uniqueTrackingId = GetTrackingId(card);
         lock (SyncRoot)
         {
-            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            if (EntityLedger.TryGetValue(uniqueTrackingId, out var entity) && entity is CardStats stat)
             {
                 GD.Print($"[DeckTracker] HandleRemove. Card: {uniqueTrackingId}");
                 if (stat.CopiesInDeck > 1)
@@ -530,41 +506,32 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             bool isGenerated = card.FloorAddedToDeck == null;
-            if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            if (!EntityLedger.TryGetValue(uniqueTrackingId, out var existing) || existing is not CardStats stat)
             {
                 CardModel sourceCard = card.DeckVersion ?? card;
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
                 string enchantName = sourceCard.Enchantment?.Id.Entry ?? "";
                 GD.Print($"[DeckTracker] RegisterCard. NEW Card: {uniqueTrackingId}, Generated: {isGenerated}");
-                stat = new CardStats 
-                { 
-                    Id = uniqueTrackingId, 
+                stat = new CardStats
+                {
+                    Id = uniqueTrackingId,
                     DisplayName = displayName,
                     Model = card,
                     CardType = sourceCard.Type.ToString(),
                     Enchantment = enchantName,
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
-                    FloorRemoved = isGenerated ? 0 : -1, 
+                    FloorRemoved = isGenerated ? 0 : -1,
                     IsActive = !isGenerated,
                     CopiesInDeck = isGenerated ? 0 : 1,
                     CombatDamage = 0,
                     RunDamage = 0
                 };
-                Totals[uniqueTrackingId] = stat;
+                EntityLedger[uniqueTrackingId] = stat;
             }
-            
-            if (_currentCombatType != "Unknown" && isGenerated)
+
+            if (_currentCombatType != "Unknown" && isGenerated && _incrementedThisCombat.Add(uniqueTrackingId))
             {
-                if (_incrementedThisCombat.Add(uniqueTrackingId))
-                {
-                    var actData = GetActData(stat, _currentAct);
-                    if (actData != null)
-                    {
-                        if (_currentCombatType == "Elite") actData.EncountersSeenElite++;
-                        else if (_currentCombatType == "Boss") actData.EncountersSeenBoss++;
-                        else actData.EncountersSeenHallway++;
-                    }
-                }
+                stat.GetAct(_currentAct)?.AddEncounterSeen(_currentCombatType);
             }
         }
     }
@@ -574,31 +541,25 @@ public static partial class CardRegistry
         string uniqueTrackingId = GetTrackingId(card);
         lock (SyncRoot)
         {
-            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            if (EntityLedger.TryGetValue(uniqueTrackingId, out var entity))
             {
-                var actData = GetActData(stat, _currentAct);
-                if (actData != null)
-                {
-                    actData.TimesDrawn++;
-                }
+                var actData = entity.GetAct(_currentAct);
+                if (actData != null) actData.TimesDrawn++;
                 GD.Print($"[DeckTracker] AddDraw. Card: {uniqueTrackingId}");
             }
         }
         Publish();
     }
-    
+
     public static void AddPlay(CardModel card)
     {
         string uniqueTrackingId = GetTrackingId(card);
         lock (SyncRoot)
         {
-            if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
+            if (EntityLedger.TryGetValue(uniqueTrackingId, out var entity))
             {
-                var actData = GetActData(stat, _currentAct);
-                if (actData != null)
-                {
-                    actData.TimesPlayed++;
-                }
+                var actData = entity.GetAct(_currentAct);
+                if (actData != null) actData.TimesPlayed++;
                 GD.Print($"[DeckTracker] AddPlay. Card: {uniqueTrackingId}");
             }
         }
@@ -618,56 +579,12 @@ public static partial class CardRegistry
             return;
         }
 
-        if (trackingId.StartsWith("RELIC_"))
-        {
-            string relicId = trackingId.Substring(6); 
-            AddRelicDamage(relicId, amount);
-            return;
-        }
-        
-        if (trackingId.StartsWith("POTION_"))
-        {
-            lock (SyncRoot)
-            {
-                if (PotionLedger.TryGetValue(trackingId, out var stat))
-                {
-                    stat.CombatDamage += amount;
-                    stat.RunDamage += amount;
-                    GD.Print($"[DeckTracker] AddDamageById (Potion). Amount: {amount}, ID: {trackingId}");
-                    
-                    var actData = GetActData(stat, _currentAct);
-                    if (actData != null)
-                    {
-                        switch (_currentCombatType)
-                        {
-                            case "Elite": actData.DamageElite += amount; break;
-                            case "Boss": actData.DamageBoss += amount; break;
-                            case "Hallway": actData.DamageHallway += amount; break;
-                        }
-                    }
-                }
-            }
-            Publish();
-            return;
-        }
-        
         lock (SyncRoot)
         {
-            if (Totals.TryGetValue(trackingId, out var stat))
+            if (EntityLedger.TryGetValue(trackingId, out var entity))
             {
-                stat.CombatDamage += amount;
-                stat.RunDamage += amount;
-                GD.Print($"[DeckTracker] AddDamageById. Amount: {amount}, Card: {trackingId}");
-                var actData = GetActData(stat, _currentAct);
-                if (actData != null)
-                {
-                    switch (_currentCombatType)
-                    {
-                        case "Elite": actData.DamageElite += amount; break;
-                        case "Boss": actData.DamageBoss += amount; break;
-                        case "Hallway": actData.DamageHallway += amount; break;
-                    }
-                }
+                entity.AddCombatDamage(amount, _currentAct, _currentCombatType);
+                GD.Print($"[DeckTracker] AddDamageById. Amount: {amount}, ID: {trackingId}");
             }
         }
         Publish();
@@ -683,7 +600,7 @@ public static partial class CardRegistry
         List<CardStats> statsCopy;
         lock (SyncRoot)
         {
-            statsCopy = Totals.Values.Select(s => (CardStats)s.Clone()).ToList();
+            statsCopy = EntityLedger.Values.OfType<CardStats>().Select(s => (CardStats)s.Clone()).ToList();
         }
         Changed?.Invoke(statsCopy);
     }

@@ -1,5 +1,6 @@
 using Godot;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace DeckTracker;
 
@@ -634,7 +635,7 @@ public static class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
 
         // 2. Fetch, Filter, and Sort Data
-        var unsortedList = CardRegistry.RelicLedger.Values
+        var unsortedList = CardRegistry.EntityLedger.Values.OfType<RelicStats>()
             .Select(r => new { Stat = r, Agg = AggregateActData(r) })
             .Where(x => {
                 decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0));
@@ -788,7 +789,7 @@ public static class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("DISCARDED", "REMOVED", 100));
 
         // 2. Fetch and Sort Data
-        var unsortedList = CardRegistry.PotionLedger.Values.Cast<PotionStats>().ToList();
+        var unsortedList = CardRegistry.EntityLedger.Values.OfType<PotionStats>().ToList();
 
         var sortedList = _currentSort.Column switch
         {

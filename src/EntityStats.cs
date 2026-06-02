@@ -32,6 +32,25 @@ public abstract class EntityStats
     public decimal ConnectedForgeCombat { get; set; }
     public decimal ReceivedForgeCombat { get; set; }
     
+    public ActData? GetAct(int actNum)
+    {
+        return actNum switch
+        {
+            1 => Act1,
+            2 => Act2,
+            3 => Act3,
+            4 => Act4,
+            _ => null
+        };
+    }
+
+    public void AddCombatDamage(decimal amount, int actNum, string combatType)
+    {
+        CombatDamage += amount;
+        RunDamage += amount;
+        GetAct(actNum)?.AddDamage(combatType, amount);
+    }
+
     // Enforce that all subclasses must be able to clone themselves
     public abstract EntityStats Clone();
 

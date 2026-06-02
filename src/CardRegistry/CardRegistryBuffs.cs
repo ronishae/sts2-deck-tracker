@@ -39,6 +39,20 @@ public static partial class CardRegistry
         public List<DamageModifierSnapshot> MultiplicativeModifiers { get; set; } = new();
     }
 
+    // --- BUFF ROUTING REGISTRIES ---
+    // Powers whose only behaviour is add/remove a persistent player buff.
+    public static readonly HashSet<string> PersistentBuffPowerIds = new()
+    {
+        "DEMON_FORM_POWER", "ARSENAL_POWER", "SHADOW_STEP_POWER", "ACCURACY_POWER",
+        "PHANTOM_BLADES_POWER", "PREP_TIME_POWER", "CRUELTY_POWER", "LETHALITY_POWER", "CALCIFY_POWER",
+    };
+
+    // Powers whose only behaviour is add/remove a duration debuff on a target creature.
+    public static readonly HashSet<string> DurationDebuffPowerIds = new()
+    {
+        "VULNERABLE_POWER", "DEBILITATE_POWER", "GIGANTIFICATION_POWER", "FLANKING_POWER", "KNOCKDOWN_POWER",
+    };
+
     // --- STATE VARIABLES ---
     // Maps a specific Creature to their active debuffs (like Vulnerable)
     public static readonly Dictionary<Creature, Dictionary<string, List<BuffContribution>>> EnemyDebuffLedgers = new();
@@ -298,7 +312,9 @@ public static partial class CardRegistry
         {
             var multMod = snapshot.MultiplicativeModifiers[i];
 
-            // NEW: Special Decomposition for Vulnerable!
+            // Vulnerable is a composite multiplier: base VulnPower → PaperPhrog → CrueltyPower → DebilitatePower.
+            // We reconstruct each sub-layer by calling the game's own modifier chain in forward order,
+            // then peel them in reverse so each contributor gets credit for exactly its marginal damage.
             if (multMod.PowerId == "VULNERABLE_POWER")
             {
                 // 1. Grab the active game objects
@@ -433,7 +449,7 @@ public static partial class CardRegistry
     private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer, PowerModel? powerInstance = null)
     {
         GD.Print($"[DeckTracker] PayoutMultiplierDamage. Power: {powerId}, Amount: {amount}");
-        if (RelicLedger.ContainsKey(powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG")
+        if (EntityLedger.ContainsKey("RELIC_" + powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG")
         {
             AddRelicDamage(powerId, amount);
             return true;
@@ -550,7 +566,7 @@ public static partial class CardRegistry
     private static bool PayoutAdditiveDamage(string powerId, decimal amount)
     {
         GD.Print($"[DeckTracker] PayoutAdditiveDamage. Power: {powerId}, Amount: {amount}");
-        if (RelicLedger.ContainsKey(powerId) || powerId == "STRIKE_DUMMY" || powerId == "FAKE_STRIKE_DUMMY" 
+        if (EntityLedger.ContainsKey("RELIC_" + powerId) || powerId == "STRIKE_DUMMY" || powerId == "FAKE_STRIKE_DUMMY"
             || powerId == "MYSTIC_LIGHTER" || powerId == "MINIATURE_CANNON")
         {
             AddRelicDamage(powerId, amount);

@@ -1,4 +1,5 @@
 using Godot;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
@@ -14,6 +15,22 @@ public static partial class CardRegistry
     private static readonly List<CardModel?> BladeReplayModifierTracker = [];
     private static readonly List<FurnaceContribution> FurnaceContributions = [];
     
+    // Returns true if the card has custom damage handling so the caller skips the default AddDamage path.
+    public static bool TryHandleCustomCardDamage(ICombatState combatState, Creature? dealer, DamageResult results, Creature target, CardModel cardSource, decimal baseDmg)
+    {
+        switch (cardSource.Id.Entry)
+        {
+            case "SOVEREIGN_BLADE":
+                AddSovereignBladeDamageHistoryItem(new DamageHistoryItem(combatState, dealer, results, target, cardSource));
+                return true;
+            case "SHIV":
+                AddShivDamage(cardSource, baseDmg);
+                return true;
+            default:
+                return false;
+        }
+    }
+
     public static void ResetSovereignBladeState()
     {
         lock (SyncRoot)
@@ -48,27 +65,17 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            // A. Is it a Relic?
-            if (trackingId.StartsWith("RELIC_"))
+            if (!EntityLedger.TryGetValue(trackingId, out var entity)) return;
+
+            entity.RawForgeCombat += amount;
+
+            // Relics don't track act-level forge breakdowns.
+            if (entity is not RelicStats)
             {
-                string relicId = trackingId.Substring(6);
-                AddRelicForge(relicId, amount, 0, 0); // Credit Raw Forge
-                ForgeHistory.Add(new ForgeInstance { TrackingId = trackingId, Amount = amount });
+                entity.GetAct(_currentAct)?.AddRawForge(_currentCombatType, amount);
             }
-            // B. Is it a Card?
-            else if (Totals.TryGetValue(trackingId, out var stat))
-            {
-                stat.RawForgeCombat += amount;
-                
-                var actData = GetActData(stat, _currentAct);
-                if (actData != null)
-                {
-                    if (_currentCombatType == "Elite") actData.RawForgeElite += amount;
-                    else if (_currentCombatType == "Boss") actData.RawForgeBoss += amount;
-                    else if (_currentCombatType == "Hallway") actData.RawForgeHallway += amount;
-                }
-                ForgeHistory.Add(new ForgeInstance { TrackingId = trackingId, Amount = amount });
-            }
+
+            ForgeHistory.Add(new ForgeInstance { TrackingId = trackingId, Amount = amount });
         }
         Publish();
     }
@@ -200,22 +207,13 @@ public static partial class CardRegistry
                 var completeDamage = results.TotalDamage + results.OverkillDamage;
                 var beforeMultiplicationDamage = completeDamage / 2;
                 var damageToAttributeToConqueror = results.TotalDamage - beforeMultiplicationDamage;
-                
-                if (Totals.TryGetValue(conquerorId, out var stat))
+
+                if (EntityLedger.TryGetValue(conquerorId, out var conquerorEntity))
                 {
                     GD.Print($"[DeckTracker] Attributing damage to {conquerorId}");
-                    stat.CombatDamage += damageToAttributeToConqueror;
-                    stat.RunDamage += damageToAttributeToConqueror;
-                    
-                    var actData = GetActData(stat, _currentAct);
-                    if (actData != null)
-                    {
-                        if (_currentCombatType == "Elite") actData.DamageElite += damageToAttributeToConqueror;
-                        else if (_currentCombatType == "Boss") actData.DamageBoss += damageToAttributeToConqueror;
-                        else if (_currentCombatType == "Hallway") actData.DamageHallway += damageToAttributeToConqueror;
-                    }
+                    conquerorEntity.AddCombatDamage(damageToAttributeToConqueror, _currentAct, _currentCombatType);
                 }
-                
+
                 damageToAttribute -= damageToAttributeToConqueror;
             }
             
@@ -263,24 +261,16 @@ public static partial class CardRegistry
 
                     var amountToAttribute = Math.Min(damageToDistribute, forgeInstance.Amount);
                     var idToAttribute = forgeInstance.TrackingId;
-                    
-                    if (idToAttribute.StartsWith("RELIC_"))
+
+                    if (EntityLedger.TryGetValue(idToAttribute, out var forgeEntity))
                     {
-                        string relicId = idToAttribute.Substring(6);
-                        GD.Print($"[DeckTracker] Adding connected forge to Relic {relicId} with amount {amountToAttribute}");
-                        AddRelicForge(relicId, 0, amountToAttribute, 0);
-                    }
-                    else if (Totals.TryGetValue(idToAttribute, out var stat))
-                    {
-                        GD.Print($"adding connected forge to {idToAttribute} with amount {amountToAttribute}");
-                        stat.ConnectedForgeCombat += amountToAttribute;
-                        
-                        var actData = GetActData(stat, _currentAct);
-                        if (actData != null)
+                        GD.Print($"[DeckTracker] Adding connected forge to {idToAttribute} with amount {amountToAttribute}");
+                        forgeEntity.ConnectedForgeCombat += amountToAttribute;
+
+                        // Relics don't track act-level forge breakdowns.
+                        if (forgeEntity is not RelicStats)
                         {
-                            if (_currentCombatType == "Elite") actData.ConnectedForgeElite += amountToAttribute;
-                            else if (_currentCombatType == "Boss") actData.ConnectedForgeBoss += amountToAttribute;
-                            else if (_currentCombatType == "Hallway") actData.ConnectedForgeHallway += amountToAttribute;
+                            forgeEntity.GetAct(_currentAct)?.AddConnectedForge(_currentCombatType, amountToAttribute);
                         }
                     }
 
@@ -304,17 +294,10 @@ public static partial class CardRegistry
                 if (totalDistributed > 0)
                 {
                     string bladeTrackingId = GetTrackingId(bladeCard);
-                    if (Totals.TryGetValue(bladeTrackingId, out CardStats? bladeStat))
+                    if (EntityLedger.TryGetValue(bladeTrackingId, out var bladeEntity))
                     {
-                        bladeStat.ReceivedForgeCombat += totalDistributed;
-                        
-                        var actData = GetActData(bladeStat, _currentAct);
-                        if (actData != null)
-                        {
-                            if (_currentCombatType == "Elite") actData.ReceivedForgeElite += totalDistributed;
-                            else if (_currentCombatType == "Boss") actData.ReceivedForgeBoss += totalDistributed;
-                            else if (_currentCombatType == "Hallway") actData.ReceivedForgeHallway += totalDistributed;
-                        }
+                        bladeEntity.ReceivedForgeCombat += totalDistributed;
+                        bladeEntity.GetAct(_currentAct)?.AddReceivedForge(_currentCombatType, totalDistributed);
                     }
                 }
             }

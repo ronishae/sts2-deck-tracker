@@ -173,24 +173,11 @@ internal static class HookPatches
         string powerId = power.Id.Entry ?? "";
         GD.Print($"[DeckTracker] BeforePowerAmountChangedPostfix. Power: {powerId}, Amount: {amount}, Target: {target.Name}");
 
-        string GetRelicOrPotionFallback()
-        {
-            if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-            {
-                return "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-            }
-            if (CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potId))
-            {
-                return potId;
-            }
-            return "External_Source";
-        }
-
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(powerId, out var simple))
         {
             if (amount > 0 && target.IsPlayer)
             {
-                simple.LogApply(cardSource, amount, GetRelicOrPotionFallback());
+                simple.LogApply(cardSource, amount, CardRegistry.GetCurrentSourceId());
             }
             return;
         }
@@ -206,7 +193,7 @@ internal static class HookPatches
 
         if (CardRegistry.ProportionalTrackers.TryGetValue(powerId, out var prop))
         {
-            string tid = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback();
+            string tid = CardRegistry.GetCurrentSourceId(cardSource);
             if (amount > 0)
             {
                 prop.AddShares(amount, tid);
@@ -224,7 +211,7 @@ internal static class HookPatches
             {
                 if (powerId == "LIGHTNING_ROD_POWER" || powerId == "SPINNER_POWER")
                 {
-                    queue.AddDirectCharges(cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback(), amount);
+                    queue.AddDirectCharges(CardRegistry.GetCurrentSourceId(cardSource), amount);
                 }
                 else
                 {
@@ -236,7 +223,21 @@ internal static class HookPatches
 
         if (powerId == "ROLLING_BOULDER_POWER" || powerId == "PANACHE_POWER" || powerId == "MONOLOGUE_POWER")
         {
-             CardRegistry.InstancedTracker.LogInstance(power, cardSource, GetRelicOrPotionFallback());
+             CardRegistry.InstancedTracker.LogInstance(power, cardSource, CardRegistry.GetCurrentSourceId());
+        }
+
+        if (CardRegistry.PersistentBuffPowerIds.Contains(powerId) && target.IsPlayer)
+        {
+            if (amount > 0) CardRegistry.AddPersistentBuff(powerId, amount, cardSource);
+            else if (amount < 0) CardRegistry.RemovePersistentBuff(powerId, Math.Abs(amount));
+            return;
+        }
+
+        if (CardRegistry.DurationDebuffPowerIds.Contains(powerId))
+        {
+            if (amount > 0) CardRegistry.AddDurationBuff(target, powerId, amount, CardRegistry.GetCurrentSourceId(cardSource));
+            else if (amount < 0) CardRegistry.RemoveDurationBuff(target, powerId, Math.Abs(amount));
+            return;
         }
 
         switch (power)
@@ -266,7 +267,7 @@ internal static class HookPatches
                     }
                     else
                     {
-                        CardRegistry.AddPoisonSharesById(target, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
+                        CardRegistry.AddPoisonSharesById(target, amount, CardRegistry.GetCurrentSourceId(cardSource));
                     }
                 }
                 else if (amount < 0)
@@ -327,13 +328,13 @@ internal static class HookPatches
                         }
                         else
                         {
-                            CardRegistry.AddDoomHistoryById(target, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
+                            CardRegistry.AddDoomHistoryById(target, amount, CardRegistry.GetCurrentSourceId(cardSource));
                         }
                     }
                 }
                 break;
             case FocusPower:
-                CardRegistry.LogFocusChangeById(cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback(), amount);
+                CardRegistry.LogFocusChangeById(CardRegistry.GetCurrentSourceId(cardSource), amount);
                 break;
             case LoopPower:
                 if (amount > 0)
@@ -354,27 +355,6 @@ internal static class HookPatches
                     for (int i = 0; i > amount; i--)
                     {
                         CardRegistry.DecrementReflect();
-                    }
-                }
-                break;
-            case DemonFormPower:
-            case ArsenalPower:
-            case ShadowStepPower:
-            case AccuracyPower:
-            case PhantomBladesPower:
-            case PrepTimePower:
-            case CrueltyPower:
-            case LethalityPower:
-            case CalcifyPower:
-                if (target.IsPlayer)
-                {
-                    if (amount > 0)
-                    {
-                        CardRegistry.AddPersistentBuff(powerId, amount, cardSource);
-                    }
-                    else if (amount < 0)
-                    {
-                        CardRegistry.RemovePersistentBuff(powerId, Math.Abs(amount));
                     }
                 }
                 break;
@@ -413,7 +393,7 @@ internal static class HookPatches
                         }
                         else
                         {
-                            CardRegistry.AddPersistentBuffById(powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
+                            CardRegistry.AddPersistentBuffById(powerId, amount, CardRegistry.GetCurrentSourceId(cardSource));
                         }
                     }
                 }
@@ -425,7 +405,7 @@ internal static class HookPatches
             case RitualPower:
                 if (amount > 0 && target.IsPlayer)
                 {
-                    string sid = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback();
+                    string sid = CardRegistry.GetCurrentSourceId(cardSource);
                     if (!string.IsNullOrEmpty(sid))
                     {
                         if (!CardRegistry.RitualSources.ContainsKey(sid))
@@ -446,26 +426,12 @@ internal static class HookPatches
                     }
                     else
                     {
-                        CardRegistry.AddConsumableBuffById(powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
+                        CardRegistry.AddConsumableBuffById(powerId, amount, CardRegistry.GetCurrentSourceId(cardSource));
                     }
                 }
                 else if (amount < 0)
                 {
                     CardRegistry.RemoveConsumableBuff(powerId, Math.Abs(amount));
-                }
-                break;
-            case VulnerablePower:
-            case DebilitatePower:
-            case GigantificationPower:
-            case FlankingPower:
-            case KnockdownPower:
-                if (amount > 0)
-                {
-                    CardRegistry.AddDurationBuff(target, powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
-                }
-                else if (amount < 0)
-                {
-                    CardRegistry.RemoveDurationBuff(target, powerId, Math.Abs(amount));
                 }
                 break;
             case DoubleDamagePower:
@@ -477,7 +443,7 @@ internal static class HookPatches
                     }
                     else
                     {
-                        CardRegistry.AddDurationBuff(target, powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
+                        CardRegistry.AddDurationBuff(target, powerId, amount, CardRegistry.GetCurrentSourceId(cardSource));
                     }
                 }
                 else if (amount < 0)
@@ -940,17 +906,9 @@ internal static class HookPatches
             baseDmg = CardRegistry.ProcessDamageSnapshot(CardRegistry.CurrentAttackSnapshot.Value, damageAmount);
         }
 
-        if (cardSource.Id.Entry.Equals("SOVEREIGN_BLADE"))
+        if (!CardRegistry.TryHandleCustomCardDamage(combatState, dealer, results, target, cardSource, baseDmg))
         {
-            CardRegistry.AddSovereignBladeDamageHistoryItem(new DamageHistoryItem(combatState, dealer, results, target, cardSource));
-        }
-        else if (cardSource.Id.Entry.Equals("SHIV"))
-        {
-            CardRegistry.AddShivDamage(cardSource, baseDmg);
-        }
-        else
-        {
-            CardRegistry.AddDamage(cardSource, baseDmg); 
+            CardRegistry.AddDamage(cardSource, baseDmg);
         }
     }
     
