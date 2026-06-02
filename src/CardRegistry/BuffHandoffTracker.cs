@@ -63,14 +63,14 @@ public class BuffHandoffTracker : ITrackerState
             {
                 if (Strategy == HandoffStrategy.ExactFifo)
                 {
-                    decimal remainingToHandOff = amount;
+                    var remainingToHandOff = amount;
                     foreach (var contribution in ledger)
                     {
                         if (remainingToHandOff <= 0)
                         {
                             break;
                         }
-                        decimal handoffAmount = Math.Min(remainingToHandOff, contribution.Amount);
+                        var handoffAmount = Math.Min(remainingToHandOff, contribution.Amount);
                         CardRegistry.AddPersistentBuffById(secondaryBuffId, handoffAmount, contribution.TrackingId);
                         remainingToHandOff -= handoffAmount;
                         GD.Print($"[DeckTracker]   -> Handed off {handoffAmount} to {contribution.TrackingId}");
@@ -83,12 +83,12 @@ public class BuffHandoffTracker : ITrackerState
                 }
                 else if (Strategy == HandoffStrategy.Proportional)
                 {
-                    decimal totalPool = ledger.Sum(c => c.Amount);
+                    var totalPool = ledger.Sum(c => c.Amount);
                     if (totalPool > 0)
                     {
                         foreach (var contribution in ledger)
                         {
-                            decimal share = amount * (contribution.Amount / totalPool);
+                            var share = amount * (contribution.Amount / totalPool);
                             if (share > 0)
                             {
                                 CardRegistry.AddConsumableBuffById(secondaryBuffId, share, contribution.TrackingId);

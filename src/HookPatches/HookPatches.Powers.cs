@@ -14,7 +14,7 @@ internal static partial class HookPatches
 {
     public static void BeforePowerAmountChangedPostfix(ICombatState combatState, PowerModel power, Decimal amount, Creature target, Creature? applier, CardModel? cardSource)
     {
-        string powerId = power.Id.Entry ?? "";
+        var powerId = power.Id.Entry ?? "";
         GD.Print($"[DeckTracker] BeforePowerAmountChangedPostfix. Power: {powerId}, Amount: {amount}, Target: {target.Name}");
 
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(powerId, out var simple))
@@ -37,7 +37,7 @@ internal static partial class HookPatches
 
         if (CardRegistry.ProportionalTrackers.TryGetValue(powerId, out var prop))
         {
-            string tid = CardRegistry.GetCurrentSourceId(cardSource);
+            var tid = CardRegistry.GetCurrentSourceId(cardSource);
             if (amount > 0)
             {
                 prop.AddShares(amount, tid);
@@ -144,7 +144,7 @@ internal static partial class HookPatches
             case RitualPower:
                 if (amount > 0 && target.IsPlayer)
                 {
-                    string sid = CardRegistry.GetCurrentSourceId(cardSource);
+                    var sid = CardRegistry.GetCurrentSourceId(cardSource);
                     if (!string.IsNullOrEmpty(sid))
                     {
                         if (!CardRegistry.RitualSources.ContainsKey(sid))
@@ -193,8 +193,8 @@ internal static partial class HookPatches
             case TrackingPower:
                 if (amount > 0)
                 {
-                    bool isFirst = !CardRegistry.PersistentLedgers.ContainsKey(powerId) || CardRegistry.PersistentLedgers[powerId].Count == 0;
-                    decimal logged = isFirst ? amount - 1 : amount;
+                    var isFirst = !CardRegistry.PersistentLedgers.ContainsKey(powerId) || CardRegistry.PersistentLedgers[powerId].Count == 0;
+                    var logged = isFirst ? amount - 1 : amount;
                     if (logged > 0)
                     {
                         CardRegistry.AddPersistentBuff(powerId, logged, cardSource);

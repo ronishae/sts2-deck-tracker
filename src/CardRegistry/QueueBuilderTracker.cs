@@ -51,7 +51,7 @@ public class QueueBuilderTracker : ITrackerState
         }
         lock (CardRegistry.SyncRoot)
         {
-            string id = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : "External_Source";
+            var id = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : "External_Source";
             _ledger.Add(new Contribution { TrackingId = id, Amount = amount });
             GD.Print($"[DeckTracker] LogApply ({PowerId}). Source: {id}, Amount: {amount}");
         }
@@ -99,7 +99,7 @@ public class QueueBuilderTracker : ITrackerState
                 var list = _queue.ToList();
                 if (_spinnerIndex < list.Count)
                 {
-                    string id = list[_spinnerIndex];
+                    var id = list[_spinnerIndex];
                     _spinnerIndex++;
                     GD.Print($"[DeckTracker] GetNextIdForOrb (Spinner). Index: {_spinnerIndex - 1}, ID: {id}");
                     return id;

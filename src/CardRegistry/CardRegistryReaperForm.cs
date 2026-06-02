@@ -35,7 +35,7 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            string uniqueId = GetTrackingId(cardSource);
+            var uniqueId = GetTrackingId(cardSource);
             var existing = ReaperFormShares.FirstOrDefault(c => c.TrackingId == uniqueId);
             
             if (existing != null) 

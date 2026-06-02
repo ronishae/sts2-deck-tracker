@@ -80,11 +80,11 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            decimal remainingForge = forgeAmount;
+            var remainingForge = forgeAmount;
             foreach (var contribution in FurnaceContributions)
             {
                 if (remainingForge <= 0) break;
-                decimal amountToAttribute = Math.Min(remainingForge, contribution.PowerAmount);
+                var amountToAttribute = Math.Min(remainingForge, contribution.PowerAmount);
                 attributions.Add((contribution.CardSource, amountToAttribute));
                 remainingForge -= amountToAttribute;
             }

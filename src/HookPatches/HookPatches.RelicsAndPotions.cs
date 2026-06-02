@@ -28,21 +28,21 @@ internal static partial class HookPatches
 
     public static void AfterPotionProcuredPrefix(PotionModel potion)
     {
-        int floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        var floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
         GD.Print($"[DeckTracker] AfterPotionProcuredPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
         CardRegistry.RegisterPotionProcured(potion, floor);
     }
 
     public static void AfterPotionDiscardedPrefix(PotionModel potion)
     {
-        int floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        var floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
         GD.Print($"[DeckTracker] AfterPotionDiscardedPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
         CardRegistry.MarkPotionDiscarded(potion, floor);
     }
 
     public static void BeforePotionUsedPrefix(PotionModel potion)
     {
-        int floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        var floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
         GD.Print($"[DeckTracker] BeforePotionUsedPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
         CardRegistry.MarkPotionUsed(potion, floor);
         CardRegistry.SetPlayingPotion(potion);

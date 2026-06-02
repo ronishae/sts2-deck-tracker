@@ -12,24 +12,24 @@ public static partial class CardRegistry
 {
     public static decimal ProcessDamageSnapshot(DamageSnapshot snapshot, decimal actualDealtDamage)
     {
-        decimal basePlusAdditives = snapshot.BaseDamage;
+        var basePlusAdditives = snapshot.BaseDamage;
         foreach (var a in snapshot.AdditiveModifiers)
         {
             basePlusAdditives += a.Amount;
         }
 
-        decimal totalMultipliers = 1m;
+        var totalMultipliers = 1m;
         foreach (var m in snapshot.MultiplicativeModifiers)
         {
             totalMultipliers *= m.Amount;
         }
 
-        decimal currentCalculatedDamage = Math.Max(0, Math.Floor(basePlusAdditives * totalMultipliers));
-        decimal overkill = Math.Max(0, currentCalculatedDamage - actualDealtDamage);
-        decimal extraDamage = Math.Max(0, actualDealtDamage - currentCalculatedDamage);
+        var currentCalculatedDamage = Math.Max(0, Math.Floor(basePlusAdditives * totalMultipliers));
+        var overkill = Math.Max(0, currentCalculatedDamage - actualDealtDamage);
+        var extraDamage = Math.Max(0, actualDealtDamage - currentCalculatedDamage);
 
         // A rolling multiplier pool. Debuffs will permanently stay in this pool.
-        decimal activeMultipliers = totalMultipliers;
+        var activeMultipliers = totalMultipliers;
 
         GD.Print($"[DeckTracker] ProcessDamageSnapshot. Total Calculated: {currentCalculatedDamage}, Actual: {actualDealtDamage}, Overkill: {overkill}, Extra: {extraDamage}");
 
@@ -48,20 +48,20 @@ public static partial class CardRegistry
                 var cruelty = snapshot.Dealer?.GetPower<CrueltyPower>();
                 var debilitate = snapshot.Target?.GetPower<DebilitatePower>();
 
-                decimal m_base = vulnPower != null ? vulnPower.DynamicVars["DamageIncrease"].BaseValue : 1.5m;
-                decimal m_phrog = phrog != null
+                var m_base =vulnPower != null ? vulnPower.DynamicVars["DamageIncrease"].BaseValue : 1.5m;
+                var m_phrog = phrog != null
                     ? phrog.ModifyVulnerableMultiplier(snapshot.Target!, m_base, snapshot.Props, snapshot.Dealer, snapshot.CardSource)
                     : m_base;
-                decimal m_cruel = cruelty != null
+                var m_cruel = cruelty != null
                     ? cruelty.ModifyVulnerableMultiplier(snapshot.Target!, m_phrog, snapshot.Props, snapshot.Dealer, snapshot.CardSource)
                     : m_phrog;
 
-                decimal multsWithoutVuln = activeMultipliers / multMod.Amount;
+                var multsWithoutVuln = activeMultipliers / multMod.Amount;
 
                 void PeelSubMultiplier(string id, decimal multWithout)
                 {
-                    decimal dmgWithout = Math.Max(0, Math.Floor(basePlusAdditives * (multsWithoutVuln * multWithout)));
-                    decimal diff = currentCalculatedDamage - dmgWithout;
+                    var dmgWithout = Math.Max(0, Math.Floor(basePlusAdditives * (multsWithoutVuln * multWithout)));
+                    var diff = currentCalculatedDamage - dmgWithout;
                     if (diff > 0)
                     {
                         decimal penalty = Math.Min(diff, overkill);
@@ -91,14 +91,14 @@ public static partial class CardRegistry
             }
 
             // STANDARD PEEL
-            decimal multsWithout = activeMultipliers / multMod.Amount;
-            decimal damageWithout = Math.Max(0, Math.Floor(basePlusAdditives * multsWithout));
-            decimal theoreticalDiff = currentCalculatedDamage - damageWithout;
+            var multsWithout = activeMultipliers / multMod.Amount;
+            var damageWithout = Math.Max(0, Math.Floor(basePlusAdditives * multsWithout));
+            var theoreticalDiff = currentCalculatedDamage - damageWithout;
 
             if (theoreticalDiff > 0)
             {
                 decimal penalty = Math.Min(theoreticalDiff, overkill);
-                decimal awardedDamage = theoreticalDiff - penalty;
+                var awardedDamage = theoreticalDiff - penalty;
                 overkill -= penalty;
 
                 if (awardedDamage > 0)
@@ -130,9 +130,9 @@ public static partial class CardRegistry
             // Multiply by activeMultipliers (which contains the Debuffs!)
             damageWithout = Math.Max(0, Math.Floor(damageWithout * activeMultipliers));
 
-            decimal theoreticalDiff = currentCalculatedDamage - damageWithout;
+            var theoreticalDiff = currentCalculatedDamage - damageWithout;
             decimal penalty = Math.Min(theoreticalDiff, overkill);
-            decimal awardedDamage = theoreticalDiff - penalty;
+            var awardedDamage = theoreticalDiff - penalty;
             overkill -= penalty;
 
             if (awardedDamage > 0)
@@ -178,7 +178,7 @@ public static partial class CardRegistry
         if (target != null && DurationLedgers.TryGetValue(target, out var targetLedger)
                            && targetLedger.TryGetValue(powerId, out var enemyLedger))
         {
-            decimal remainingToPay = amount;
+            var remainingToPay = amount;
             foreach (var contribution in enemyLedger)
             {
                 if (remainingToPay <= 0) break;
@@ -194,7 +194,7 @@ public static partial class CardRegistry
         if (dealer != null && DurationLedgers.TryGetValue(dealer, out var dealerLedger)
                            && dealerLedger.TryGetValue(powerId, out var playerDurationLedger))
         {
-            decimal remainingToPay = amount;
+            var remainingToPay = amount;
             foreach (var contribution in playerDurationLedger)
             {
                 if (remainingToPay <= 0) break;
@@ -209,7 +209,7 @@ public static partial class CardRegistry
         // 3. Consumable Player Buff (Pen Nib)
         if (ConsumableLedgers.TryGetValue(powerId, out var consumableLedger))
         {
-            decimal remainingToPay = amount;
+            var remainingToPay = amount;
             foreach (var contribution in consumableLedger)
             {
                 if (remainingToPay <= 0) break;
@@ -224,10 +224,10 @@ public static partial class CardRegistry
         // 4. Persistent Player Buff (Strength, Accuracy, PhantomBlades)
         if (PersistentLedgers.TryGetValue(powerId, out var persistentLedger))
         {
-            decimal totalPool = persistentLedger.Sum(c => c.Amount);
+            var totalPool = persistentLedger.Sum(c => c.Amount);
             if (totalPool > 0)
             {
-                decimal remainingToPay = amount;
+                var remainingToPay = amount;
                 for (int i = 0; i < persistentLedger.Count; i++)
                 {
                     var contribution = persistentLedger[i];
@@ -269,7 +269,7 @@ public static partial class CardRegistry
         // 1. Consumable (Vigor)
         if (ConsumableLedgers.ContainsKey(powerId))
         {
-            decimal remainingToPay = amount;
+            var remainingToPay = amount;
             foreach (var contribution in ConsumableLedgers[powerId])
             {
                 if (remainingToPay <= 0) break;
@@ -284,10 +284,10 @@ public static partial class CardRegistry
         // 2. Persistent Buff (Strength, Accuracy, PhantomBlades)
         if (PersistentLedgers.TryGetValue(powerId, out var persistentLedger))
         {
-            decimal totalPool = persistentLedger.Sum(c => c.Amount);
+            var totalPool = persistentLedger.Sum(c => c.Amount);
             if (totalPool > 0)
             {
-                decimal remainingToPay = amount;
+                var remainingToPay = amount;
                 for (int i = 0; i < persistentLedger.Count; i++)
                 {
                     var contribution = persistentLedger[i];

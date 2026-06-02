@@ -331,7 +331,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var copyCounts = activeDeckIds.GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());
-            HashSet<string> uniqueActiveIds = new HashSet<string>(activeDeckIds);
+            var uniqueActiveIds = new HashSet<string>(activeDeckIds);
             
             GD.Print($"[DeckTracker] SyncDeckState. Floor: {currentFloor}, Active Count: {activeDeckIds.Count}");
             foreach (var stat in EntityLedger.Values.OfType<CardStats>())
@@ -342,13 +342,13 @@ public static partial class CardRegistry
                     stat.IsActive = false;
                     stat.CopiesInDeck = 0;
                         
-                    int floorLeft = Math.Max(1, currentFloor - 1);
+                    var floorLeft = Math.Max(1, currentFloor - 1);
                     if (stat.FloorRemoved == -1)
                     {
                         stat.FloorLeftDeck = floorLeft;
                     }
                 }
-                else if (copyCounts.TryGetValue(stat.Id, out int count))
+                else if (copyCounts.TryGetValue(stat.Id, out var count))
                 {
                     stat.IsActive = true;
                     stat.CopiesInDeck = count;
@@ -361,11 +361,7 @@ public static partial class CardRegistry
     public static MegaCrit.Sts2.Core.Runs.RunState? GetLiveRunState()
     {
         var stateProperty = AccessTools.Property(typeof(MegaCrit.Sts2.Core.Runs.RunManager), "State");
-        if (stateProperty != null)
-        {
-            return stateProperty.GetValue(MegaCrit.Sts2.Core.Runs.RunManager.Instance) as MegaCrit.Sts2.Core.Runs.RunState;
-        }
-        return null;
+        return stateProperty?.GetValue(MegaCrit.Sts2.Core.Runs.RunManager.Instance) as MegaCrit.Sts2.Core.Runs.RunState;
     }
     
     private static void RestoreLiveInstances()
@@ -388,14 +384,14 @@ public static partial class CardRegistry
 
             foreach (var card in player.Deck.Cards)
             {
-                string trackingId = GetTrackingId(card);
+                var trackingId = GetTrackingId(card);
                 if (EntityLedger.TryGetValue(trackingId, out var entity))
                 {
                     entity.Model = card;
                 }
             }
 
-            for (int i = 0; i < player.PotionSlots.Count; i++)
+            for (var i = 0; i < player.PotionSlots.Count; i++)
             {
                 var potion = player.PotionSlots[i];
                 if (potion == null)
@@ -403,7 +399,7 @@ public static partial class CardRegistry
                     continue;
                 }
 
-                string? existingId = PotionInstanceIds.FirstOrDefault(kvp => kvp.Key == potion).Value;
+                var existingId = PotionInstanceIds.FirstOrDefault(kvp => kvp.Key == potion).Value;
 
                 if (string.IsNullOrEmpty(existingId))
                 {

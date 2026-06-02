@@ -94,7 +94,7 @@ public static partial class CardRegistry
                 return;
             }
 
-            decimal totalShares = shares.Sum(c => c.Amount);
+            var totalShares = shares.Sum(c => c.Amount);
             if (totalShares <= 0)
             {
                 return;
@@ -111,8 +111,8 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] RemovePoisonSharesProportionally. Removing {decreaseAmount} from {totalShares} total shares on {target.Name}");
             foreach (var share in shares)
             {
-                decimal percentage = share.Amount / totalShares;
-                decimal amountToShave = decreaseAmount * percentage;
+                var percentage = share.Amount / totalShares;
+                var amountToShave = decreaseAmount * percentage;
                 
                 share.Amount -= amountToShave;
                 GD.Print($"[DeckTracker]   -> Decayed {share.TrackingId} by {amountToShave:F2}");

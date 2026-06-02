@@ -82,14 +82,17 @@ public static partial class CardRegistry
     // For SwordSage, replayCountAdded would be 1. Later when supporting Hidden Gem hitting this, it may be 2 or 3
     public static void UpdateSovereignBladeReplayModifierTracker(decimal replayCountAdded, CardModel? cardSource)
     {
-        if (cardSource != null && replayCountAdded > 0)
+        if (cardSource == null || replayCountAdded <= 0)
         {
-            var uniqueTrackingId = GetTrackingId(cardSource);
-            for (var i = 0; i < (int)replayCountAdded; i++)
-            {
-                GD.Print($"[DeckTracker] Adding replay modifier to history with ID {uniqueTrackingId}.");
-                BladeReplayModifierTracker.Add(cardSource);
-            }
+            Publish();
+            return;
+        }
+
+        var uniqueTrackingId = GetTrackingId(cardSource);
+        for (var i = 0; i < (int)replayCountAdded; i++)
+        {
+            GD.Print($"[DeckTracker] Adding replay modifier to history with ID {uniqueTrackingId}.");
+            BladeReplayModifierTracker.Add(cardSource);
         }
         Publish();
     }
@@ -98,12 +101,11 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            const int sovereignBladeBaseDamage = 10;
-             
             var conquerorId = GetEarliestActiveConqueror(target);
             GD.Print($"[DeckTracker] ConquerorID requested: {conquerorId}.");
             var damageToAttribute = results.TotalDamage;
             GD.Print($"[DeckTracker] Damage to attribute: {damageToAttribute}.");
+
             if (conquerorId != null)
             {
                 var completeDamage = results.TotalDamage + results.OverkillDamage;
@@ -118,93 +120,82 @@ public static partial class CardRegistry
 
                 damageToAttribute -= damageToAttributeToConqueror;
             }
-            
-            // Conqueror damage is skimmed off the top before everything else, then the natural damage is processed
-            // Order to be Sword Sage favored (vs Seeking Edge) in damage evaluation order
+
+            // Conqueror damage is skimmed off the top before everything else, then the natural damage is processed.
+            // Order is Sword Sage favored (vs Seeking Edge) in damage evaluation order.
             if (replayModifyingCard != null)
             {
-                // REPLAY HIT (Both Max and Spillover)
-                // The modifier card caused this entirely new swing to happen.
-                // It gets damage on the max hit and all AOE hits,
-                // even though the AOE would not be possible without Seeking Edge.
-                // This could be changed later to split damage between both if both are present,
-                // but to me, Sword Sage feels like it should get all the credit (the number looks very small without this)
+                // REPLAY HIT: the modifier card caused this new swing — it gets all the credit.
                 GD.Print($"[DeckTracker] Replay Hit: Attributing {damageToAttribute} to {GetTrackingId(replayModifyingCard)}");
                 AddDamage(replayModifyingCard, damageToAttribute);
             }
-            else if (seekingEdge != null) 
+            else if (seekingEdge != null)
             {
-                // SPILLOVER HIT
-                // Damage goes to Seeking Edge, not the blade or forgers
+                // SPILLOVER HIT: damage goes to Seeking Edge, not the blade or forgers.
                 AddDamage(seekingEdge, damageToAttribute);
             }
             else
             {
-                // MAX HIT
-                // Base damage goes to the blade.
-                // Note: In the future, may want to change how this handles weak / shrunk.
-                // The current implementation gives damage to base blade first before all forgers,
-                // so when weak, the blade will eat all the damage from the forgers, even though
-                // forgers actually added damage to the blade.
-                // The issue with proportional rounding (e.g. blade and forgers get 0.75%) penalty
-                // is 1) because of a lot of messy interactions with flooring in STS, 2) it would mess up
-                // interactions with truncated damage caps (e.g. intangible, Exoskeletons, maybe Skulking Colony),
-                // 3) detecting the specific debuff (weak vs shrunk) on the player is annoying (but possible, I guess)
-                // For now, just leave it at this compromise to penalize forgers when the player is weak / small.
-                AddDamage(bladeCard, Math.Min(damageToAttribute, sovereignBladeBaseDamage));
-                damageToAttribute -= sovereignBladeBaseDamage;
-
-                decimal damageToDistribute = Math.Max(0, damageToAttribute);
-                decimal totalDistributed = 0;
-
-                foreach (var forgeInstance in ForgeHistory)
-                {
-                    if (damageToDistribute <= 0) break;
-
-                    var amountToAttribute = Math.Min(damageToDistribute, forgeInstance.Amount);
-                    var idToAttribute = forgeInstance.TrackingId;
-
-                    if (EntityLedger.TryGetValue(idToAttribute, out var forgeEntity))
-                    {
-                        GD.Print($"[DeckTracker] Adding connected forge to {idToAttribute} with amount {amountToAttribute}");
-                        forgeEntity.ConnectedForgeCombat += amountToAttribute;
-
-                        // Relics don't track act-level forge breakdowns.
-                        if (forgeEntity is not RelicStats)
-                        {
-                            forgeEntity.GetAct(_currentAct)?.AddConnectedForge(_currentCombatType, amountToAttribute);
-                        }
-                    }
-
-                    damageToDistribute -= amountToAttribute;
-                    totalDistributed += amountToAttribute;
-                }
-                
-                // Fallback for forges from unknown sources (e.g. Fencing Manual before relic support is added)
-                if (damageToDistribute > 0)
-                {
-                    AddDamage(bladeCard, damageToDistribute);
-                    GD.Print(
-                        $"[DeckTracker] Warning: Went through all forgers and had remaining damage: {damageToDistribute}.");
-                }
-
-                // Although we distribute forge amounts to forgers, the damage goes to the blade initially
-                // Then this damage can be subtracted by the forge received when using the forge view.
-                AddDamage(bladeCard, totalDistributed);
-                GD.Print(
-                    $"[DeckTracker] Adding total distributed forge damage amount {totalDistributed} to Blade.");
-                if (totalDistributed > 0)
-                {
-                    string bladeTrackingId = GetTrackingId(bladeCard);
-                    if (EntityLedger.TryGetValue(bladeTrackingId, out var bladeEntity))
-                    {
-                        bladeEntity.ReceivedForgeCombat += totalDistributed;
-                        bladeEntity.GetAct(_currentAct)?.AddReceivedForge(_currentCombatType, totalDistributed);
-                    }
-                }
+                // MAX HIT: base damage to the blade, remainder distributed across forge history.
+                AttributeMaxHitDamage(bladeCard, damageToAttribute);
             }
         }
         Publish();
+    }
+
+    // Distributes the max-hit damage across the blade and its forge contributors.
+    // Note: forgers always receive connected-forge credit, but the blade absorbs the raw damage number
+    // (which the UI then offsets with ReceivedForgeCombat). This is a deliberate compromise that avoids
+    // complex per-debuff proportional rounding — see inline comment history for details.
+    private static void AttributeMaxHitDamage(CardModel bladeCard, decimal damageToAttribute)
+    {
+        const int sovereignBladeBaseDamage = 10;
+        AddDamage(bladeCard, Math.Min(damageToAttribute, sovereignBladeBaseDamage));
+        damageToAttribute -= sovereignBladeBaseDamage;
+
+        var (totalDistributed, remaining) = DistributeForgeHistory(Math.Max(0, damageToAttribute));
+
+        if (remaining > 0)
+        {
+            AddDamage(bladeCard, remaining);
+            GD.Print($"[DeckTracker] Warning: Went through all forgers and had remaining damage: {remaining}.");
+        }
+
+        AddDamage(bladeCard, totalDistributed);
+        GD.Print($"[DeckTracker] Adding total distributed forge damage amount {totalDistributed} to Blade.");
+
+        if (totalDistributed <= 0) return;
+
+        var bladeTrackingId = GetTrackingId(bladeCard);
+        if (!EntityLedger.TryGetValue(bladeTrackingId, out var bladeEntity)) return;
+
+        bladeEntity.ReceivedForgeCombat += totalDistributed;
+        bladeEntity.GetAct(_currentAct)?.AddReceivedForge(_currentCombatType, totalDistributed);
+    }
+
+    private static (decimal distributed, decimal remaining) DistributeForgeHistory(decimal damageToDistribute)
+    {
+        decimal totalDistributed = 0;
+        foreach (var forgeInstance in ForgeHistory)
+        {
+            if (damageToDistribute <= 0) break;
+
+            var amount = Math.Min(damageToDistribute, forgeInstance.Amount);
+            damageToDistribute -= amount;
+            totalDistributed += amount;
+
+            if (!EntityLedger.TryGetValue(forgeInstance.TrackingId, out var entity)) continue;
+
+            GD.Print($"[DeckTracker] Adding connected forge to {forgeInstance.TrackingId} with amount {amount}");
+            entity.ConnectedForgeCombat += amount;
+
+            // Relics don't track act-level forge breakdowns.
+            if (entity is not RelicStats)
+            {
+                entity.GetAct(_currentAct)?.AddConnectedForge(_currentCombatType, amount);
+            }
+        }
+        return (totalDistributed, damageToDistribute);
     }
     
     

@@ -102,13 +102,13 @@ internal static partial class HookPatches
 
         foreach (var mod in modifiers)
         {
-            decimal addAmount = mod.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
+            var addAmount = mod.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
             if (addAmount > 0)
             {
                 snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = addAmount });
             }
 
-            decimal multAmount = mod.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
+            var multAmount = mod.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
             if (multAmount != 1m && multAmount != 0m)
             {
                 snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = multAmount });

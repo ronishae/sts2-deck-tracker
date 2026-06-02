@@ -176,7 +176,7 @@ public static partial class CardRegistry
                 return;
             }
 
-            decimal remainingToRemove = amount;
+            var remainingToRemove = amount;
             GD.Print($"[DeckTracker] RemoveDurationBuff. Removing {amount} {buffType} from {target.Name}");
             
             // FIFO removal because older durations tick down first!
@@ -212,7 +212,7 @@ public static partial class CardRegistry
                 PersistentLedgers[buffType] = new List<Contribution>();
             }
             
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
+            var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
             PersistentLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] AddPersistentBuff. Added {amount} {buffType} to persistent ledger for {trackingId}");
         }
@@ -249,7 +249,7 @@ public static partial class CardRegistry
                 return;
             }
             
-            decimal remainingToRemove = amount;
+            var remainingToRemove = amount;
             GD.Print($"[DeckTracker] RemovePersistentBuff. Removing {amount} {buffType}");
             
             // Remove LIFO (Last-In-First-Out) for things like Temporary Strength expiring or Debuffs
@@ -284,7 +284,7 @@ public static partial class CardRegistry
                 ConsumableLedgers[buffType] = new List<Contribution>();
             }
             
-            string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
+            var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
             ConsumableLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] AddConsumableBuff. Added {amount} {buffType} to consumable FIFO ledger for {trackingId}");
         }
@@ -303,7 +303,7 @@ public static partial class CardRegistry
                 return;
             }
 
-            decimal remainingToRemove = amount;
+            var remainingToRemove = amount;
             GD.Print($"[DeckTracker] RemoveConsumableBuff. Consuming {amount} {buffType}");
             
             // Remove FIFO (First-In-First-Out) because older Vigor gets consumed first!

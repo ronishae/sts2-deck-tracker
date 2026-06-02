@@ -24,11 +24,11 @@ public static partial class CardRegistry
         {
             lock (SyncRoot)
             {
-                decimal rem = amount;
+                var rem = amount;
                 foreach (var c in CountdownHistory)
                 {
                     if (rem <= 0) break;
-                    decimal a = Math.Min(rem, c.Amount);
+                    var a = Math.Min(rem,c.Amount);
                     AddDoomHistoryById(target, a, c.TrackingId);
                     rem -= a;
                 }
@@ -40,12 +40,12 @@ public static partial class CardRegistry
         {
             lock (SyncRoot)
             {
-                decimal rem = amount;
-                decimal dmg = GetReaperDamage();
+                var rem = amount;
+                var dmg = GetReaperDamage();
                 foreach (var s in ReaperFormShares)
                 {
                     if (rem <= 0) break;
-                    decimal a = Math.Min(rem, s.Amount * dmg);
+                    var a = Math.Min(rem,s.Amount * dmg);
                     AddDoomHistoryById(target, a, s.TrackingId);
                     rem -= a;
                 }
@@ -81,7 +81,7 @@ public static partial class CardRegistry
         {
             if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<Contribution>();
 
-            string uniqueId = GetTrackingId(cardSource);
+            var uniqueId = GetTrackingId(cardSource);
             DoomHistory[target].Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             GD.Print($"[DeckTracker] Added {amount} Doom to FIFO queue for {uniqueId}.");
         }
@@ -125,7 +125,7 @@ public static partial class CardRegistry
         {
             foreach (var creature in creatures)
             {
-                if (!PendingDoomHp.TryGetValue(creature, out decimal hpToDistribute) || hpToDistribute <= 0)
+                if (!PendingDoomHp.TryGetValue(creature, out var hpToDistribute) || hpToDistribute <= 0)
                 {
                     continue;
                 }
@@ -136,13 +136,13 @@ public static partial class CardRegistry
                     continue;
                 }
 
-                decimal remainingHp = hpToDistribute;
+                var remainingHp = hpToDistribute;
                 
                 foreach (var contribution in history)
                 {
                     if (remainingHp <= 0) break;
 
-                    decimal amountToAttribute = Math.Min(remainingHp, contribution.Amount);
+                    var amountToAttribute = Math.Min(remainingHp, contribution.Amount);
                     
                     GD.Print($"[DeckTracker] Attributing {amountToAttribute} Doom damage to {contribution.TrackingId}");
                     

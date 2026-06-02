@@ -124,7 +124,7 @@ public static partial class CardRegistry
         }
         lock (SyncRoot)
         {
-            string id = GetTrackingId(cardSource);
+            var id = GetTrackingId(cardSource);
             LoopHistory.Add(new Contribution { TrackingId = id, Amount = amount });
             GD.Print($"[DeckTracker] AddLoop. Amount: {amount}, Source: {id}");
         }
@@ -251,8 +251,8 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            decimal remaining = totalDamage;
-            decimal totalRelicMods = 0m;
+            var remaining = totalDamage;
+            var totalRelicMods = 0m;
             GD.Print($"[DeckTracker] DistributeOrbDamage (Waterfall). Total: {totalDamage}, Orb: {context.Orb.Id.Entry}");
 
             if (RelicExecutionManager.PendingOrbModifiers.Value != null)
@@ -273,7 +273,7 @@ public static partial class CardRegistry
             {
                 if (context.IsEvoke && CurrentPlayingCard != null)
                 {
-                    string multiId = GetTrackingId(CurrentPlayingCard);
+                    var multiId = GetTrackingId(CurrentPlayingCard);
                     AddDamageById(multiId, remaining);
                     GD.Print($"[DeckTracker] DistributeOrbDamage (Phantom Evoke). Attributed {remaining} to {multiId}");
                     return;
@@ -321,7 +321,7 @@ public static partial class CardRegistry
 
             if (cPayout != 0)
             {
-                string baseTarget = (!context.IsEvoke && context.ForcedActorId != null) ? context.ForcedActorId : channelerId;
+                var baseTarget =(!context.IsEvoke && context.ForcedActorId != null) ? context.ForcedActorId : channelerId;
                 AddDamageById(baseTarget, cPayout);
                 GD.Print($"[DeckTracker]   -> Base Payout: {cPayout}, To: {baseTarget}");
             }

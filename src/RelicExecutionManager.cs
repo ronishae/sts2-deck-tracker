@@ -50,9 +50,9 @@ public static class RelicExecutionManager
         if (__result && modifiedAmount > amount)
         {
             CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
-            decimal delta = modifiedAmount - amount;
-            string relicId = "RELIC_" + __instance.Id.Entry;
-            string powerId = canonicalPower.Id.Entry ?? "";
+            var delta = modifiedAmount - amount;
+            var relicId = "RELIC_" + __instance.Id.Entry;
+            var powerId = canonicalPower.Id.Entry ?? "";
 
             GD.Print($"[DeckTracker] {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
 
@@ -60,11 +60,9 @@ public static class RelicExecutionManager
             if (powerId == "STRENGTH_POWER")
             {
                 CardRegistry.AddPersistentBuffById(powerId, delta, relicId);
+                return;
             }
-            else
-            {
-                GD.Print($"[DeckTracker] Warning: TryModifyPowerAmountReceivedPostfix encountered unsupported power amount modification.");
-            }
+            GD.Print($"[DeckTracker] Warning: TryModifyPowerAmountReceivedPostfix encountered unsupported power amount modification.");
         }
     }
 
@@ -73,9 +71,9 @@ public static class RelicExecutionManager
         if (__result > amount)
         {
             CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
-            decimal delta = __result - amount;
-            string relicId = "RELIC_" + __instance.Id.Entry;
-            string powerId = power.Id.Entry ?? "";
+            var delta = __result - amount;
+            var relicId = "RELIC_" + __instance.Id.Entry;
+            var powerId = power.Id.Entry ?? "";
 
             // Direct Injection! No dictionary needed.
             if (powerId == "POISON_POWER" && target != null)

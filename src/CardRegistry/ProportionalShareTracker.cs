@@ -66,7 +66,7 @@ public class ProportionalShareTracker : ITrackerState
         }
         lock (CardRegistry.SyncRoot)
         {
-            decimal totalShares = _ledger.Sum(x => x.Amount);
+            var totalShares = _ledger.Sum(x => x.Amount);
             if (totalShares <= 0)
             {
                 return;
@@ -82,8 +82,8 @@ public class ProportionalShareTracker : ITrackerState
             GD.Print($"[DeckTracker] RemoveSharesProportionally ({PowerId}). Removing {amountToRemove} from {totalShares} total shares.");
             foreach (var share in _ledger)
             {
-                decimal proportion = share.Amount / totalShares;
-                decimal reduction = amountToRemove * proportion;
+                var proportion = share.Amount / totalShares;
+                var reduction = amountToRemove * proportion;
                 share.Amount = Math.Max(0, share.Amount - reduction);
                 GD.Print($"[DeckTracker]   -> Reduced {share.TrackingId} by {reduction:F2}");
             }
@@ -108,7 +108,7 @@ public class ProportionalShareTracker : ITrackerState
         }
         lock (CardRegistry.SyncRoot)
         {
-            decimal totalShares = _ledger.Sum(x => x.Amount);
+            var totalShares = _ledger.Sum(x => x.Amount);
             if (totalShares <= 0)
             {
                 return;
@@ -117,8 +117,8 @@ public class ProportionalShareTracker : ITrackerState
             GD.Print($"[DeckTracker] DistributeProportional ({PowerId}). Context: {contextName}, Total: {totalAmount}");
             foreach (var share in _ledger)
             {
-                decimal proportion = share.Amount / totalShares;
-                decimal attributed = totalAmount * proportion;
+                var proportion = share.Amount / totalShares;
+                var attributed = totalAmount * proportion;
                 
                 if (attributed > 0)
                 {
