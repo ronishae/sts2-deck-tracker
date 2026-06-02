@@ -3,7 +3,7 @@ using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
-public partial class CardRegistry
+public static partial class CardRegistry
 {
     // Tracks how many times an orb has naturally fired its passive this turn
     public static readonly Dictionary<OrbModel, int> EotPassiveCounts = new();

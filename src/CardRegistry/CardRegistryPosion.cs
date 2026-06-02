@@ -22,6 +22,26 @@ public static partial class CardRegistry
     // AsyncLocal is used to keep the variable consistent across threads when dealing with async tasks
     public static readonly AsyncLocal<Creature?> CurrentPoisonTarget = new();
 
+    public static void RoutePoisonApplication(Creature target, decimal amount, CardModel? cardSource)
+    {
+        if (amount > 0)
+        {
+            var executingProp = ProportionalTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+            if (executingProp != null)
+            {
+                executingProp.DistributeProportional(amount, (id, amt) => AddPoisonSharesById(target, amt, id), "Poison Handoff");
+            }
+            else
+            {
+                AddPoisonSharesById(target, amount, GetCurrentSourceId(cardSource));
+            }
+        }
+        else if (amount < 0)
+        {
+            RemovePoisonSharesProportionally(target, Math.Abs(amount));
+        }
+    }
+
     public static void ResetPoisonState()
     {
         lock (SyncRoot)

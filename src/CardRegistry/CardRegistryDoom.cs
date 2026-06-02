@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Godot;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
@@ -13,6 +15,54 @@ public static partial class CardRegistry
     
     // Captures HP right before CreatureCmd.Kill happens
     private static readonly Dictionary<Creature, decimal> PendingDoomHp = new();
+
+    public static void RouteDoomApplication(Creature target, decimal amount, CardModel? cardSource)
+    {
+        if (amount <= 0) return;
+
+        if (IsCountdownExecuting.Value)
+        {
+            lock (SyncRoot)
+            {
+                decimal rem = amount;
+                foreach (var c in CountdownHistory)
+                {
+                    if (rem <= 0) break;
+                    decimal a = Math.Min(rem, c.Amount);
+                    AddDoomHistoryById(target, a, c.TrackingId);
+                    rem -= a;
+                }
+            }
+            return;
+        }
+
+        if (IsReaperFormExecuting.Value)
+        {
+            lock (SyncRoot)
+            {
+                decimal rem = amount;
+                decimal dmg = GetReaperDamage();
+                foreach (var s in ReaperFormShares)
+                {
+                    if (rem <= 0) break;
+                    decimal a = Math.Min(rem, s.Shares * dmg);
+                    AddDoomHistoryById(target, a, s.TrackingId);
+                    rem -= a;
+                }
+            }
+            return;
+        }
+
+        var executingTargeted = TargetedTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+        if (executingTargeted != null)
+        {
+            executingTargeted.DistributeDamage(target, amount);
+        }
+        else
+        {
+            AddDoomHistoryById(target, amount, GetCurrentSourceId(cardSource));
+        }
+    }
 
     public static void ResetDoomState()
     {

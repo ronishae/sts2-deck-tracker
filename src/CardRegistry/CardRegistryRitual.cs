@@ -1,6 +1,6 @@
 namespace DeckTracker;
 
-public partial class CardRegistry
+public static partial class CardRegistry
 {
     // --- RITUAL EXACT-AMOUNT TRACKER ---
     public static Dictionary<string, decimal> RitualSources = new();

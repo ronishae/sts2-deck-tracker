@@ -272,6 +272,7 @@ public static partial class CardRegistry
         {
             _currentCombatType = "Unknown";
             _incrementedThisCombat.Clear();
+            ResetForgeState();
             ResetSovereignBladeState();
             ResetNecroMasteryState();
             ResetFanOfKnivesState();

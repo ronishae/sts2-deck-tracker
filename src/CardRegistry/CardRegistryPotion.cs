@@ -6,7 +6,7 @@ using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
-public partial class CardRegistry
+public static partial class CardRegistry
 {
 
     // We use a ConditionalWeakTable or Dictionary to map the live object to our unique ID

@@ -1,6 +1,6 @@
 namespace DeckTracker;
 
-public partial class CardRegistry
+public static partial class CardRegistry
 {
     // --- THE BOOT TRACKING ---
     public static readonly AsyncLocal<int> PendingBootDamage = new();

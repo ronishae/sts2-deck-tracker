@@ -3,7 +3,7 @@ using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
-public partial class CardRegistry
+public static partial class CardRegistry
 {
     // --- RELIC TRACKING ---
     public static readonly Dictionary<string, string> RelicNameCache = new();
