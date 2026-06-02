@@ -909,6 +909,36 @@ internal static class HookPatches
                     CardRegistry.RemovePersistentBuff("CALCIFY_POWER", Math.Abs(amount));
                 }
                 break;
+            case FlankingPower:     
+            case KnockdownPower: 
+                if (amount > 0 && target != null)
+                {
+                    string sourceId = "";
+                
+                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    {
+                        GD.Print($"[DeckTracker] Warning: potion applied flanking or knockdown power ");
+                        sourceId = potionId;
+                    }
+                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                    {
+                        GD.Print($"[DeckTracker] Warning: relic applied flanking or knockdown power ");
+                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                    }
+                    else if (cardSource != null)
+                        sourceId = CardRegistry.GetTrackingId(cardSource);
+
+                    if (!string.IsNullOrEmpty(sourceId))
+                    {
+                        // Logs the debuff to the target's Duration FIFO ledger!
+                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, sourceId);
+                    }
+                }
+                else if (amount < 0 && target != null) 
+                {
+                    CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
+                }
+                break;
         }
     }
     
@@ -1445,7 +1475,7 @@ internal static class HookPatches
         // ORB INTERCEPT
         if (CardRegistry.ExecutingOrb != null && damageAmount > 0)
         {
-            Creature player = combatState.Players[0].Creature;
+            Creature player = CardRegistry.ExecutingOrb.Orb.Owner.Creature;
             CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb, damageAmount, player);
             return; 
         }
@@ -1739,19 +1769,19 @@ internal static class HookPatches
     private static List<string> ScanDeckForCards(IRunState? runState)
     {
         List<string> deckIds = new();
-        
         if (runState == null) return deckIds;
-        try 
-        {
-            var players = runState.Players;
-            if (players.Count == 0) return deckIds;
+        var players = runState.Players;
+        if (players.Count == 0) return deckIds;
 
-            ScanPlayerPiles(players[0], deckIds);
-        } 
-        catch { }
+        // THE FIX: Scan the decks of every player in the lobby!
+        foreach (var player in players)
+        {
+            ScanPlayerPiles(player, deckIds);
+        }
+
         return deckIds;
     }
-
+    
     private static void ScanPlayerPiles(Player player, List<string> deckIds)
     {
         var deck = player.Deck;
