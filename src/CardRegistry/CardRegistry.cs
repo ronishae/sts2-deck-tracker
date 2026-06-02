@@ -271,9 +271,10 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             _currentCombatType = "Unknown";
-            _incrementedThisCombat.Clear(); 
-            ForgeHistory.Clear();
-            BladeReplayModifierTracker.Clear();
+            _incrementedThisCombat.Clear();
+            ResetSovereignBladeState();
+            ResetNecroMasteryState();
+            ResetFanOfKnivesState();
             ResetPoisonState();
             ResetReaperFormState();
             ResetDoomState();

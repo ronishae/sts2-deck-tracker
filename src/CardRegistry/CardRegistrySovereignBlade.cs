@@ -14,6 +14,20 @@ public static partial class CardRegistry
     private static readonly List<CardModel?> BladeReplayModifierTracker = [];
     private static readonly List<FurnaceContribution> FurnaceContributions = [];
     
+    public static void ResetSovereignBladeState()
+    {
+        lock (SyncRoot)
+        {
+            ForgeHistory.Clear();
+            FurnaceContributions.Clear();
+            SovereignBladeDamageHistory.Clear();
+            ConquerorTracker.Clear();
+            BladeReplayModifierTracker.Clear();
+            _activeSeekingEdgeCard = null;
+            GD.Print("[DeckTracker] ResetSovereignBladeState. All sovereign blade state cleared.");
+        }
+    }
+
     public static void AddRelicForge(string relicId, decimal rawForge, decimal connectedForge, decimal receivedForge)
     {
         lock (SyncRoot)
