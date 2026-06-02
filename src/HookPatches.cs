@@ -200,6 +200,24 @@ internal static class HookPatches
         CardModel? cardSource)
     {
         GD.Print($"[DeckTracker] Card {cardSource?.Id.Entry} did {power} power with amount {amount} {target.Name}.");
+
+        if (CardRegistry.SimpleDamageTrackers.TryGetValue(power.Id.Entry, out var tracker))
+        {
+            if (amount > 0 && target.IsPlayer) // Only track player buffs for damage!
+            {
+                string fallback = "External_Source";
+                if (cardSource == null)
+                {
+                    if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+                        fallback = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+                    else if (CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                        fallback = potionId;
+                }
+                tracker.LogApply(cardSource, amount, fallback);
+            }
+            return;
+        }
+
         switch (power)
         {
             case ConquerorPower:
@@ -222,51 +240,17 @@ internal static class HookPatches
             case OblivionPower:
                 if (amount > 0) CardRegistry.LogOblivionApply(target, cardSource, (int)amount);
                 break;
-            case SerpentFormPower:
-                if (amount > 0) CardRegistry.LogSerpentFormApply(cardSource, (int)amount);
-                break;
             case ReaperFormPower:
                 if (amount > 0) CardRegistry.AddReaperFormShares(amount, cardSource);
                 break;
-            case BlackHolePower:
-                if (amount > 0) CardRegistry.LogBlackHoleApply(cardSource, (int)amount);
-                break;
-            case SleightOfFleshPower:
-                if (amount > 0) CardRegistry.LogSleightOfFleshApply(cardSource, (int)amount);
-                break;
-            case HauntPower:
-                if (amount > 0) CardRegistry.LogHauntApply(cardSource, (int)amount);
-                break;
-            case SpeedsterPower:
-                if (amount > 0) CardRegistry.LogSpeedsterApply(cardSource, (int)amount);
-                break;
-            case ThunderPower:
-                if (amount > 0) CardRegistry.LogThunderApply(cardSource, (int)amount);
-                break;
             case StormPower:
                 if (amount > 0) CardRegistry.LogStormApply(cardSource, (int)amount);
-                break;
-            case HailstormPower:
-                if (amount > 0) CardRegistry.LogHailstormApply(cardSource, (int)amount);
-                break;
-            case JuggernautPower:
-                if (amount > 0) CardRegistry.LogJuggernautApply(cardSource, (int)amount);
                 break;
             case NecroMasteryPower:
                 if (amount > 0) CardRegistry.LogNecroMasteryApply(cardSource, (int)amount);
                 break;
             case RollingBoulderPower:
                 CardRegistry.LogRollingBoulderInstance(power, cardSource);
-                break;
-            case ThornsPower:
-                if (amount > 0 && target.IsPlayer)
-                {
-                    // Relic, Card, and Potion differences are split inside the function
-                    CardRegistry.LogThornsApply(cardSource, (int)amount);
-                }
-                break;
-            case FlameBarrierPower:
-                if (amount > 0) CardRegistry.LogFlameBarrierApply(cardSource, (int)amount);
                 break;
             case CorrosiveWavePower:
                 if (amount > 0) 
@@ -1054,14 +1038,20 @@ internal static class HookPatches
         __result = CardRegistry.AwaitOblivionTaskAsync(__result);
     }
 
-    public static void SerpentFormAfterCardPlayedPrefix(SerpentFormPower __instance)
+    public static void GenericPowerPrefix(PowerModel __instance)
     {
-        CardRegistry.StartSerpentFormExecution();
+        if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var tracker))
+        {
+            tracker.StartExecution();
+        }
     }
 
-    public static void SerpentFormAfterCardPlayedPostfix(SerpentFormPower __instance, ref Task __result)
+    public static void GenericPowerPostfix(PowerModel __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitSerpentFormTaskAsync(__result);
+        if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var tracker))
+        {
+            __result = tracker.AwaitTaskAsync(__result);
+        }
     }
 
     public static void ReaperFormAfterDamageGivenPrefix(ReaperFormPower __instance, DamageResult result)
@@ -1072,66 +1062,6 @@ internal static class HookPatches
     public static void ReaperFormAfterDamageGivenPostfix(ReaperFormPower __instance, ref Task __result, DamageResult result)
     {
         __result = CardRegistry.AwaitReaperFormTaskAsync(__result, result.TotalDamage);
-    }
-
-    public static void BlackHoleAfterCardPlayedPrefix(BlackHolePower __instance)
-    {
-        CardRegistry.StartBlackHoleExecution();
-    }
-
-    public static void BlackHoleAfterCardPlayedPostfix(BlackHolePower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitBlackHoleTaskAsync(__result);
-    }
-
-    public static void BlackHoleAfterStarsGainedPrefix(BlackHolePower __instance)
-    {
-        CardRegistry.StartBlackHoleExecution();
-    }
-
-    public static void BlackHoleAfterStarsGainedPostfix(BlackHolePower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitBlackHoleTaskAsync(__result);
-    }
-
-    public static void SleightOfFleshAfterPowerAmountChangedPrefix(SleightOfFleshPower __instance)
-    {
-        CardRegistry.StartSleightOfFleshExecution();
-    }
-
-    public static void SleightOfFleshAfterPowerAmountChangedPostfix(SleightOfFleshPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitSleightOfFleshTaskAsync(__result);
-    }
-
-    public static void HauntAfterCardPlayedPrefix(HauntPower __instance)
-    {
-        CardRegistry.StartHauntExecution();
-    }
-
-    public static void HauntAfterCardPlayedPostfix(HauntPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitHauntTaskAsync(__result);
-    }
-
-    public static void SpeedsterAfterCardDrawnPrefix(SpeedsterPower __instance)
-    {
-        CardRegistry.StartSpeedsterExecution();
-    }
-
-    public static void SpeedsterAfterCardDrawnPostfix(SpeedsterPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitSpeedsterTaskAsync(__result);
-    }
-
-    public static void ThunderAfterOrbEvokedPrefix(ThunderPower __instance)
-    {
-        CardRegistry.StartThunderExecution();
-    }
-
-    public static void ThunderAfterOrbEvokedPostfix(ThunderPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitThunderTaskAsync(__result);
     }
 
     public static void StormAfterCardPlayedPrefix(StormPower __instance)
@@ -1155,26 +1085,6 @@ internal static class HookPatches
         __result = CardRegistry.AwaitStormTaskAsync(__result);
     }
 
-    public static void HailstormBeforeTurnEndPrefix(HailstormPower __instance)
-    {
-        CardRegistry.StartHailstormExecution();
-    }
-
-    public static void HailstormBeforeTurnEndPostfix(HailstormPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitHailstormTaskAsync(__result);
-    }
-
-    public static void JuggernautAfterBlockGainedPrefix(JuggernautPower __instance)
-    {
-        CardRegistry.StartJuggernautExecution();
-    }
-
-    public static void JuggernautAfterBlockGainedPostfix(JuggernautPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitJuggernautTaskAsync(__result);
-    }
-
     public static void NecroMasteryAfterCurrentHpChangedPrefix(NecroMasteryPower __instance, decimal delta )
     {
         CardRegistry.StartNecroMasteryExecution(delta);
@@ -1185,26 +1095,6 @@ internal static class HookPatches
         __result = CardRegistry.AwaitNecroMasteryTaskAsync(__result, delta);
     }
 
-    public static void ThornsBeforeDamageReceivedPrefix(ThornsPower __instance)
-    {
-        CardRegistry.StartThornsExecution();
-    }
-
-    public static void ThornsBeforeDamageReceivedPostfix(ThornsPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitThornsTaskAsync(__result);
-    }
-
-    public static void FlameBarrierAfterDamageReceivedPrefix(FlameBarrierPower __instance)
-    {
-        CardRegistry.StartFlameBarrierExecution();
-    }
-
-    public static void FlameBarrierAfterDamageReceivedPostfix(FlameBarrierPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitFlameBarrierTaskAsync(__result);
-    }
-    
     public static void ReflectAfterDamageReceivedPrefix(ReflectPower __instance)
     {
         CardRegistry.StartReflectExecution();
@@ -1221,11 +1111,13 @@ internal static class HookPatches
         
         GD.Print($"[DeckTracker] BeforePowerRemovedPrefix: {power.GetType().Name} removed from {power.Owner.Name}");
         
+        if (CardRegistry.SimpleDamageTrackers.TryGetValue(power.Id.Entry, out var tracker))
+        {
+            tracker.Reset();
+        }
+
         switch (power)
         {
-            case FlameBarrierPower:
-                CardRegistry.ClearFlameBarrier();
-                break;
             case StranglePower:
                 CardRegistry.ClearStrangle(power.Owner);
                 break;
@@ -1564,69 +1456,16 @@ internal static class HookPatches
             return;
         }
 
-        if (CardRegistry.IsSerpentFormExecuting && damageAmount > 0)
+        var executingTracker = CardRegistry.SimpleDamageTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+        if (executingTracker != null && damageAmount > 0)
         {
-            CardRegistry.DistributeSerpentFormDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsBlackHoleExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeBlackHoleDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsSleightOfFleshExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeSleightOfFleshDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsHauntExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeHauntDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsHailstormExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeHailstormDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsSpeedsterExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeSpeedsterDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsThunderExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeThunderDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsJuggernautExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeJuggernautDamage(damageAmount);
+            executingTracker.DistributeDamage(damageAmount);
             return;
         }
 
         if (CardRegistry.IsNecroMasteryExecuting && damageAmount > 0)
         {
             CardRegistry.DistributeNecroMasteryDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsThornsExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeThornsDamage(damageAmount);
-            return;
-        }
-
-        if (CardRegistry.IsFlameBarrierExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeFlameBarrierDamage(damageAmount);
             return;
         }
 

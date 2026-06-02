@@ -176,6 +176,21 @@ public static partial class CardRegistry
         return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}";
     }
 
+    // Dynamic tracking for generic FIFO damage powers
+    public static readonly Dictionary<string, GenericDamageTracker> SimpleDamageTrackers = new()
+    {
+        { "FLAME_BARRIER_POWER", new GenericDamageTracker("FLAME_BARRIER_POWER") },
+        { "JUGGERNAUT_POWER", new GenericDamageTracker("JUGGERNAUT_POWER") },
+        { "SERPENT_FORM_POWER", new GenericDamageTracker("SERPENT_FORM_POWER") },
+        { "BLACK_HOLE_POWER", new GenericDamageTracker("BLACK_HOLE_POWER") },
+        { "SLEIGHT_OF_FLESH_POWER", new GenericDamageTracker("SLEIGHT_OF_FLESH_POWER") },
+        { "HAUNT_POWER", new GenericDamageTracker("HAUNT_POWER") },
+        { "SPEEDSTER_POWER", new GenericDamageTracker("SPEEDSTER_POWER") },
+        { "THUNDER_POWER", new GenericDamageTracker("THUNDER_POWER") },
+        { "HAILSTORM_POWER", new GenericDamageTracker("HAILSTORM_POWER") },
+        { "THORNS_POWER", new GenericDamageTracker("THORNS_POWER") },
+    };
+
     private static void ResetInternalsCombat()
     {
         _currentCombatType = "Unknown"; // Clear the state
@@ -186,18 +201,10 @@ public static partial class CardRegistry
         ResetPoisonState();
         ResetStrangleState();
         ResetOblivionState();
-        ResetSerpentFormState();
         ResetReaperFormState();
-        ResetBlackHoleState();
-        ResetSleightOfFleshState();
-        ResetSpeedsterState();
-        ResetThunderState();
         ResetStormState();
-        ResetHailstormState();
         ResetFanOfKnivesState();
         ResetNecroMasteryState();
-        ResetThornsState();
-        ResetFlameBarrierState();
         ResetFumesState();
         ResetDoomState();
         ResetCountdownState();
@@ -225,6 +232,11 @@ public static partial class CardRegistry
         InfernoLedger.Clear();
         OutbreakLedger.Clear();
         SmokestackLedger.Clear();
+        
+        foreach (var tracker in SimpleDamageTrackers.Values)
+        {
+            tracker.Reset();
+        }
     }
     
     public static void ClearSession()

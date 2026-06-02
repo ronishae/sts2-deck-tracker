@@ -152,13 +152,32 @@ public static class ModEntry
             prefix: new HarmonyMethod(oblivionPrefix),
             postfix: new HarmonyMethod(oblivionPostfix));
 
-        var serpentOriginal = AccessTools.Method(typeof(SerpentFormPower), nameof(SerpentFormPower.AfterCardPlayed));
-        var serpentPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SerpentFormAfterCardPlayedPrefix));
-        var serpentPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SerpentFormAfterCardPlayedPostfix));
-        
-        _harmony.Patch(serpentOriginal, 
-            prefix: new HarmonyMethod(serpentPrefix), 
-            postfix: new HarmonyMethod(serpentPostfix));
+        var genericPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPrefix)));
+        var genericPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPostfix)));
+
+        var simplePowerMethods = new (Type, string)[]
+        {
+            (typeof(FlameBarrierPower), nameof(FlameBarrierPower.AfterDamageReceived)),
+            (typeof(JuggernautPower), nameof(JuggernautPower.AfterBlockGained)),
+            (typeof(SerpentFormPower), nameof(SerpentFormPower.AfterCardPlayed)),
+            (typeof(BlackHolePower), nameof(BlackHolePower.AfterCardPlayed)),
+            (typeof(BlackHolePower), nameof(BlackHolePower.AfterStarsGained)),
+            (typeof(SleightOfFleshPower), nameof(SleightOfFleshPower.AfterPowerAmountChanged)),
+            (typeof(HauntPower), nameof(HauntPower.AfterCardPlayed)),
+            (typeof(SpeedsterPower), nameof(SpeedsterPower.AfterCardDrawn)),
+            (typeof(ThunderPower), nameof(ThunderPower.AfterOrbEvoked)),
+            (typeof(HailstormPower), nameof(HailstormPower.BeforeSideTurnEnd)),
+            (typeof(ThornsPower), nameof(ThornsPower.BeforeDamageReceived)),
+        };
+
+        foreach (var (powerType, methodName) in simplePowerMethods)
+        {
+            var original = AccessTools.Method(powerType, methodName);
+            if (original != null)
+            {
+                _harmony.Patch(original, prefix: genericPrefix, postfix: genericPostfix);
+            }
+        }
 
         var reaperOriginal = AccessTools.Method(typeof(ReaperFormPower), nameof(ReaperFormPower.AfterDamageGiven));
         var reaperPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReaperFormAfterDamageGivenPrefix));
@@ -168,41 +187,6 @@ public static class ModEntry
             prefix: new HarmonyMethod(reaperPrefix),
             postfix: new HarmonyMethod(reaperPostfix));
 
-        var blackHolePlayedOriginal = AccessTools.Method(typeof(BlackHolePower), nameof(BlackHolePower.AfterCardPlayed));
-        var blackHoleStarsOriginal = AccessTools.Method(typeof(BlackHolePower), nameof(BlackHolePower.AfterStarsGained));
-        
-        _harmony.Patch(blackHolePlayedOriginal, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterCardPlayedPrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterCardPlayedPostfix))));
-
-        _harmony.Patch(blackHoleStarsOriginal, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterStarsGainedPrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BlackHoleAfterStarsGainedPostfix))));
-
-        var sleightOriginal = AccessTools.Method(typeof(SleightOfFleshPower), nameof(SleightOfFleshPower.AfterPowerAmountChanged));
-        var sleightPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SleightOfFleshAfterPowerAmountChangedPrefix));
-        var sleightPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SleightOfFleshAfterPowerAmountChangedPostfix));
-        
-        _harmony.Patch(sleightOriginal, 
-            prefix: new HarmonyMethod(sleightPrefix), 
-            postfix: new HarmonyMethod(sleightPostfix));
-
-        var hauntOriginal = AccessTools.Method(typeof(HauntPower), nameof(HauntPower.AfterCardPlayed));
-        var hauntPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HauntAfterCardPlayedPrefix));
-        var hauntPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HauntAfterCardPlayedPostfix));
-        
-        _harmony.Patch(hauntOriginal, 
-            prefix: new HarmonyMethod(hauntPrefix), 
-            postfix: new HarmonyMethod(hauntPostfix));
-
-        var juggernautOriginal = AccessTools.Method(typeof(JuggernautPower), nameof(JuggernautPower.AfterBlockGained));
-        var juggernautPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.JuggernautAfterBlockGainedPrefix));
-        var juggernautPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.JuggernautAfterBlockGainedPostfix));
-        
-        _harmony.Patch(juggernautOriginal, 
-            prefix: new HarmonyMethod(juggernautPrefix), 
-            postfix: new HarmonyMethod(juggernautPostfix));
-
         var necroMasteryOriginal = AccessTools.Method(typeof(NecroMasteryPower), nameof(NecroMasteryPower.AfterCurrentHpChanged));
         var necroMasteryPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPrefix));
         var necroMasteryPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPostfix));
@@ -210,22 +194,6 @@ public static class ModEntry
         _harmony.Patch(necroMasteryOriginal,
             prefix: new HarmonyMethod(necroMasteryPrefix),
             postfix: new HarmonyMethod(necroMasteryPostfix));
-
-        var thornsOriginal = AccessTools.Method(typeof(ThornsPower), nameof(ThornsPower.BeforeDamageReceived));
-        var thornsPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThornsBeforeDamageReceivedPrefix));
-        var thornsPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThornsBeforeDamageReceivedPostfix));
-
-        _harmony.Patch(thornsOriginal,
-            prefix: new HarmonyMethod(thornsPrefix),
-            postfix: new HarmonyMethod(thornsPostfix));
-
-        var flameBarrierOriginal = AccessTools.Method(typeof(FlameBarrierPower), nameof(FlameBarrierPower.AfterDamageReceived));
-        var flameBarrierPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPrefix));
-        var flameBarrierPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FlameBarrierAfterDamageReceivedPostfix));
-        
-        _harmony.Patch(flameBarrierOriginal, 
-            prefix: new HarmonyMethod(flameBarrierPrefix), 
-            postfix: new HarmonyMethod(flameBarrierPostfix));
 
         var reflectOriginal = AccessTools.Method(typeof(ReflectPower), nameof(ReflectPower.AfterDamageReceived));
         var reflectPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReflectAfterDamageReceivedPrefix));
@@ -235,22 +203,6 @@ public static class ModEntry
             prefix: new HarmonyMethod(reflectPrefix), 
             postfix: new HarmonyMethod(reflectPostfix));
 
-        var speedsterOriginal = AccessTools.Method(typeof(SpeedsterPower), nameof(SpeedsterPower.AfterCardDrawn));
-        var speedsterPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpeedsterAfterCardDrawnPrefix));
-        var speedsterPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpeedsterAfterCardDrawnPostfix));
-
-        _harmony.Patch(speedsterOriginal, 
-            prefix: new HarmonyMethod(speedsterPrefix), 
-            postfix: new HarmonyMethod(speedsterPostfix));
-
-        var thunderOriginal = AccessTools.Method(typeof(ThunderPower), nameof(ThunderPower.AfterOrbEvoked));
-        var thunderPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThunderAfterOrbEvokedPrefix));
-        var thunderPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ThunderAfterOrbEvokedPostfix));
-
-        _harmony.Patch(thunderOriginal,
-            prefix: new HarmonyMethod(thunderPrefix),
-            postfix: new HarmonyMethod(thunderPostfix));
-
         var stormOriginal = AccessTools.Method(typeof(StormPower), nameof(StormPower.AfterCardPlayed));
         var stormPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StormAfterCardPlayedPrefix));
         var stormPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StormAfterCardPlayedPostfix));
@@ -258,14 +210,6 @@ public static class ModEntry
         _harmony.Patch(stormOriginal,
             prefix: new HarmonyMethod(stormPrefix),
             postfix: new HarmonyMethod(stormPostfix));
-
-        var hailstormOriginal = AccessTools.Method(typeof(HailstormPower), nameof(HailstormPower.BeforeSideTurnEnd));
-        var hailstormPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HailstormBeforeTurnEndPrefix));
-        var hailstormPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HailstormBeforeTurnEndPostfix));
-
-        _harmony.Patch(hailstormOriginal,
-            prefix: new HarmonyMethod(hailstormPrefix),
-            postfix: new HarmonyMethod(hailstormPostfix));
 
         var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });        var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
         _harmony.Patch(powerRemoveOriginal, prefix: new HarmonyMethod(powerRemovePrefix));

@@ -235,9 +235,9 @@ public static partial class CardRegistry
     {
         if (totalDamage <= 0) return;
 
-        if (IsThunderExecuting)
+        if (SimpleDamageTrackers["THUNDER_POWER"].IsExecuting)
         {
-            DistributeThunderDamage(totalDamage);
+            SimpleDamageTrackers["THUNDER_POWER"].DistributeDamage(totalDamage);
             return;
         }
 
