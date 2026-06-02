@@ -9,13 +9,13 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<NecroMasteryContribution> _necroMasteryLedger = new();
+    private static readonly List<string> _necroMasteryLedger = new();
     private static readonly AsyncLocal<bool> _isNecroMasteryExecuting = new();
     private static AsyncLocal<decimal> _delta = new();
 
     public static bool IsNecroMasteryExecuting => _isNecroMasteryExecuting.Value;
 
-    public static void StartNecroMasteryExecution(decimal delta) 
+    public static void StartNecroMasteryExecution(decimal delta)
     {
         _isNecroMasteryExecuting.Value = true;
         _delta.Value = delta;
@@ -37,7 +37,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
-            _necroMasteryLedger.Add(new NecroMasteryContribution { TrackingId = trackingId, Amount = amount });
+            _necroMasteryLedger.Add(trackingId);
             GD.Print($"[DeckTracker] LogNecroMasteryApply. Card: {trackingId}, Amount: {amount}");
         }
     }
@@ -51,18 +51,15 @@ public static partial class CardRegistry
             var remainingDamage = totalDamage;
             GD.Print($"[DeckTracker] DistributeNecroMasteryDamage. Total Damage: {totalDamage} with delta: {_delta.Value}");
 
-            // Distribute damage in FIFO order based on contributions
-            for (var i = 0; i < _necroMasteryLedger.Count && remainingDamage > 0; i++)
+            foreach (var trackingId in _necroMasteryLedger)
             {
-                var contribution = _necroMasteryLedger[i];
-                // Negate delta to get positive value
+                if (remainingDamage <= 0) break;
                 var share = Math.Min(remainingDamage, -_delta.Value);
-                
-                AddDamageById(contribution.TrackingId, share);
+                AddDamageById(trackingId, share);
                 remainingDamage -= share;
-                GD.Print($"[DeckTracker] DistributeNecroMasteryDamage. Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
+                GD.Print($"[DeckTracker] DistributeNecroMasteryDamage. Attributed {share} to {trackingId}. Remaining: {remainingDamage}");
             }
-            
+
             if (remainingDamage > 0)
             {
                 GD.Print($"[DeckTracker] DistributeNecroMasteryDamage. {remainingDamage} damage unattributed (more stacks than contributions?)");

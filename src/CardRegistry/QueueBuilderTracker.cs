@@ -12,7 +12,7 @@ public class QueueBuilderTracker : ITrackerState
 {
     public string PowerId { get; }
     public bool NeedsFlattening { get; }
-    private readonly List<PowerContribution> _ledger = new();
+    private readonly List<Contribution> _ledger = new();
     private readonly Queue<string> _queue = new();
     private readonly AsyncLocal<bool> _isExecuting = new();
     private int _spinnerIndex = 0;
@@ -52,7 +52,7 @@ public class QueueBuilderTracker : ITrackerState
         lock (CardRegistry.SyncRoot)
         {
             string id = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : "External_Source";
-            _ledger.Add(new PowerContribution { TrackingId = id, Amount = amount });
+            _ledger.Add(new Contribution { TrackingId = id, Amount = amount });
             GD.Print($"[DeckTracker] LogApply ({PowerId}). Source: {id}, Amount: {amount}");
         }
     }

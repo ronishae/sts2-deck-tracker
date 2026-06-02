@@ -11,7 +11,7 @@ namespace DeckTracker;
 public class TargetedDamageTracker : ITrackerState
 {
     public string PowerId { get; }
-    private readonly Dictionary<Creature, List<PowerContribution>> _ledgers = new();
+    private readonly Dictionary<Creature, List<Contribution>> _ledgers = new();
     private readonly AsyncLocal<bool> _isExecuting = new();
 
     public bool IsExecuting
@@ -48,12 +48,12 @@ public class TargetedDamageTracker : ITrackerState
         {
             if (!_ledgers.TryGetValue(target, out var ledger))
             {
-                ledger = new List<PowerContribution>();
+                ledger = new List<Contribution>();
                 _ledgers[target] = ledger;
             }
 
             var trackingId = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : "External_Source";
-            ledger.Add(new PowerContribution { TrackingId = trackingId, Amount = amount });
+            ledger.Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogApply (Targeted: {PowerId}). Target: {target.Name}, Source: {trackingId}, Amount: {amount}");
         }
     }

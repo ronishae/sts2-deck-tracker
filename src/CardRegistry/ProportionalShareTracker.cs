@@ -11,7 +11,7 @@ namespace DeckTracker;
 public class ProportionalShareTracker : ITrackerState
 {
     public string PowerId { get; }
-    private readonly List<PowerContribution> _ledger = new();
+    private readonly List<Contribution> _ledger = new();
     private readonly AsyncLocal<bool> _isExecuting = new();
 
     public bool IsExecuting
@@ -52,7 +52,7 @@ public class ProportionalShareTracker : ITrackerState
             }
             else
             {
-                _ledger.Add(new PowerContribution { TrackingId = trackingId, Amount = amount });
+                _ledger.Add(new Contribution { TrackingId = trackingId, Amount = amount });
             }
             GD.Print($"[DeckTracker] AddShares ({PowerId}). Source: {trackingId}, Amount: {amount}");
         }

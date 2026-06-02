@@ -11,13 +11,7 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    public class PoisonContribution
-    {
-        public string TrackingId { get; init; } = "";
-        public decimal Shares { get; set; }
-    }
-
-    private static readonly Dictionary<Creature, List<PoisonContribution>> PoisonShares = new();
+    private static readonly Dictionary<Creature, List<Contribution>> PoisonShares = new();
     
     // AsyncLocal is used to keep the variable consistent across threads when dealing with async tasks
     public static readonly AsyncLocal<Creature?> CurrentPoisonTarget = new();
@@ -62,18 +56,18 @@ public static partial class CardRegistry
         {
             if (!PoisonShares.ContainsKey(target))
             {
-                PoisonShares[target] = new List<PoisonContribution>();
+                PoisonShares[target] = new List<Contribution>();
             }
             
             var existing = PoisonShares[target].FirstOrDefault(c => c.TrackingId == uniqueId);
             
             if (existing != null) 
             {
-                existing.Shares += amount;
+                existing.Amount += amount;
             } 
             else 
             {
-                PoisonShares[target].Add(new PoisonContribution { TrackingId = uniqueId, Shares = amount });
+                PoisonShares[target].Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             }
             GD.Print($"[DeckTracker] AddPoisonSharesById. Added {amount} shares to {uniqueId} for {target.Name}");
         }
@@ -100,7 +94,7 @@ public static partial class CardRegistry
                 return;
             }
 
-            decimal totalShares = shares.Sum(c => c.Shares);
+            decimal totalShares = shares.Sum(c => c.Amount);
             if (totalShares <= 0)
             {
                 return;
@@ -117,14 +111,14 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] RemovePoisonSharesProportionally. Removing {decreaseAmount} from {totalShares} total shares on {target.Name}");
             foreach (var share in shares)
             {
-                decimal percentage = share.Shares / totalShares;
+                decimal percentage = share.Amount / totalShares;
                 decimal amountToShave = decreaseAmount * percentage;
                 
-                share.Shares -= amountToShave;
+                share.Amount -= amountToShave;
                 GD.Print($"[DeckTracker]   -> Decayed {share.TrackingId} by {amountToShave:F2}");
             }
 
-            shares.RemoveAll(c => c.Shares <= 0.01m);
+            shares.RemoveAll(c => c.Amount <= 0.01m);
             if (shares.Count == 0)
             {
                 PoisonShares.Remove(target);
@@ -141,7 +135,7 @@ public static partial class CardRegistry
                 return;
             }
 
-            var totalShares = shares.Sum(c => c.Shares);
+            var totalShares = shares.Sum(c => c.Amount);
             if (totalShares <= 0)
             {
                 return;
@@ -150,7 +144,7 @@ public static partial class CardRegistry
             GD.Print($"[DeckTracker] DistributePoisonDamage. Target: {target.Name}, Total: {totalDamage}");
             foreach (var share in shares)
             {
-                var percentage = share.Shares / totalShares;
+                var percentage = share.Amount / totalShares;
                 var attributedDamage = totalDamage * percentage;
 
                 AddDamageById(share.TrackingId, attributedDamage);

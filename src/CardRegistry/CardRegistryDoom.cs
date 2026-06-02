@@ -11,7 +11,7 @@ public static partial class CardRegistry
     
 
     // Tracks exactly who applied doom, in exact order
-    private static readonly Dictionary<Creature, List<DoomContribution>> DoomHistory = new();
+    private static readonly Dictionary<Creature, List<Contribution>> DoomHistory = new();
     
     // Captures HP right before CreatureCmd.Kill happens
     private static readonly Dictionary<Creature, decimal> PendingDoomHp = new();
@@ -45,7 +45,7 @@ public static partial class CardRegistry
                 foreach (var s in ReaperFormShares)
                 {
                     if (rem <= 0) break;
-                    decimal a = Math.Min(rem, s.Shares * dmg);
+                    decimal a = Math.Min(rem, s.Amount * dmg);
                     AddDoomHistoryById(target, a, s.TrackingId);
                     rem -= a;
                 }
@@ -79,10 +79,10 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<DoomContribution>();
+            if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<Contribution>();
 
             string uniqueId = GetTrackingId(cardSource);
-            DoomHistory[target].Add(new DoomContribution { TrackingId = uniqueId, Amount = amount });
+            DoomHistory[target].Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             GD.Print($"[DeckTracker] Added {amount} Doom to FIFO queue for {uniqueId}.");
         }
         Publish();
@@ -94,9 +94,9 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<DoomContribution>();
+            if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<Contribution>();
 
-            DoomHistory[target].Add(new DoomContribution { TrackingId = uniqueId, Amount = amount });
+            DoomHistory[target].Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             GD.Print($"[DeckTracker] Chained {amount} Doom to FIFO queue for {uniqueId}.");
         }
         Publish();

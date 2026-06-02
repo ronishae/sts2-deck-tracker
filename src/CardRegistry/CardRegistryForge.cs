@@ -6,7 +6,7 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<ForgeInstance> ForgeHistory = new();
+    private static readonly List<Contribution> ForgeHistory = new();
     private static readonly List<FurnaceContribution> FurnaceContributions = [];
 
     public static void ResetForgeState()
@@ -46,7 +46,7 @@ public static partial class CardRegistry
                 entity.GetAct(_currentAct)?.AddRawForge(_currentCombatType, amount);
             }
 
-            ForgeHistory.Add(new ForgeInstance { TrackingId = trackingId, Amount = amount });
+            ForgeHistory.Add(new Contribution { TrackingId = trackingId, Amount = amount });
         }
         Publish();
     }

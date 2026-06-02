@@ -7,9 +7,9 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    public static readonly List<ReflectContribution> ReflectQueue = new();
+    public static readonly List<string> ReflectQueue = new();
     private static readonly AsyncLocal<bool> _isReflectExecuting = new();
-    
+
     public static bool IsReflectExecuting => _isReflectExecuting.Value;
 
     public static void ResetReflectState()
@@ -24,7 +24,7 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            ReflectQueue.Add(new ReflectContribution(trackingId));
+            ReflectQueue.Add(trackingId);
         }
     }
 
@@ -62,9 +62,8 @@ public static partial class CardRegistry
         {
             if (ReflectQueue.Count > 0)
             {
-                string trackingId = ReflectQueue[0].TrackingId;
-                GD.Print($"[DeckTracker] Distributing {amount} Reflect damage to {trackingId}");
-                AddDamageById(trackingId, amount);
+                GD.Print($"[DeckTracker] Distributing {amount} Reflect damage to {ReflectQueue[0]}");
+                AddDamageById(ReflectQueue[0], amount);
             }
         }
     }

@@ -6,7 +6,7 @@ namespace DeckTracker;
 public static partial class CardRegistry
 {
     // The bucket for Reaper Form applications
-    public static readonly List<ReaperFormContribution> ReaperFormShares = new();
+    public static readonly List<Contribution> ReaperFormShares = new();
     
     public static readonly AsyncLocal<bool> IsReaperFormExecuting = new();
     private static AsyncLocal<decimal> _reaperDamage = new();
@@ -40,11 +40,11 @@ public static partial class CardRegistry
             
             if (existing != null) 
             {
-                existing.Shares += amount;
+                existing.Amount += amount;
             } 
             else 
             {
-                ReaperFormShares.Add(new ReaperFormContribution { TrackingId = uniqueId, Shares = amount });
+                ReaperFormShares.Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             }
             GD.Print($"[DeckTracker] Added {amount} Reaper Form shares to {uniqueId}.");
         }

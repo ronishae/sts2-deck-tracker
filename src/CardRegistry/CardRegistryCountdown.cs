@@ -10,7 +10,7 @@ namespace DeckTracker;
 public static partial class CardRegistry
 {
     // Tracks the exact order cards added Countdown to the player
-    public static readonly List<CountdownContribution> CountdownHistory = new();
+    public static readonly List<Contribution> CountdownHistory = new();
     
     // The Execution Scope Trap
     public static readonly AsyncLocal<bool> IsCountdownExecuting = new();
@@ -30,7 +30,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var uniqueId = GetTrackingId(cardSource);
-            CountdownHistory.Add(new CountdownContribution { TrackingId = uniqueId, Amount = amount });
+            CountdownHistory.Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             GD.Print($"[DeckTracker] Added {amount} Countdown to history for {uniqueId}.");
         }
         Publish();

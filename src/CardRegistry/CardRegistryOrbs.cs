@@ -21,9 +21,9 @@ public static partial class CardRegistry
     private static readonly Dictionary<OrbModel, string> OrbChannelers = new();
     private static readonly List<FocusContribution> FocusHistory = new();
     
-    private static readonly Dictionary<OrbModel, List<OrbContribution>> DarkOrbLedgers = new();
+    private static readonly Dictionary<OrbModel, List<Contribution>> DarkOrbLedgers = new();
     
-    public static readonly List<LoopContribution> LoopHistory = new();
+    public static readonly List<Contribution> LoopHistory = new();
     public static readonly List<string> CurrentTurnLoopQueue = new();
     public static readonly AsyncLocal<bool> IsLoopExecuting = new();
     
@@ -93,8 +93,8 @@ public static partial class CardRegistry
             
             if (orb is DarkOrb)
             {
-                DarkOrbLedgers[orb] = new List<OrbContribution>();
-                DarkOrbLedgers[orb].Add(new OrbContribution { TrackingId = trackingId, Amount = orb.EvokeVal });
+                DarkOrbLedgers[orb] = new List<Contribution>();
+                DarkOrbLedgers[orb].Add(new Contribution { TrackingId = trackingId, Amount = orb.EvokeVal });
                 GD.Print($"[DeckTracker] RegisterChanneledOrb (Dark Orb). Initial Base: {orb.EvokeVal:F2}, To: {trackingId}");
             }
         }
@@ -125,7 +125,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             string id = GetTrackingId(cardSource);
-            LoopHistory.Add(new LoopContribution { TrackingId = id, Amount = amount });
+            LoopHistory.Add(new Contribution { TrackingId = id, Amount = amount });
             GD.Print($"[DeckTracker] AddLoop. Amount: {amount}, Source: {id}");
         }
     }
@@ -164,7 +164,7 @@ public static partial class CardRegistry
                     baseId = "External_Relic";
                 }
 
-                ledger.Add(new OrbContribution { TrackingId = baseId, Amount = pureBase });
+                ledger.Add(new Contribution { TrackingId = baseId, Amount = pureBase });
                 GD.Print($"[DeckTracker] RecordDarkOrbWave. Base: {pureBase:F2}, To: {baseId}");
             }
             if (totalFocus > 0)
@@ -173,7 +173,7 @@ public static partial class CardRegistry
                 {
                     if (focus.Amount > 0)
                     {
-                        ledger.Add(new OrbContribution { TrackingId = focus.TrackingId, Amount = focus.Amount });
+                        ledger.Add(new Contribution { TrackingId = focus.TrackingId, Amount = focus.Amount });
                         GD.Print($"[DeckTracker] RecordDarkOrbWave. Focus: {focus.Amount:F2}, To: {focus.TrackingId}");
                     }
                 }

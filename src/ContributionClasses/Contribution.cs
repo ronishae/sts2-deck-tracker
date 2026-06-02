@@ -1,6 +1,6 @@
 namespace DeckTracker;
 
-public class CountdownContribution
+public class Contribution
 {
     public string TrackingId { get; set; } = "";
     public decimal Amount { get; set; }

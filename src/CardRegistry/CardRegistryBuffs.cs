@@ -15,12 +15,6 @@ namespace DeckTracker;
 public static partial class CardRegistry
 {
     // --- CONTEXT CLASSES ---
-    public class BuffContribution
-    {
-        public string TrackingId { get; set; } = "";
-        public decimal Amount { get; set; }
-    }
-
     public class DamageModifierSnapshot
     {
         public string PowerId { get; set; } = "";
@@ -55,9 +49,9 @@ public static partial class CardRegistry
 
     // --- STATE VARIABLES ---
     // Maps a specific Creature to their active debuffs (like Vulnerable)
-    public static readonly Dictionary<Creature, Dictionary<string, List<BuffContribution>>> EnemyDebuffLedgers = new();
-    public static readonly Dictionary<string, List<BuffContribution>> PersistentLedgers = new();
-    public static readonly Dictionary<string, List<BuffContribution>> ConsumableLedgers = new();
+    public static readonly Dictionary<Creature, Dictionary<string, List<Contribution>>> EnemyDebuffLedgers = new();
+    public static readonly Dictionary<string, List<Contribution>> PersistentLedgers = new();
+    public static readonly Dictionary<string, List<Contribution>> ConsumableLedgers = new();
     
     // The Snapshot trap we will use in Phase 3
     public static readonly AsyncLocal<DamageSnapshot?> CurrentAttackSnapshot = new();
@@ -130,9 +124,9 @@ public static partial class CardRegistry
         {
             if (!ConsumableLedgers.ContainsKey(buffType))
             {
-                ConsumableLedgers[buffType] = new List<BuffContribution>();
+                ConsumableLedgers[buffType] = new List<Contribution>();
             }
-            ConsumableLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            ConsumableLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] AddConsumableBuffById. Added {amount} {buffType} to Consumable FIFO ledger for {trackingId}");
         }
     }
@@ -141,7 +135,7 @@ public static partial class CardRegistry
 
     // --- DURATION LEDGERS (For Vulnerable, Double Damage, Weak, Intangible) ---
     // Maps a Creature (Player or Enemy) to their active turn-based buffs!
-    public static readonly Dictionary<Creature, Dictionary<string, List<BuffContribution>>> DurationLedgers = new();
+    public static readonly Dictionary<Creature, Dictionary<string, List<Contribution>>> DurationLedgers = new();
 
     public static void AddDurationBuff(Creature target, string buffType, decimal amount, string trackingId)
     {
@@ -157,10 +151,10 @@ public static partial class CardRegistry
             }
             if (!DurationLedgers[target].ContainsKey(buffType))
             {
-                DurationLedgers[target][buffType] = new List<BuffContribution>();
+                DurationLedgers[target][buffType] = new List<Contribution>();
             }
             
-            DurationLedgers[target][buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            DurationLedgers[target][buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] AddDurationBuff. Added {amount} {buffType} to Duration FIFO ledger for {trackingId} on {target.Name}");
         }
     }
@@ -215,11 +209,11 @@ public static partial class CardRegistry
         {
             if (!PersistentLedgers.ContainsKey(buffType))
             {
-                PersistentLedgers[buffType] = new List<BuffContribution>();
+                PersistentLedgers[buffType] = new List<Contribution>();
             }
             
             string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
-            PersistentLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            PersistentLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] AddPersistentBuff. Added {amount} {buffType} to persistent ledger for {trackingId}");
         }
     }
@@ -235,9 +229,9 @@ public static partial class CardRegistry
         {
             if (!PersistentLedgers.ContainsKey(buffType))
             {
-                PersistentLedgers[buffType] = new List<BuffContribution>();
+                PersistentLedgers[buffType] = new List<Contribution>();
             }
-            PersistentLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            PersistentLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] AddPersistentBuffById. Added {amount} {buffType} to Persistent ledger for {trackingId}");
         }
     }
@@ -287,11 +281,11 @@ public static partial class CardRegistry
         {
             if (!ConsumableLedgers.ContainsKey(buffType))
             {
-                ConsumableLedgers[buffType] = new List<BuffContribution>();
+                ConsumableLedgers[buffType] = new List<Contribution>();
             }
             
             string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
-            ConsumableLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            ConsumableLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] AddConsumableBuff. Added {amount} {buffType} to consumable FIFO ledger for {trackingId}");
         }
     }
