@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
@@ -21,72 +25,64 @@ internal static class HookPatches
     {
         var currentFloor = ExtractFloorNum(runState);
         var activeDeckIds = ScanDeckForCards(runState);
-        
-        // Sync the deck the moment we step into a new room to catch Upgrades/Transforms immediately
+        GD.Print($"[DeckTracker] AfterRoomEnteredPostfix. Floor: {currentFloor}, Room: {room.RoomType}");
         CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
     }
     
     public static void BeforeCardRemovedPostfix(IRunState runState, CardModel card)
     {
         var currentFloor = ExtractFloorNum(runState);
+        GD.Print($"[DeckTracker] BeforeCardRemovedPostfix. Card: {card.Id.Entry}, Floor: {currentFloor}");
         CardRegistry.HandleRemove(card, currentFloor);
     }
     
-    // Catches cards that enter the hand via Generation, Exhaust, or Discard retrieval!
     public static void AfterCardChangedPilesPostfix(IRunState runState, ICombatState? combatState, CardModel card, PileType oldPile, AbstractModel? clonedBy)
     {
-        // We only care if we are actively in combat
-        if (combatState == null) return;
-        
+        if (combatState == null)
+        {
+            return;
+        }
         try
         {
-            // If the card is now in the Hand, but it didn't come from the Draw pile 
-            // (because our other AfterCardDrawn hook already handles standard draws)
             if (card.Pile != null && card.Pile.Type == PileType.Hand && oldPile != PileType.Draw)
             {
                 if (CardRegistry.IsCardPlayActive())
                 {
+                    GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Deferring draw for {card.Id.Entry}");
                     CardRegistry.DeferDraw(card);
-                    GD.Print($"[DeckTracker] AfterCardChangedPiles: Deferring draw for {card.Id.Entry} until play finishes.");
                 }
                 else
                 {
+                    GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Direct draw for {card.Id.Entry}");
                     CardRegistry.RegisterCard(card);
                     CardRegistry.AddDraw(card);
                     CardRegistry.ForcePublish();
                 }
             }
         }
-        catch { /* Fails silently if Pile data is missing */ }
+        catch (Exception e)
+        {
+            GD.PrintErr($"[DeckTracker] AfterCardChangedPilesPostfix Error: {e.Message}");
+        }
     }
     
     public static void BeforeRoomEnteredPrefix(IRunState? runState, AbstractRoom room)
     {
         var seed = ExtractRunSeed(runState);
-        
-        // This will trigger ResetRun and RestoreLiveInstances on the very first room,
-        // and safely abort on every subsequent room!
+        GD.Print($"[DeckTracker] BeforeRoomEnteredPrefix. Seed: {seed}, Room: {room.RoomType}");
         CardRegistry.SyncRun(seed); 
     }
     
     public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
     {
-        // (Optional: You can leave SyncRun here as a fallback just in case you 
-        // load a save directly into mid-combat, it will just instantly return 
-        // if BeforeRoomEntered already handled it!)
-        // var seed = ExtractRunSeed(runState);
-        // CardRegistry.SyncRun(seed);
-    
         var currentFloor = ExtractFloorNum(runState);
         var currentAct = ExtractActNum(runState);
         var combatType = GetCombatType(runState);
-        
-        // 1. Scan deck first to register cards and get the active list
         var activeDeckIds = ScanDeckForCards(runState);
         
-        // 2. Start combat and pass the active list so it can diff against the tracker history
-        CardRegistry.StartCombat(combatType, currentFloor, currentAct, activeDeckIds);
+        GD.Print($"[DeckTracker] BeforeCombatStartPostfix. Floor: {currentFloor}, Act: {currentAct}, Type: {combatType}");
         
+        CardRegistry.StartCombat(combatType, currentFloor, currentAct, activeDeckIds);
         CardRegistry.ForcePublish();
 
         if (!_overlayScheduled)
@@ -96,41 +92,35 @@ internal static class HookPatches
         }
     }
 
-    public static void AfterSideTurnStartPostfix(
-        ICombatState combatState,
-        CombatSide side,
-        IReadOnlyList<Creature> participants)
+    public static void AfterSideTurnStartPostfix(ICombatState combatState, CombatSide side, IReadOnlyList<Creature> participants)
     {
+        GD.Print($"[DeckTracker] AfterSideTurnStartPostfix. Side: {side}");
         CardRegistry.ResetOrbTurnState();
     }
 
     public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
     {
+        GD.Print("[DeckTracker] AfterCombatEndPostfix.");
         CardRegistry.ProcessCombatEnd();
     }
 
-    // --- NEW: CLEAN EVENT HOOKS ---
-
-    // Catches ALL cards entering your hand
     public static void AfterCardDrawnPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardModel card, bool fromHandDraw)
     {
+        GD.Print($"[DeckTracker] AfterCardDrawnPostfix. Card: {card.Id.Entry}, FromHand: {fromHandDraw}");
         CardRegistry.RegisterCard(card);
         CardRegistry.AddDraw(card);
     }
 
-    // Catches manual plays (spending energy)
     public static void BeforeCardPlayedPostfix(ICombatState combatState, CardPlay cardPlay)
     {
         try
         {
-            // We use reflection here just in case CardPlay changes in future Early Access builds,
-            // but it reliably holds a reference to the CardModel being played.
             var cardProp = cardPlay.GetType().GetProperty("Card");
             if (cardProp?.GetValue(cardPlay) is CardModel card)
             {
+                GD.Print($"[DeckTracker] BeforeCardPlayedPostfix. Card: {card.Id.Entry}, PlayIndex: {cardPlay.PlayIndex}");
                 CardRegistry.StartCardPlay(card);
                 CardRegistry.RegisterCard(card);
-                // Do not count Replay in the times play tracker
                 if (cardPlay.PlayIndex == 0)
                 {
                     CardRegistry.AddPlay(card);
@@ -138,21 +128,18 @@ internal static class HookPatches
                 CardRegistry.ForcePublish();
             }
         }
-        catch { /* Silently fail if STS2 changes the CardPlay object */ }
+        catch (Exception e)
+        {
+            GD.PrintErr($"[DeckTracker] BeforeCardPlayedPostfix Error: {e.Message}");
+        }
     }
     
-    public static void ModifyDamagePostfix(
-        Decimal damage,
-        Creature? target,
-        Creature? dealer,
-        ValueProp props,
-        CardModel? cardSource,
-        CardPreviewMode previewMode,
-        ref IEnumerable<AbstractModel> modifiers,
-        ref Decimal __result)
+    public static void ModifyDamagePostfix(Decimal damage, Creature? target, Creature? dealer, ValueProp props, CardModel? cardSource, CardPreviewMode previewMode, ref IEnumerable<AbstractModel> modifiers, ref Decimal __result)
     {
-        // FILTER: Completely ignore UI previews and phantom calculations!
-        if (previewMode != CardPreviewMode.None) return;
+        if (previewMode != CardPreviewMode.None)
+        {
+            return;
+        }
 
         var snapshot = new CardRegistry.DamageSnapshot
         {
@@ -165,57 +152,91 @@ internal static class HookPatches
 
         foreach (var mod in modifiers)
         {
-            // We call the math directly on the base AbstractModel!
             decimal addAmount = mod.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
             if (addAmount > 0)
             {
-                snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot {
-                    PowerId = mod.Id.Entry,
-                    Amount = addAmount
-                });
+                snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = addAmount });
             }
 
-            // Extract the Multiplier
             decimal multAmount = mod.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
-            
-            // We ignore 1m (no change) and 0m (just in case of a weird engine fail-safe)
             if (multAmount != 1m && multAmount != 0m)
             {
-                snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot {
-                    PowerId = mod.Id.Entry,
-                    Amount = multAmount
-                });
-                GD.Print($"[DeckTracker] Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
+                snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = multAmount });
+                GD.Print($"[DeckTracker] ModifyDamagePostfix. Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
             }
         }
         CardRegistry.CurrentAttackSnapshot.Value = snapshot;
     }
     
-    public static void BeforePowerAmountChangedPostfix(
-        ICombatState combatState,
-        PowerModel power,
-        Decimal amount,
-        Creature target,
-        Creature? applier,
-        CardModel? cardSource)
+    public static void BeforePowerAmountChangedPostfix(ICombatState combatState, PowerModel power, Decimal amount, Creature target, Creature? applier, CardModel? cardSource)
     {
-        GD.Print($"[DeckTracker] Card {cardSource?.Id.Entry} did {power} power with amount {amount} {target.Name}.");
+        string powerId = power.Id.Entry ?? "";
+        GD.Print($"[DeckTracker] BeforePowerAmountChangedPostfix. Power: {powerId}, Amount: {amount}, Target: {target.Name}");
 
-        if (CardRegistry.SimpleDamageTrackers.TryGetValue(power.Id.Entry, out var tracker))
+        string GetRelicOrPotionFallback()
         {
-            if (amount > 0 && target.IsPlayer) // Only track player buffs for damage!
+            if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
             {
-                string fallback = "External_Source";
-                if (cardSource == null)
-                {
-                    if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                        fallback = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                    else if (CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                        fallback = potionId;
-                }
-                tracker.LogApply(cardSource, amount, fallback);
+                return "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+            }
+            if (CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potId))
+            {
+                return potId;
+            }
+            return "External_Source";
+        }
+
+        if (CardRegistry.SimpleDamageTrackers.TryGetValue(powerId, out var simple))
+        {
+            if (amount > 0 && target.IsPlayer)
+            {
+                simple.LogApply(cardSource, amount, GetRelicOrPotionFallback());
             }
             return;
+        }
+
+        if (CardRegistry.TargetedTrackers.TryGetValue(powerId, out var targeted))
+        {
+            if (amount > 0)
+            {
+                targeted.LogApply(target, cardSource, amount);
+            }
+            return;
+        }
+
+        if (CardRegistry.ProportionalTrackers.TryGetValue(powerId, out var prop))
+        {
+            string tid = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback();
+            if (amount > 0)
+            {
+                prop.AddShares(amount, tid);
+            }
+            else if (amount < 0)
+            {
+                prop.RemoveSharesProportionally(Math.Abs(amount));
+            }
+            return;
+        }
+
+        if (CardRegistry.QueueTrackers.TryGetValue(powerId, out var queue))
+        {
+            if (amount > 0)
+            {
+                if (powerId == "LIGHTNING_ROD_POWER" || powerId == "SPINNER_POWER")
+                {
+                    queue.AddDirectCharges(cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback(), amount);
+                }
+                else
+                {
+                    queue.LogApply(cardSource, amount);
+                }
+            }
+            return;
+        }
+
+        if (powerId == "ROLLING_BOULDER_POWER" || powerId == "PANACHE_POWER" || powerId == "MONOLOGUE_POWER")
+        {
+             CardRegistry.InstancedTracker.LogInstance(power, cardSource, GetRelicOrPotionFallback());
         }
 
         switch (power)
@@ -224,114 +245,28 @@ internal static class HookPatches
                 CardRegistry.UpdateConquerorTracker(target, amount, cardSource);
                 break;
             case SwordSagePower:
-            {
                 CardRegistry.UpdateSovereignBladeReplayModifierTracker(amount, cardSource);
                 break;
-            }
             case FurnacePower:
                 CardRegistry.UpdateFurnaceHistory(amount, cardSource);
                 break;
-            case NoxiousFumesPower:
-                if (amount > 0) CardRegistry.AddFumesShares(amount, cardSource);
-                break;
-            case StranglePower:
-                if (amount > 0) CardRegistry.LogStrangleApply(target, cardSource, (int)amount);
-                break;
-            case OblivionPower:
-                if (amount > 0) CardRegistry.LogOblivionApply(target, cardSource, (int)amount);
-                break;
             case ReaperFormPower:
-                if (amount > 0) CardRegistry.AddReaperFormShares(amount, cardSource);
-                break;
-            case StormPower:
-                if (amount > 0) CardRegistry.LogStormApply(cardSource, (int)amount);
-                break;
-            case NecroMasteryPower:
-                if (amount > 0) CardRegistry.LogNecroMasteryApply(cardSource, (int)amount);
-                break;
-            case RollingBoulderPower:
-                CardRegistry.LogRollingBoulderInstance(power, cardSource);
-                break;
-            case CorrosiveWavePower:
-                if (amount > 0) 
+                if (amount > 0)
                 {
-                    CardRegistry.AddCorrosiveWaveShares(amount, cardSource);
-                }
-                else if (amount < 0) 
-                {
-                    // The power is removed at end of turn. Just dump the bucket!
-                    CardRegistry.ClearCorrosiveWaveShares();
+                    CardRegistry.AddReaperFormShares(amount, cardSource);
                 }
                 break;
             case PoisonPower:
                 if (amount > 0)
                 {
-                    // This is the BASE amount requested by the card/source (e.g., 5)
-                    decimal amountToCreditToSourcePoison = amount;
-
-                    // 2. MIDDLEMEN MODIFIERS
-                    if (CardRegistry.IsNoxiousFumesExecuting.Value)
+                    var executingProp = CardRegistry.ProportionalTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+                    if (executingProp != null)
                     {
-                        lock (CardRegistry.SyncRoot)
-                        {
-                            decimal totalFumes = CardRegistry.FumesShares.Sum(x => x.Shares);
-                            if (totalFumes > 0)
-                            {
-                                foreach (var share in CardRegistry.FumesShares)
-                                {
-                                    decimal proportion = share.Shares / totalFumes;
-                                    CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison * proportion, share.TrackingId);
-                                }
-                            }
-                        }
-                    }
-                    else if (CardRegistry.IsCorrosiveWaveExecuting.Value)
-                    {
-                        lock (CardRegistry.SyncRoot)
-                        {
-                            decimal totalWave = CardRegistry.CorrosiveWaveShares.Sum(x => x.Shares);
-                            if (totalWave > 0)
-                            {
-                                foreach (var share in CardRegistry.CorrosiveWaveShares)
-                                {
-                                    decimal proportion = share.Shares / totalWave;
-                                    CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison * proportion, share.TrackingId);
-                                }
-                            }
-                        }
-                    }
-                    // Envenom
-                    else if (CardRegistry.IsEnvenomExecuting.Value)
-                    {
-                        lock (CardRegistry.SyncRoot)
-                        {
-                            decimal totalEnvenom = CardRegistry.EnvenomShares.Sum(x => x.Shares);
-                            if (totalEnvenom > 0)
-                            {
-                                foreach (var share in CardRegistry.EnvenomShares)
-                                {
-                                    decimal proportion = share.Shares / totalEnvenom;
-                                    CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison * proportion, share.TrackingId);
-                                }
-                            }
-                        }
+                        executingProp.DistributeProportional(amount, (id, amt) => CardRegistry.AddPoisonSharesById(target, amt, id), "Poison Handoff");
                     }
                     else
                     {
-                        // 3. BASE SOURCES
-                        GD.Print($"[DeckTracker] Adding poison power {amountToCreditToSourcePoison} from card {cardSource?.Id.Entry}.");
-                        if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                        {
-                            CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison, potionId);
-                        }
-                        else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                        {
-                            CardRegistry.AddPoisonSharesById(target, amountToCreditToSourcePoison, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
-                        }
-                        else
-                        {
-                            CardRegistry.AddPoisonShares(target, amountToCreditToSourcePoison, cardSource);
-                        }
+                        CardRegistry.AddPoisonSharesById(target, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
                     }
                 }
                 else if (amount < 0)
@@ -340,27 +275,28 @@ internal static class HookPatches
                 }
                 break;
             case CountdownPower:
-                if (amount > 0) CardRegistry.AddCountdownHistory(amount, cardSource);
+                if (amount > 0)
+                {
+                    CardRegistry.AddCountdownHistory(amount, cardSource);
+                }
                 break;
             case DoomPower:
                 if (amount > 0)
                 {
-                    // Is Countdown currently applying this Doom?
                     if (CardRegistry.IsCountdownExecuting.Value)
                     {
                         lock (CardRegistry.SyncRoot)
                         {
-                            decimal remainingDoom = amount;
-
-                            // Read the Countdown history top-to-bottom and assign the Doom
-                            foreach (var contribution in CardRegistry.CountdownHistory)
+                            decimal rem = amount;
+                            foreach (var c in CardRegistry.CountdownHistory)
                             {
-                                if (remainingDoom <= 0) break;
-
-                                decimal amountToAttribute = Math.Min(remainingDoom, contribution.Amount);
-                                CardRegistry.AddDoomHistoryById(target, amountToAttribute, contribution.TrackingId);
-
-                                remainingDoom -= amountToAttribute;
+                                if (rem <= 0)
+                                {
+                                    break;
+                                }
+                                decimal a = Math.Min(rem, c.Amount);
+                                CardRegistry.AddDoomHistoryById(target, a, c.TrackingId);
+                                rem -= a;
                             }
                         }
                     }
@@ -368,575 +304,200 @@ internal static class HookPatches
                     {
                         lock (CardRegistry.SyncRoot)
                         {
-                            decimal remainingDoom = amount;
-                            decimal damageDealt = CardRegistry.GetReaperDamage();
-
-                            // Read the Reaper Form history top-to-bottom and assign the Doom
-                            foreach (var share in CardRegistry.ReaperFormShares)
+                            decimal rem = amount;
+                            decimal dmg = CardRegistry.GetReaperDamage();
+                            foreach (var s in CardRegistry.ReaperFormShares)
                             {
-                                if (remainingDoom <= 0) break;
-                                
-                                // Reaper Form multiplier: share.Shares * damageDealt
-                                decimal amountToAttribute = Math.Min(remainingDoom, share.Shares * damageDealt);
-                                CardRegistry.AddDoomHistoryById(target, amountToAttribute, share.TrackingId);
-
-                                remainingDoom -= amountToAttribute;
-                            }
-                        }
-                    }
-                    else if (CardRegistry.IsOblivionExecuting)
-                    {
-                        lock (CardRegistry.SyncRoot)
-                        {
-                            decimal remainingDoom = amount;
-
-                            if (CardRegistry.OblivionLedgers.TryGetValue(target, out var ledger))
-                            {
-                                foreach (var share in ledger)
+                                if (rem <= 0)
                                 {
-                                    if (remainingDoom <= 0) break;
-
-                                    decimal amountToAttribute = Math.Min(remainingDoom, (decimal)share.Amount);
-                                    CardRegistry.AddDoomHistoryById(target, amountToAttribute, share.TrackingId);
-
-                                    remainingDoom -= amountToAttribute;
+                                    break;
                                 }
+                                decimal a = Math.Min(rem, s.Shares * dmg);
+                                CardRegistry.AddDoomHistoryById(target, a, s.TrackingId);
+                                rem -= a;
                             }
                         }
                     }
-                    else {
-                        if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    else
+                    {
+                        var executingTargeted = CardRegistry.TargetedTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+                        if (executingTargeted != null)
                         {
-                            CardRegistry.AddDoomHistoryById(target, amount, potionId);
-                        }
-                        // NOTE: this doesn't proc on any relic in the game currently, but added just for the future
-                        else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                        {
-                            CardRegistry.AddDoomHistoryById(target, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                            executingTargeted.DistributeDamage(target, amount);
                         }
                         else
                         {
-                            CardRegistry.AddDoomHistory(target, amount, cardSource);
+                            CardRegistry.AddDoomHistoryById(target, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
                         }
                     }
                 }
                 break;
             case FocusPower:
-                if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionIdFocus))
-                {
-                    CardRegistry.LogFocusChangeById(potionIdFocus, amount);
-                }
-                // Relics and Cards are both routed here, logic in LogFocusChange handles relic vs card.
-                else
-                {
-                    CardRegistry.LogFocusChange(cardSource, amount);
-                }
+                CardRegistry.LogFocusChangeById(cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback(), amount);
                 break;
             case LoopPower:
-                if (amount > 0) CardRegistry.AddLoop(amount, cardSource);
+                if (amount > 0)
+                {
+                    CardRegistry.AddLoop(amount, cardSource);
+                }
                 break;
             case ReflectPower:
                 if (amount > 0 && cardSource != null)
                 {
                     for (int i = 0; i < amount; i++)
+                    {
                         CardRegistry.AddReflect(CardRegistry.GetTrackingId(cardSource));
+                    }
                 }
                 else if (amount < 0)
                 {
                     for (int i = 0; i > amount; i--)
+                    {
                         CardRegistry.DecrementReflect();
+                    }
                 }
                 break;
             case DemonFormPower:
-                if (target.IsPlayer)
-                {
-                    if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
-                    else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
-                }
-                break;
             case ArsenalPower:
+            case ShadowStepPower:
+            case AccuracyPower:
+            case PhantomBladesPower:
+            case PrepTimePower:
+            case CrueltyPower:
+            case LethalityPower:
+            case CalcifyPower:
                 if (target.IsPlayer)
                 {
-                    if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
-                    else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
-                }
-                break;
-            case MonologuePower:
-                if (target.IsPlayer)
-                {
-                    if (amount > 0) 
+                    if (amount > 0)
                     {
-                        // TAPE THE NAMETAG: Link this specific power object to the card source!
-                        CardRegistry.InstancedPowerSources[power] = CardRegistry.GetTrackingId(cardSource);
+                        CardRegistry.AddPersistentBuff(powerId, amount, cardSource);
                     }
-                    else if (amount < 0) 
+                    else if (amount < 0)
                     {
-                        // Cleanup when the power is removed
-                        CardRegistry.InstancedPowerSources.Remove(power);
+                        CardRegistry.RemovePersistentBuff(powerId, Math.Abs(amount));
                     }
                 }
                 break;
             case StrengthPower:
-                if (!target.IsPlayer) break;
-                decimal amountToCreditToSource = amount;
-                
-                // 1. PROCESS THE REMAINDER (Cards, Active Relics, or Middlemen)
-                if (amountToCreditToSource > 0)
+                if (!target.IsPlayer)
                 {
-                    GD.Print($"[DeckTracker] StrengthPower Part 2");
-                    if (CardRegistry.IsDemonFormExecuting.Value) 
-                        CardRegistry.ProcessDemonFormStrength(amountToCreditToSource);
-                    else if (CardRegistry.IsArsenalExecuting.Value) 
-                        CardRegistry.ProcessArsenalStrength(amountToCreditToSource);
-                    else if (!string.IsNullOrEmpty(CardRegistry.ExecutingInstancedSource.Value)) 
-                        CardRegistry.AddPersistentBuffById(power.Id.Entry, amountToCreditToSource, CardRegistry.ExecutingInstancedSource.Value);
+                    break;
+                }
+                if (amount > 0)
+                {
+                    var handoff = CardRegistry.HandoffTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+                    if (handoff != null)
+                    {
+                        handoff.ProcessHandoff(powerId, amount);
+                    }
+                    else if (CardRegistry.InstancedTracker.ExecutingSourceId != null)
+                    {
+                        CardRegistry.AddPersistentBuffById(powerId, amount, CardRegistry.InstancedTracker.ExecutingSourceId);
+                    }
                     else if (CardRegistry.IsRitualTriggering.Value)
                     {
-                        foreach (var source in CardRegistry.RitualSources)
+                        foreach (var s in CardRegistry.RitualSources)
                         {
-                            if (source.Value > 0)
+                            if (s.Value > 0)
                             {
-                                CardRegistry.AddPersistentBuffById(power.Id.Entry, source.Value, source.Key);
-                                GD.Print($"[DeckTracker] Ritual triggered! Routed {source.Value} STRENGTH_POWER to {source.Key}");
+                                CardRegistry.AddPersistentBuffById(powerId, s.Value, s.Key);
                             }
                         }
-                    }
-                    else if (CardRegistry.IsRuptureExecuting.Value)
-                    {
-                        lock (CardRegistry.SyncRoot)
-                        {
-                            decimal totalRupture = CardRegistry.RuptureLedger.Sum(x => x.Shares);
-                            if (totalRupture > 0)
-                            {
-                                foreach (var share in CardRegistry.RuptureLedger)
-                                {
-                                    decimal proportion = share.Shares / totalRupture;
-                                    decimal attributedStrength = amountToCreditToSource * proportion;
-                                
-                                    if (attributedStrength > 0)
-                                    {
-                                        CardRegistry.AddPersistentBuffById(power.Id.Entry, attributedStrength, share.TrackingId);
-                                        GD.Print($"[DeckTracker] Rupture triggered! Routed {attributedStrength} STRENGTH_POWER to {share.TrackingId}");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Strength potion, flex potion
-                    else if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                    {
-                        CardRegistry.AddPersistentBuffById(power.Id.Entry, amountToCreditToSource, potionId);
-                    }
-                    // NEW: Active Relic Appliers (Vajra, Mini Regent)
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        GD.Print($"[DeckTracker] StrengthPower Inside relic check");
-                        CardRegistry.AddPersistentBuffById(power.Id.Entry, amountToCreditToSource, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
                     }
                     else
                     {
-                        GD.Print($"[DeckTracker] StrengthPower Final Card Source");
-                        CardRegistry.AddPersistentBuff(power.Id.Entry, amountToCreditToSource, cardSource);
+                        var executingProp = CardRegistry.ProportionalTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+                        if (executingProp != null)
+                        {
+                            executingProp.DistributeProportional(amount, (id, amt) => CardRegistry.AddPersistentBuffById(powerId, amt, id), "Persistent Handoff");
+                        }
+                        else
+                        {
+                            CardRegistry.AddPersistentBuffById(powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
+                        }
                     }
                 }
-                else if (amountToCreditToSource < 0) 
+                else if (amount < 0)
                 {
-                    // Handles Monologue cleanup, Red Skull deactivation, Enemy debuffs, etc.
-                    CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amountToCreditToSource));
+                    CardRegistry.RemovePersistentBuff(powerId, Math.Abs(amount));
                 }
                 break;
             case RitualPower:
                 if (amount > 0 && target.IsPlayer)
                 {
-                    string sourceId = "";
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
+                    string sid = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback();
+                    if (!string.IsNullOrEmpty(sid))
                     {
-                        sourceId = potionId;
-                    }
-                    else if (cardSource != null)
-                    {
-                        sourceId = CardRegistry.GetTrackingId(cardSource);
-                    }
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                    }
-                
-                    if (!string.IsNullOrEmpty(sourceId))
-                    {
-                        if (!CardRegistry.RitualSources.ContainsKey(sourceId)) 
-                            CardRegistry.RitualSources[sourceId] = 0;
-                    
-                        CardRegistry.RitualSources[sourceId] += amount;
-                        Godot.GD.Print($"[DeckTracker] Logged {amount} RITUAL_POWER from {sourceId}");
+                        if (!CardRegistry.RitualSources.ContainsKey(sid))
+                        {
+                            CardRegistry.RitualSources[sid] = 0;
+                        }
+                        CardRegistry.RitualSources[sid] += amount;
+                        GD.Print($"[DeckTracker] BeforePowerAmountChangedPostfix. Ritual Log: {amount} from {sid}");
                     }
                 }
-                break;
-            
-            case AccuracyPower:
-                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
-                break;
-            case PhantomBladesPower:
-                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
-                break;
-            case PrepTimePower:
-                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
                 break;
             case VigorPower:
                 if (amount > 0)
                 {
-                    // INTERCEPT: Did PrepTimePower generate this Vigor?
-                    if (CardRegistry.IsPrepTimeExecuting.Value)
+                    if (CardRegistry.HandoffTrackers["PREP_TIME_POWER"].IsExecuting)
                     {
-                        CardRegistry.ProcessPrepTimeVigor(amount);
-                    }
-                    // NEW: Intercept Akabeko and any future Vigor relics!
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        CardRegistry.AddConsumableBuffById(power.Id.Entry, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
+                        CardRegistry.HandoffTrackers["PREP_TIME_POWER"].ProcessHandoff(powerId, amount);
                     }
                     else
                     {
-                        CardRegistry.AddConsumableBuff(power.Id.Entry, amount, cardSource);
+                        CardRegistry.AddConsumableBuffById(powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
                     }
                 }
-                else if (amount < 0) CardRegistry.RemoveConsumableBuff(power.Id.Entry, Math.Abs(amount));
+                else if (amount < 0)
+                {
+                    CardRegistry.RemoveConsumableBuff(powerId, Math.Abs(amount));
+                }
                 break;
             case VulnerablePower:
-                // Note we changed AddEnemyDebuff to AddDurationBuff
+            case DebilitatePower:
+            case GigantificationPower:
+            case FlankingPower:
+            case KnockdownPower:
                 if (amount > 0)
                 {
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                    {
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, potionId);
-                    }
-                    // NOTE: this should only proc on drill, which is not yet implemented
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
-                    }
-                    else
-                    {
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount,
-                            CardRegistry.GetTrackingId(cardSource));
-                    }
+                    CardRegistry.AddDurationBuff(target, powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
                 }
-                else if (amount < 0) CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
+                else if (amount < 0)
+                {
+                    CardRegistry.RemoveDurationBuff(target, powerId, Math.Abs(amount));
+                }
                 break;
-            case ShadowStepPower:
-                if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
-                else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
-                break;
-
             case DoubleDamagePower:
                 if (amount > 0)
                 {
-                    if (CardRegistry.IsShadowStepExecuting.Value)
+                    if (CardRegistry.HandoffTrackers["SHADOW_STEP_POWER"].IsExecuting)
                     {
-                        CardRegistry.ProcessShadowStepDoubleDamage(amount, target);
+                        CardRegistry.HandoffTrackers["SHADOW_STEP_POWER"].ProcessHandoff(powerId, amount);
                     }
                     else
                     {
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
+                        CardRegistry.AddDurationBuff(target, powerId, amount, cardSource != null ? CardRegistry.GetTrackingId(cardSource) : GetRelicOrPotionFallback());
                     }
                 }
-                else if (amount < 0) 
+                else if (amount < 0)
                 {
-                    CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
+                    CardRegistry.RemoveDurationBuff(target, powerId, Math.Abs(amount));
                 }
                 break;
             case TrackingPower:
                 if (amount > 0) 
                 {
-                    // Check if this is the very first time Tracking is being applied
-                    bool isFirstApplication = !CardRegistry.PersistentLedgers.ContainsKey(power.Id.Entry) || 
-                                              CardRegistry.PersistentLedgers[power.Id.Entry].Count == 0;
-                
-                    // The first application gives 2 stacks, but 1 of those is the inherent 1.0x base.
-                    // We only want to log the actual BONUS multiplier delta into the ledger!
-                    decimal loggedAmount = isFirstApplication ? amount - 1 : amount;
-                
-                    if (loggedAmount > 0) 
+                    bool isFirst = !CardRegistry.PersistentLedgers.ContainsKey(powerId) || CardRegistry.PersistentLedgers[powerId].Count == 0;
+                    decimal logged = isFirst ? amount - 1 : amount;
+                    if (logged > 0)
                     {
-                        CardRegistry.AddPersistentBuff(power.Id.Entry, loggedAmount, cardSource);
-                    }
-                }
-                else if (amount < 0) 
-                {
-                    // If it ever gets removed or completely wiped, we wipe the ledger as usual.
-                    // (Using a full wipe here is safest if a boss cleanses debuffs/buffs)
-                    CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
-                }
-                break;
-            case EnvenomPower:
-                if (target.IsPlayer)
-                {
-                    if (amount > 0)
-                    {
-                        CardRegistry.AddEnvenomShares(amount, cardSource);
-                    }
-                }
-                break;
-            case TrashToTreasurePower:
-                if (target.IsPlayer)
-                {
-                    if (amount > 0) CardRegistry.AddTrashToTreasureShares(amount, cardSource);
-                }
-                break;
-            // Cruelty acts like Strength (stacks infinitely, persists on Player)
-            case CrueltyPower:
-                if (target != null && target.IsPlayer)
-                {
-                    if (amount > 0) CardRegistry.AddPersistentBuff(power.Id.Entry, amount, cardSource);
-                    else if (amount < 0) CardRegistry.RemovePersistentBuff(power.Id.Entry, Math.Abs(amount));
-                }
-                break;
-
-            // Debilitate acts like Weak (duration counts down, FIFO queue on Enemy)
-            case DebilitatePower:
-                if (amount > 0) CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
-                else if (amount < 0) CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
-                break;
-            
-            case DemisePower:
-                if (amount > 0)
-                {
-                    string sourceId = "";
-                
-                    // Route to Active Potion (Powdered Demise)
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                        sourceId = potionId;
-                    // Route to Relic (does not exist)
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                    // Route to Card (only Misery can trigger this currently)
-                    else if (cardSource != null)
-                        sourceId = CardRegistry.GetTrackingId(cardSource);
-
-                    if (!string.IsNullOrEmpty(sourceId))
-                    {
-                        CardRegistry.AddDemiseSharesById(target, amount, sourceId);
+                        CardRegistry.AddPersistentBuff(powerId, logged, cardSource);
                     }
                 }
                 else if (amount < 0)
                 {
-                    CardRegistry.RemoveDemiseSharesProportionally(target, Math.Abs(amount));
-                }
-                break;
-            case GigantificationPower:
-                if (amount > 0 && target != null && target.IsPlayer)
-                {
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                    {
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, potionId);
-                    }
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value);
-                    }
-                    else if (cardSource != null)
-                    {
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, CardRegistry.GetTrackingId(cardSource));
-                    }
-                }
-                else if (amount < 0 && target != null)
-                {
-                    CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
-                }
-                break;
-            case LightningRodPower:
-                if (amount > 0)
-                {
-                    string sourceId = "";
-                
-                    // NOTE: this should never trigger based on current potions
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                        sourceId = potionId;
-                    // NOTE: this should never trigger based on current relics
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                    // Card
-                    else if (cardSource != null)
-                        sourceId = CardRegistry.GetTrackingId(cardSource);
-
-                    if (!string.IsNullOrEmpty(sourceId))
-                    {
-                        lock (CardRegistry.SyncRoot)
-                        {
-                            // Enqueue 1 ticket for every stack of power applied
-                            for (int i = 0; i < amount; i++)
-                            {
-                                CardRegistry.LightningRodQueue.Enqueue(sourceId);
-                            }
-                        }
-                        Godot.GD.Print($"[DeckTracker] Enqueued {amount} Lightning Rod charges for {sourceId}");
-                    }
-                }
-                // we don't handle negative amount since when the orb is channeled, we dequeue from our queue
-                // automatically, so don't need to check for the decrement event
-                break;
-            case SpinnerPower:
-                if (amount > 0)
-                {
-                    string sourceId = "";
-                
-                    // should never be triggered by potion
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null &&
-                        CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                    {
-                        sourceId = potionId;
-                        GD.Print($"[DeckTracker] Warning: spinner power applied from potion");
-                    }
-                    // should never be triggered by relic
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        GD.Print($"[DeckTracker] Warning: spinner power applied from relic");
-                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                    }
-                    // Card
-                    else if (cardSource != null)
-                    {
-                        sourceId = CardRegistry.GetTrackingId(cardSource);
-                    }
-
-                    if (!string.IsNullOrEmpty(sourceId))
-                    {
-                        lock (CardRegistry.SyncRoot)
-                        {
-                            // Add 1 permanent ticket for every stack of power applied
-                            for (int i = 0; i < amount; i++)
-                            {
-                                CardRegistry.SpinnerSources.Add(sourceId);
-                            }
-                        }
-                        GD.Print($"[DeckTracker] Added {amount} Spinner charges for {sourceId}");
-                    }
-                }
-                // This should never occur, so handle it kinda messily in case some random event decrements this
-                else if (amount < 0)
-                {
-                    // If an enemy cleanses the buff (or a specific amount of it), pop from the end of the list (LIFO removal)
-                    lock (CardRegistry.SyncRoot)
-                    {
-                        GD.Print($"[DeckTracker] Warning: spinner power was decremented");
-                        int removeCount = (int)Math.Min(CardRegistry.SpinnerSources.Count, Math.Abs(amount));
-                        CardRegistry.SpinnerSources.RemoveRange(CardRegistry.SpinnerSources.Count - removeCount, removeCount);
-                    }
-                }
-                break;
-            case LethalityPower:
-                if (amount > 0 && target.IsPlayer)
-                {
-                    CardRegistry.AddPersistentBuff("LETHALITY_POWER", amount, cardSource);
-                }
-                else if (amount < 0 && target.IsPlayer)
-                {
-                    // In case an enemy or event cleanses the buff
-                    CardRegistry.RemovePersistentBuff("LETHALITY_POWER", Math.Abs(amount));
-                    GD.Print($"[DeckTracker] Warning: Removed {amount} LETHALITY_POWER buff");
-                }
-                break;
-            case InfernoPower:
-        case OutbreakPower:
-        case SmokestackPower:
-        case RupturePower:
-        case PanachePower:
-            if (amount > 0)
-            {
-                string sourceId = "";
-                
-                if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                    sourceId = potionId;
-                else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                else if (cardSource != null)
-                    sourceId = CardRegistry.GetTrackingId(cardSource);
-
-                if (!string.IsNullOrEmpty(sourceId))
-                {
-                    if (power is InfernoPower) CardRegistry.AddProportionalShare(CardRegistry.InfernoLedger, amount, sourceId);
-                    else if (power is OutbreakPower) CardRegistry.AddProportionalShare(CardRegistry.OutbreakLedger, amount, sourceId);
-                    else if (power is SmokestackPower) CardRegistry.AddProportionalShare(CardRegistry.SmokestackLedger, amount, sourceId);
-                    else if (power is RupturePower) CardRegistry.AddProportionalShare(CardRegistry.RuptureLedger, amount, sourceId); // NEW
-                    else if (power is PanachePower panacheInst) CardRegistry.PanacheLedgers[panacheInst] = sourceId; // Directly map the instance!
-                }
-            }
-            else if (amount < 0)
-            {
-                if (power is InfernoPower) CardRegistry.RemoveProportionalShare(CardRegistry.InfernoLedger, Math.Abs(amount));
-                else if (power is OutbreakPower) CardRegistry.RemoveProportionalShare(CardRegistry.OutbreakLedger, Math.Abs(amount));
-                else if (power is SmokestackPower) CardRegistry.RemoveProportionalShare(CardRegistry.SmokestackLedger, Math.Abs(amount));
-                else if (power is RupturePower) CardRegistry.RemoveProportionalShare(CardRegistry.RuptureLedger, Math.Abs(amount)); // NEW
-                // Panache is instanced, so we don't decrement shares. The engine will just garbage collect it when combat ends.
-            }
-            break;
-            
-            case CalcifyPower:
-                if (amount > 0 && target != null && target.IsPlayer)
-                {
-                    string sourceId = "";
-                
-                    // Route to Active Potion
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                    {
-                        GD.Print($"[DeckTracker] Warning: potion applied calcify power");
-                        sourceId = potionId;
-                    }
-                    // Route to Relic
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        GD.Print($"[DeckTracker] Warning: relic applied calcify power");
-                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                    }
-                    // Route to Card
-                    else if (cardSource != null)
-                    {
-                        sourceId = CardRegistry.GetTrackingId(cardSource);
-                    }
-
-                    if (!string.IsNullOrEmpty(sourceId))
-                    {
-                        CardRegistry.AddPersistentBuff("CALCIFY_POWER", amount, cardSource);
-                        GD.Print($"[DeckTracker] Added {amount} CALCIFY_POWER to persistent ledger for {sourceId}");
-                    }
-                }
-                else if (amount < 0 && target != null && target.IsPlayer)
-                {
-                    // In case an enemy or event cleanses the buff
-                    CardRegistry.RemovePersistentBuff("CALCIFY_POWER", Math.Abs(amount));
-                }
-                break;
-            case FlankingPower:     
-            case KnockdownPower: 
-                if (amount > 0 && target != null)
-                {
-                    string sourceId = "";
-                
-                    if (cardSource == null && CardRegistry.CurrentPlayingPotion != null && CardRegistry.PotionInstanceIds.TryGetValue(CardRegistry.CurrentPlayingPotion, out var potionId))
-                    {
-                        GD.Print($"[DeckTracker] Warning: potion applied flanking or knockdown power ");
-                        sourceId = potionId;
-                    }
-                    else if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
-                    {
-                        GD.Print($"[DeckTracker] Warning: relic applied flanking or knockdown power ");
-                        sourceId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-                    }
-                    else if (cardSource != null)
-                        sourceId = CardRegistry.GetTrackingId(cardSource);
-
-                    if (!string.IsNullOrEmpty(sourceId))
-                    {
-                        // Logs the debuff to the target's Duration FIFO ledger!
-                        CardRegistry.AddDurationBuff(target, power.Id.Entry, amount, sourceId);
-                    }
-                }
-                else if (amount < 0 && target != null) 
-                {
-                    CardRegistry.RemoveDurationBuff(target, power.Id.Entry, Math.Abs(amount));
+                    CardRegistry.RemovePersistentBuff(powerId, Math.Abs(amount));
                 }
                 break;
         }
@@ -946,23 +507,21 @@ internal static class HookPatches
     {
         CardRegistry.EndCardPlay();
         CardRegistry.ForcePublish();
-        
-        var cardId = cardPlay.Card.Id.Entry ?? "";
-        GD.Print($"[DeckTracker] Card {cardId} played with PlayCount: {cardPlay.PlayCount} and PlayIndex: {cardPlay.PlayIndex}.");
-
-        if (cardId.Equals("SEEKING_EDGE")) 
+        var id = cardPlay.Card.Id.Entry ?? "";
+        GD.Print($"[DeckTracker] AfterCardPlayedPostfix. Card: {id}");
+        if (id.Equals("SEEKING_EDGE"))
         {
             CardRegistry.UpdateSeekingEdge(cardPlay.Card);
         }
-        else if (cardId.Equals("FAN_OF_KNIVES"))
+        else if (id.Equals("FAN_OF_KNIVES"))
         {
             CardRegistry.UpdateFanOfKnives(cardPlay.Card);
         }
-        else if (cardId.Equals("SOVEREIGN_BLADE"))
+        else if (id.Equals("SOVEREIGN_BLADE"))
         {
             CardRegistry.ProcessSovereignBladeHistory(cardPlay);
         }
-        else if (cardId.Equals("SHIV"))
+        else if (id.Equals("SHIV"))
         {
             CardRegistry.ProcessShivHistory(cardPlay);
             CardRegistry.CurrentAttackSnapshot.Value = null;
@@ -971,17 +530,14 @@ internal static class HookPatches
     
     public static void AfterForgePostfix(ICombatState combatState, decimal amount, Player forger, AbstractModel? source)
     {
-        GD.Print($"[DeckTracker] Card {source?.Id.Entry} did {amount} forge.");
+        GD.Print($"[DeckTracker] AfterForgePostfix. Source: {source?.Id.Entry}, Amount: {amount}");
         if (source is CardModel card)
         {
             CardRegistry.AddForge(card, amount);
         }
-        else if (source is PowerModel power)
+        else if (source is PowerModel power && power is FurnacePower)
         {
-            if (power is FurnacePower)
-            {
-                CardRegistry.HandleFurnaceForge(amount);
-            }
+            CardRegistry.HandleFurnaceForge(amount);
         }
         else if (source is RelicModel relic)
         {
@@ -990,12 +546,11 @@ internal static class HookPatches
         }
     }
     
-    // The parameters MUST be named this way, with double underscores or Harmony will have errors. Do not change.
     public static void PoisonAfterSideTurnStartPrefix(PoisonPower __instance)
     {
         if (!__instance.Owner.IsPlayer)
         {
-            GD.Print($"[DeckTracker] Setting Poison context for {__instance.Owner.Name} in PREFIX");
+            GD.Print($"[DeckTracker] PoisonAfterSideTurnStartPrefix. Target: {__instance.Owner.Name}");
             CardRegistry.CurrentPoisonTarget.Value = __instance.Owner;
         }
     }
@@ -1008,38 +563,21 @@ internal static class HookPatches
         }
     }
     
-    public static void FumesAfterSideTurnStartPrefix(NoxiousFumesPower __instance)
-    {
-        CardRegistry.IsNoxiousFumesExecuting.Value = true;
-    }
-
-    public static void FumesAfterSideTurnStartPostfix(NoxiousFumesPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitFumesTaskAsync(__result);
-    }
-    
-    public static void WaveAfterCardDrawnPrefix(CorrosiveWavePower __instance)
-    {
-        CardRegistry.IsCorrosiveWaveExecuting.Value = true;
-    }
-
-    public static void WaveAfterCardDrawnPostfix(CorrosiveWavePower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitCorrosiveWaveTaskAsync(__result);
-    }
-    
     public static void DoomKillPrefix(IReadOnlyList<Creature> creatures)
     {
+        GD.Print($"[DeckTracker] DoomKillPrefix. Count: {creatures.Count}");
         CardRegistry.CapturePendingDoomHp(creatures);
     }
 
     public static void AfterDiedToDoomPostfix(ICombatState combatState, IReadOnlyList<Creature> creatures)
     {
+        GD.Print($"[DeckTracker] AfterDiedToDoomPostfix. Count: {creatures.Count}");
         CardRegistry.DistributeDoomDamage(creatures);
     }
     
     public static void CountdownAfterSideTurnStartPrefix(CountdownPower __instance)
     {
+        GD.Print("[DeckTracker] CountdownAfterSideTurnStartPrefix.");
         CardRegistry.IsCountdownExecuting.Value = true;
     }
 
@@ -1048,44 +586,9 @@ internal static class HookPatches
         __result = CardRegistry.AwaitCountdownTaskAsync(__result);
     }
 
-    public static void StrangleAfterCardPlayedPrefix(StranglePower __instance)
-    {
-        CardRegistry.StartStrangleExecution();
-    }
-
-    public static void StrangleAfterCardPlayedPostfix(StranglePower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitStrangleTaskAsync(__result, __instance.Owner, __instance.Amount);
-    }
-
-    public static void OblivionAfterCardPlayedPrefix(OblivionPower __instance)
-    {
-        CardRegistry.StartOblivionExecution();
-    }
-
-    public static void OblivionAfterCardPlayedPostfix(OblivionPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitOblivionTaskAsync(__result);
-    }
-
-    public static void GenericPowerPrefix(PowerModel __instance)
-    {
-        if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var tracker))
-        {
-            tracker.StartExecution();
-        }
-    }
-
-    public static void GenericPowerPostfix(PowerModel __instance, ref Task __result)
-    {
-        if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var tracker))
-        {
-            __result = tracker.AwaitTaskAsync(__result);
-        }
-    }
-
     public static void ReaperFormAfterDamageGivenPrefix(ReaperFormPower __instance, DamageResult result)
     {
+        GD.Print($"[DeckTracker] ReaperFormAfterDamageGivenPrefix. Damage: {result.TotalDamage}");
         CardRegistry.StartReaperFormExecution(result.TotalDamage);
     }
 
@@ -1094,29 +597,9 @@ internal static class HookPatches
         __result = CardRegistry.AwaitReaperFormTaskAsync(__result, result.TotalDamage);
     }
 
-    public static void StormAfterCardPlayedPrefix(StormPower __instance)
-    {
-        CardRegistry.IsStormExecuting.Value = true;
-        CardRegistry.CurrentTurnStormQueue.Clear();
-        lock (CardRegistry.SyncRoot)
-        {
-            foreach (var contribution in CardRegistry.StormHistory)
-            {
-                for (int i = 0; i < contribution.Amount; i++)
-                {
-                    CardRegistry.CurrentTurnStormQueue.Add(contribution.TrackingId);
-                }
-            }
-        }
-    }
-
-    public static void StormAfterCardPlayedPostfix(StormPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitStormTaskAsync(__result);
-    }
-
     public static void NecroMasteryAfterCurrentHpChangedPrefix(NecroMasteryPower __instance, decimal delta )
     {
+        GD.Print($"[DeckTracker] NecroMasteryAfterCurrentHpChangedPrefix. Delta: {delta}");
         CardRegistry.StartNecroMasteryExecution(delta);
     }
 
@@ -1125,106 +608,163 @@ internal static class HookPatches
         __result = CardRegistry.AwaitNecroMasteryTaskAsync(__result, delta);
     }
 
-    public static void ReflectAfterDamageReceivedPrefix(ReflectPower __instance)
-    {
-        CardRegistry.StartReflectExecution();
-    }
-
-    public static void ReflectAfterDamageReceivedPostfix(ReflectPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitReflectTaskAsync(__result);
-    }
-    
     public static void BeforePowerRemovedPrefix(PowerModel? power)
     {
-        if (power == null) return;
-        
-        GD.Print($"[DeckTracker] BeforePowerRemovedPrefix: {power.GetType().Name} removed from {power.Owner.Name}");
-        
+        if (power == null)
+        {
+            return;
+        }
+        GD.Print($"[DeckTracker] BeforePowerRemovedPrefix. Power: {power.Id.Entry}");
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(power.Id.Entry, out var tracker))
         {
             tracker.Reset();
         }
+    }
 
-        switch (power)
+    public static void GenericPowerPrefix(PowerModel __instance)
+    {
+        if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
-            case StranglePower:
-                CardRegistry.ClearStrangle(power.Owner);
-                break;
-            case OblivionPower:
-                CardRegistry.ClearOblivion(power.Owner);
-                break;
+            GD.Print($"[DeckTracker] GenericPowerPrefix. Power: {__instance.Id.Entry}");
+            t.StartExecution();
         }
     }
 
-    // --- ORB WRAPPERS ---
-
-    public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, MegaCrit.Sts2.Core.Entities.Players.Player player)
+    public static void GenericPowerPostfix(PowerModel __instance, ref Task __result)
     {
+        if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            __result = t.AwaitTaskAsync(__result);
+        }
+    }
+
+    public static void TargetedPowerPrefix(PowerModel __instance)
+    {
+        if (CardRegistry.TargetedTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            GD.Print($"[DeckTracker] TargetedPowerPrefix. Power: {__instance.Id.Entry}");
+            t.StartExecution();
+        }
+    }
+
+    public static void TargetedPowerPostfix(PowerModel __instance, ref Task __result)
+    {
+        if (CardRegistry.TargetedTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            __result = t.AwaitTaskAsync(__result);
+        }
+    }
+
+    public static void HandoffPowerPrefix(PowerModel __instance)
+    {
+        if (CardRegistry.HandoffTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            GD.Print($"[DeckTracker] HandoffPowerPrefix. Power: {__instance.Id.Entry}");
+            t.StartExecution();
+        }
+    }
+
+    public static void HandoffPowerPostfix(PowerModel __instance, ref Task __result)
+    {
+        if (CardRegistry.HandoffTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            __result = t.AwaitTaskAsync(__result);
+        }
+    }
+
+    public static void ProportionalPowerPrefix(PowerModel __instance)
+    {
+        if (CardRegistry.ProportionalTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            GD.Print($"[DeckTracker] ProportionalPowerPrefix. Power: {__instance.Id.Entry}");
+            t.StartExecution();
+        }
+    }
+
+    public static void ProportionalPowerPostfix(PowerModel __instance, ref Task __result)
+    {
+        if (CardRegistry.ProportionalTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            __result = t.AwaitTaskAsync(__result);
+        }
+    }
+
+    public static void QueuePowerPrefix(PowerModel __instance)
+    {
+        if (CardRegistry.QueueTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            GD.Print($"[DeckTracker] QueuePowerPrefix. Power: {__instance.Id.Entry}");
+            t.StartExecution(flatten: t.NeedsFlattening);
+        }
+    }
+
+    public static void QueuePowerPostfix(PowerModel __instance, ref Task __result)
+    {
+        if (CardRegistry.QueueTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        {
+            __result = t.AwaitTaskAsync(__result, flatten: t.NeedsFlattening);
+        }
+    }
+
+    public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, Player player)
+    {
+        GD.Print($"[DeckTracker] OrbChannelPostfix. Orb: {orb.Id.Entry}");
         CardRegistry.RegisterChanneledOrb(orb, CardRegistry.CurrentPlayingCard);
     }
 
     public static void OrbPassivePrefix(OrbModel __instance)
     {
         string? forcingActor = null;
-
-        // If Loop is running, pop the next card in line!
         if (CardRegistry.IsLoopExecuting.Value && CardRegistry.CurrentTurnLoopQueue.Count > 0)
         {
             forcingActor = CardRegistry.CurrentTurnLoopQueue[0];
-            CardRegistry.CurrentTurnLoopQueue.RemoveAt(0); // Pop!
+            CardRegistry.CurrentTurnLoopQueue.RemoveAt(0);
         }
         else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
         {
-            // Catch Emotion Chip!
             forcingActor = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
         }
-        // Otherwise, if Darkness is being played, it gets the credit!
         else if (CardRegistry.CurrentPlayingCard != null)
         {
             forcingActor = CardRegistry.GetTrackingId(CardRegistry.CurrentPlayingCard);
         }
-        // 4. Natural End-of-Turn Passive
         else
         {
             lock (CardRegistry.SyncRoot)
             {
-                // Increment the counter for this specific orb
                 int count = CardRegistry.EotPassiveCounts.GetValueOrDefault(__instance, 0) + 1;
                 CardRegistry.EotPassiveCounts[__instance] = count;
-
-                // The first execution is the natural one (credit to Channeler). 
-                // Any execution after the first is the extra loop from Gold Plated Cables!
                 if (count > 1)
                 {
                     forcingActor = "RELIC_GoldPlatedCables";
                 }
             }
         }
-        // Bake the Forcing Actor directly into the execution context so the Waterfall doesn't have to guess!
+        GD.Print($"[DeckTracker] OrbPassivePrefix. Orb: {__instance.Id.Entry}, ForcingActor: {forcingActor}");
         CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
     }
     
     public static void OrbPassivePostfix(OrbModel __instance, ref Task __result)
     {
+        GD.Print($"[DeckTracker] OrbPassivePostfix. Orb: {__instance.Id.Entry}");
         __result = CardRegistry.AwaitOrbExecutionTaskAsync(__result, __instance, isEvoke: false);
     }
 
     public static void OrbEvokePrefix(OrbModel __instance)
     {
-        GD.Print($"[DeckTracker] Trap SET for {__instance.Id.Entry} Evoke");
-        // Cache the EvokeVal before the execution!
+        GD.Print($"[DeckTracker] OrbEvokePrefix. Orb: {__instance.Id.Entry}");
         CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, true, __instance.EvokeVal);
     }
     
     public static void OrbEvokePostfix(OrbModel __instance, ref Task<IEnumerable<Creature>> __result)
     {
-        // Smoothly wraps the Task<T> without losing the IEnumerable<Creature> return value!
+        GD.Print($"[DeckTracker] OrbEvokePostfix. Orb: {__instance.Id.Entry}");
         __result = CardRegistry.AwaitOrbEvokeTaskAsync(__result, __instance);
     }
     
     public static void TempFocusApplyPrefix(TemporaryFocusPower __instance)
     {
+        GD.Print("[DeckTracker] TempFocusApplyPrefix.");
         CardRegistry.IsApplyingTemporaryFocus.Value = true;
     }
 
@@ -1235,6 +775,7 @@ internal static class HookPatches
 
     public static void TempFocusExpirePrefix(TemporaryFocusPower __instance)
     {
+        GD.Print("[DeckTracker] TempFocusExpirePrefix.");
         CardRegistry.IsExpiringTemporaryFocus.Value = true;
     }
 
@@ -1242,18 +783,16 @@ internal static class HookPatches
     {
         __result = CardRegistry.AwaitTempFocusExpireAsync(__result);
     }
-    
+
     public static void LoopPrefix(LoopPower __instance)
     {
+        GD.Print("[DeckTracker] LoopPrefix.");
         CardRegistry.IsLoopExecuting.Value = true;
         CardRegistry.CurrentTurnLoopQueue.Clear();
-        
-        // Flatten the ledger into an execution queue (FIFO)
         lock (CardRegistry.SyncRoot)
         {
             foreach (var contribution in CardRegistry.LoopHistory)
             {
-                // If Card A gave 2 Loop, add its ID twice. If Card B gave 1, add it once.
                 for (int i = 0; i < contribution.Amount; i++)
                 {
                     CardRegistry.CurrentTurnLoopQueue.Add(contribution.TrackingId);
@@ -1269,227 +808,101 @@ internal static class HookPatches
 
     public static void RollingBoulderAfterPlayerTurnStartPrefix(RollingBoulderPower __instance)
     {
-        CardRegistry.StartRollingBoulderExecution(__instance);
+        GD.Print("[DeckTracker] RollingBoulderAfterPlayerTurnStartPrefix.");
+        CardRegistry.InstancedTracker.StartExecution(__instance);
     }
 
     public static void RollingBoulderAfterPlayerTurnStartPostfix(RollingBoulderPower __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitRollingBoulderTaskAsync(__result, __instance);
+        __result = CardRegistry.InstancedTracker.AwaitTaskAsync(__result, __instance);
     }
     
     public static void PrepTimePrefix(PrepTimePower __instance)
     {
-        CardRegistry.IsPrepTimeExecuting.Value = true;
+        GD.Print("[DeckTracker] PrepTimePrefix.");
+        CardRegistry.HandoffTrackers["PREP_TIME_POWER"].StartExecution();
     }
 
     public static void PrepTimePostfix(PrepTimePower __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitPrepTimeTaskAsync(__result);
-    }
-    
-    // --- SHADOW STEP EXECUTION TRAP ---
-
-    public static void ShadowStepPrefix(ShadowStepPower __instance)
-    {
-        CardRegistry.IsShadowStepExecuting.Value = true;
+        __result = CardRegistry.HandoffTrackers["PREP_TIME_POWER"].AwaitTaskAsync(__result);
     }
 
-    public static void ShadowStepPostfix(ShadowStepPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitShadowStepTaskAsync(__result);
-    }
-    
-    public static void DemonFormPrefix(DemonFormPower __instance)
-    {
-        CardRegistry.IsDemonFormExecuting.Value = true;
-    }
-
-    public static void DemonFormPostfix(DemonFormPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitDemonFormTaskAsync(__result);
-    }
-    
-    public static void ArsenalPrefix(ArsenalPower __instance)
-    {
-        CardRegistry.IsArsenalExecuting.Value = true;
-    }
-
-    public static void ArsenalPostfix(ArsenalPower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitArsenalTaskAsync(__result);
-    }
-    
-    // --- MONOLOGUE EXECUTION TRAP ---
-
-    public static void MonologuePrefix(MonologuePower __instance)
-    {
-        // Read the nametag! If this instance has one, tell the system who is executing.
-        if (CardRegistry.InstancedPowerSources.TryGetValue(__instance, out var sourceId))
-        {
-            CardRegistry.ExecutingInstancedSource.Value = sourceId;
-        }
-    }
-
-    public static void MonologuePostfix(MonologuePower __instance, ref Task __result)
-    {
-        __result = CardRegistry.AwaitInstancedTaskAsync(__result);
-    }
-    
-    // A Prefix to open the trap right before Envenom executes
-    public static void EnvenomPrefix()
-    {
-        CardRegistry.IsEnvenomExecuting.Value = true;
-    }
-
-    // A Postfix to wrap the async task and close the trap when it finishes applying poison
-    public static void EnvenomPostfix(ref Task __result)
-    {
-        async Task WrappedTask(Task originalTask)
-        {
-            try { await originalTask; }
-            finally { CardRegistry.IsEnvenomExecuting.Value = false; }
-        }
-        
-        __result = WrappedTask(__result);
-    }
-    
-    // Opens the trap and builds the attribution deck!
-    public static void TrashToTreasurePrefix(TrashToTreasurePower __instance)
-    {
-        CardRegistry.IsTrashToTreasureExecuting.Value = true;
-        CardRegistry.TrashToTreasureAttributionQueue.Value = new Queue<string>();
-        
-        lock (CardRegistry.SyncRoot)
-        {
-            // If Card A gave 1 stack and Card B gave 2 stacks, this loop builds a queue: [CardA, CardB, CardB]
-            foreach (var share in CardRegistry.TrashToTreasureShares)
-            {
-                int wholeShares = (int)Math.Round(share.Shares);
-                for (int i = 0; i < wholeShares; i++)
-                {
-                    CardRegistry.TrashToTreasureAttributionQueue.Value.Enqueue(share.TrackingId);
-                }
-            }
-        }
-    }
-
-    // Closes the trap
-    public static void TrashToTreasurePostfix(ref Task __result)
-    {
-        async Task WrappedTask(Task originalTask)
-        {
-            try { await originalTask; }
-            finally { CardRegistry.IsTrashToTreasureExecuting.Value = false; }
-        }
-        __result = WrappedTask(__result);
-    }
-    
-    // --- DEMISE MIDDLEMAN ---
-    public static void DemisePowerTurnEndPrefix()
-    {
-        CardRegistry.IsDemiseExecuting.Value = true;
-    }
-
-    public static void DemisePowerTurnEndPostfix()
-    {
-        CardRegistry.IsDemiseExecuting.Value = false;
-    }
-    
-    // --- LIGHTNING ROD MIDDLEMAN ---
-    public static void LightningRodTurnStartPrefix()
-    {
-        CardRegistry.IsLightningRodExecuting.Value = true;
-    }
-
-    public static void LightningRodTurnStartPostfix()
-    {
-        CardRegistry.IsLightningRodExecuting.Value = false;
-    }
-    
-    // --- SPINNER MIDDLEMAN ---
-    public static void SpinnerTurnStartPrefix()
-    {
-        CardRegistry.IsSpinnerExecuting.Value = true;
-        CardRegistry.SpinnerExecutionIndex = 0; // Reset the pointer every turn!
-    }
-
-    public static void SpinnerTurnStartPostfix()
-    {
-        CardRegistry.IsSpinnerExecuting.Value = false;
-    }
-    
     public static void RelicAfterObtainedPrefix(RelicModel __instance)
     {
         CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
         var stats = CardRegistry.GetOrCreateRelicStats(__instance.Id.Entry);
         stats.FloorAdded = __instance.FloorAddedToDeck;
         stats.IsActive = true;
-        Godot.GD.Print($"[DeckTracker] Cached localized name for {__instance.Id.Entry}: {CardRegistry.RelicNameCache[__instance.Id.Entry]} added on floor {stats.FloorAdded}");
+        GD.Print($"[DeckTracker] RelicAfterObtainedPrefix. Relic: {__instance.Id.Entry}, Floor: {stats.FloorAdded}");
     }
 
-    public static void PlayerRemoveRelicPostfix(MegaCrit.Sts2.Core.Entities.Players.Player __instance, RelicModel relic)
+    public static void PlayerRemoveRelicPostfix(Player __instance, RelicModel relic)
     {
         if (relic != null)
         {
-            var currentFloor = ExtractFloorNum(__instance.RunState);
-            CardRegistry.HandleRelicRemove(relic, currentFloor);
+            GD.Print($"[DeckTracker] PlayerRemoveRelicPostfix. Relic: {relic.Id.Entry}");
+            CardRegistry.HandleRelicRemove(relic, ExtractFloorNum(__instance.RunState));
         }
     }
 
-    // Catches all damage dealt
-    // Catches all damage dealt
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
-        // Do not log any self-damage
-        if (target.IsPlayer) return;
-        
-        // Floor the total damage immediately!
+        if (target.IsPlayer)
+        {
+            return;
+        }
         var damageAmount = results.TotalDamage;
-        GD.Print($"[DeckTracker] AfterDamageGivePostfix triggered. Floored TotalDamage to {damageAmount}");
-        
+        GD.Print($"[DeckTracker] AfterDamageGivenPostfix. Damage: {damageAmount}, Target: {target.Name}, Source: {cardSource?.Id.Entry}");
+
         if (CardRegistry.PendingBootDamage.Value > 0)
         {
             damageAmount -= CardRegistry.PendingBootDamage.Value;
-            CardRegistry.PendingBootDamage.Value = 0; 
-            GD.Print($"[DeckTracker] The Boot reduced waterfall damage amount value in AfterDamageGivenPostfix");
+            CardRegistry.PendingBootDamage.Value = 0;
+            GD.Print($"[DeckTracker]   -> Reduced by Boot: {damageAmount}");
         }
-        
+
         if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
         {
-            string executingRelic = RelicExecutionManager.ExecutingRelicId.Value;
-            CardRegistry.AddRelicDamage(executingRelic, damageAmount);
-            return; 
+            CardRegistry.AddRelicDamage(RelicExecutionManager.ExecutingRelicId.Value, damageAmount);
+            return;
         }
-        
+
         if (CardRegistry.CurrentPoisonTarget.Value == target && damageAmount > 0)
         {
-            GD.Print($"[DeckTracker] Poison detected");
             CardRegistry.DistributePoisonDamage(target, damageAmount);
-            
-            if (!target.IsAlive) 
+            if (!target.IsAlive)
+            {
                 CardRegistry.ClearStateForTarget(target);
-                
+            }
             return;
         }
-        
-        // ORB INTERCEPT
+
         if (CardRegistry.ExecutingOrb != null && damageAmount > 0)
         {
-            Creature player = CardRegistry.ExecutingOrb.Orb.Owner.Creature;
-            CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb, damageAmount, player);
-            return; 
-        }
-
-        if (CardRegistry.IsStrangleExecuting && damageAmount > 0)
-        {
-            CardRegistry.DistributeStrangleDamage(target, damageAmount);
+            CardRegistry.DistributeOrbDamage(CardRegistry.ExecutingOrb, damageAmount, CardRegistry.ExecutingOrb.Orb.Owner.Creature);
             return;
         }
 
-        var executingTracker = CardRegistry.SimpleDamageTrackers.Values.FirstOrDefault(t => t.IsExecuting);
-        if (executingTracker != null && damageAmount > 0)
+        // Generic check for TargetedTrackers (handles Strangle/Oblivion)
+        var executingTargeted = CardRegistry.TargetedTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+        if (executingTargeted != null && damageAmount > 0)
         {
-            executingTracker.DistributeDamage(damageAmount);
+            executingTargeted.DistributeDamage(target, damageAmount);
+            return;
+        }
+
+        var simple = CardRegistry.SimpleDamageTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+        if (simple != null && damageAmount > 0)
+        {
+            simple.DistributeDamage(damageAmount);
+            return;
+        }
+
+        var prop = CardRegistry.ProportionalTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+        if (prop != null && damageAmount > 0)
+        {
+            prop.DistributeDamage(damageAmount);
             return;
         }
 
@@ -1505,170 +918,73 @@ internal static class HookPatches
             return;
         }
 
-        if (CardRegistry.ExecutingBoulder != null && damageAmount > 0)
+        if (cardSource == null)
         {
-            CardRegistry.DistributeRollingBoulderDamage(damageAmount);
+            if (CardRegistry.InstancedTracker.ExecutingSourceId != null)
+            {
+                CardRegistry.AddDamageById(CardRegistry.InstancedTracker.ExecutingSourceId, damageAmount);
+                return;
+            }
+            var activePot = CardRegistry.CurrentPlayingPotion;
+            if (activePot != null && target != null && !target.IsPlayer && CardRegistry.PotionInstanceIds.TryGetValue(activePot, out var pid))
+            {
+                CardRegistry.AddDamageById(pid, damageAmount);
+                return;
+            }
             return;
         }
 
-        if (cardSource == null)
+        decimal baseDmg = damageAmount;
+        if (CardRegistry.CurrentAttackSnapshot.Value != null && CardRegistry.CurrentAttackSnapshot.Value.CardSource == cardSource)
         {
-            // 1. INSTANCED PANACHE PAYOUT
-            if (dealer != null && dealer.IsPlayer)
-            {
-                // Find any tracked Panache instance that is currently waiting or dealing damage!
-                var firingPanache = CardRegistry.PanacheLedgers.Keys.FirstOrDefault(p => 
-                    p.DynamicVars["CardsLeft"].IntValue <= 0);
-                
-                if (firingPanache != null)
-                {
-                    if (CardRegistry.PanacheLedgers.TryGetValue(firingPanache, out var panacheSourceId))
-                    {
-                        CardRegistry.AddDamageById(panacheSourceId, damageAmount);
-                        GD.Print($"[DeckTracker] Routed {damageAmount} damage to Panache: {panacheSourceId}");
-                        return;
-                    }
-                }
-            }
-            GD.Print($"[DeckTracker] After panache check");
-            
-            // 2. PROPORTIONAL LEDGER PAYOUTS
-            List<CardRegistry.PowerShare>? activeLedger = null;
-        
-            if (CardRegistry.IsInfernoExecuting.Value) activeLedger = CardRegistry.InfernoLedger;
-            else if (CardRegistry.IsOutbreakExecuting.Value) activeLedger = CardRegistry.OutbreakLedger;
-            else if (CardRegistry.IsSmokestackExecuting.Value) activeLedger = CardRegistry.SmokestackLedger;
+            baseDmg = CardRegistry.ProcessDamageSnapshot(CardRegistry.CurrentAttackSnapshot.Value, damageAmount);
+        }
 
-            if (activeLedger != null && activeLedger.Count > 0)
-            {
-                decimal totalShares = activeLedger.Sum(x => x.Shares);
-                if (totalShares > 0)
-                {
-                    foreach (var share in activeLedger)
-                    {
-                        decimal proportion = share.Shares / totalShares;
-                        decimal attributedDamage = damageAmount * proportion;
-                
-                        if (attributedDamage > 0)
-                        {
-                            CardRegistry.AddDamageById(share.TrackingId, attributedDamage);
-                        }
-                    }
-                    return; // Successfully routed the proportional damage!
-                }
-            }
-        }
-        
-        if (cardSource == null)
+        if (cardSource.Id.Entry.Equals("SOVEREIGN_BLADE"))
         {
-            var activePotion = CardRegistry.CurrentPlayingPotion;
-            if (activePotion != null)
-            {
-                // FOUL POTION CHECK: Ignore self-damage!
-                if (target != null && !target.IsPlayer)
-                {
-                    if (CardRegistry.PotionInstanceIds.TryGetValue(activePotion, out var potionId))
-                    {
-                        CardRegistry.AddDamageById(potionId, damageAmount);
-                        GD.Print($"[DeckTracker] Routed {damageAmount} damage to {potionId}.");
-                        return; // Successfully routed to the potion!
-                    }
-                }
-            }
-            
-            // NOTE: this check falls outside the activePotion != null branch since Powdered Demise potion
-            // will not be playing while the damage ticks. Damage ticks rely on the IsDemiseExecuting value
-            // TODO: simplify logic -- it should never need to use proportional logic
-            // since Powdered Demise is discrete and monotonically increasing
-            if (CardRegistry.IsDemiseExecuting.Value && target != null)
-            {
-                if (CardRegistry.DemiseLedgers.TryGetValue(target, out var ledger))
-                {
-                    GD.Print($"[DeckTracker] PowderedDemise detected");
-                    decimal totalShares = ledger.Sum(x => x.Shares);
-                    if (totalShares > 0)
-                    {
-                        foreach (var share in ledger)
-                        {
-                            decimal proportion = share.Shares / totalShares;
-                            decimal attributedDamage = damageAmount * proportion;
-                        
-                            if (attributedDamage > 0)
-                            {
-                                CardRegistry.AddDamageById(share.TrackingId, attributedDamage);
-                            }
-                        }
-                        return; // Successfully routed the Demise damage!
-                    }
-                }
-            }
-            
-            // If it wasn't a potion, fallback to your existing poison/orb checks
-            GD.Print("[DeckTracker] CardSource is null and not potion or supported orb. Returning...");
-            return;
-        }
-        
-        decimal baseCardDamage = damageAmount;
-        if (CardRegistry.CurrentAttackSnapshot.Value != null && 
-            CardRegistry.CurrentAttackSnapshot.Value.CardSource == cardSource)
-        {
-            baseCardDamage = CardRegistry.ProcessDamageSnapshot(CardRegistry.CurrentAttackSnapshot.Value, damageAmount);
-        }
-        
-        // If the card is Sovereign Blade, process the forge distribution!
-        GD.Print($"[DeckTracker] Card {cardSource.Id.Entry} did {damageAmount} damage to {target.Name} with target type {cardSource.TargetType}");
-        GD.Print($"[DeckTracker] {combatState.Enemies.Count} enemies in the combat via after damage");
-        if (cardSource.Id.Entry.Equals("SOVEREIGN_BLADE")) 
-        {
-            var damageHistoryItem = new DamageHistoryItem(combatState, dealer, results, target, cardSource);
-            CardRegistry.AddSovereignBladeDamageHistoryItem(damageHistoryItem);
+            CardRegistry.AddSovereignBladeDamageHistoryItem(new DamageHistoryItem(combatState, dealer, results, target, cardSource));
         }
         else if (cardSource.Id.Entry.Equals("SHIV"))
         {
-            // Bypass the un-peeled results object and pass the clean base damage!
-            CardRegistry.AddShivDamage(cardSource, baseCardDamage);
+            CardRegistry.AddShivDamage(cardSource, baseDmg);
         }
         else
         {
-            CardRegistry.AddDamage(cardSource, baseCardDamage); 
+            CardRegistry.AddDamage(cardSource, baseDmg); 
         }
     }
     
-    // --- POTION HOOKS ---
     public static void AfterPotionProcuredPrefix(PotionModel potion)
     {
-        int currentFloor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
-        CardRegistry.RegisterPotionProcured(potion, currentFloor);
-        GD.Print($"[DeckTracker] Potion {potion.Id.Entry} has been procured");
+        int floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        GD.Print($"[DeckTracker] AfterPotionProcuredPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
+        CardRegistry.RegisterPotionProcured(potion, floor);
     }
-    
+
     public static void AfterPotionDiscardedPrefix(PotionModel potion)
     {
-        int currentFloor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
-        CardRegistry.MarkPotionDiscarded(potion, currentFloor);
-        GD.Print($"[DeckTracker] Potion {potion.Id.Entry} has been discarded");
+        int floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        GD.Print($"[DeckTracker] AfterPotionDiscardedPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
+        CardRegistry.MarkPotionDiscarded(potion, floor);
     }
 
     public static void BeforePotionUsedPrefix(PotionModel potion)
     {
-        int currentFloor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
-        CardRegistry.MarkPotionUsed(potion, currentFloor);
-        
-        // OPEN THE TRAP: Any un-sourced damage that happens next belongs to this potion!
+        int floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
+        GD.Print($"[DeckTracker] BeforePotionUsedPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
+        CardRegistry.MarkPotionUsed(potion, floor);
         CardRegistry.SetPlayingPotion(potion);
-        GD.Print($"[DeckTracker] (before) Potion {potion.Id.Entry} has been used");
-    }
-    
-    public static void AfterPotionUsedPrefix(PotionModel potion)
-    {
-        // CLOSE THE TRAP
-        CardRegistry.SetPlayingPotion(null);
-        GD.Print($"[DeckTracker] (after) Potion {potion.Id.Entry} has been used");
     }
 
-    // --- RITUAL MIDDLEMAN ---
+    public static void AfterPotionUsedPrefix(PotionModel potion)
+    {
+        GD.Print($"[DeckTracker] AfterPotionUsedPrefix. Potion: {potion.Id.Entry}");
+        CardRegistry.SetPlayingPotion(null);
+    }
+
     public static void RitualPowerTurnEndPrefix()
     {
+        GD.Print("[DeckTracker] RitualPowerTurnEndPrefix.");
         CardRegistry.IsRitualTriggering.Value = true;
     }
 
@@ -1676,8 +992,7 @@ internal static class HookPatches
     {
         CardRegistry.IsRitualTriggering.Value = false;
     }
-    
-    // --- HAND DRILL TRAP ---
+
     public static void HandDrillAfterDamagePrefix()
     {
         RelicExecutionManager.ExecutingRelicId.Value = "HAND_DRILL";
@@ -1688,118 +1003,63 @@ internal static class HookPatches
         RelicExecutionManager.ExecutingRelicId.Value = null;
     }
     
-    // --- THE BOOT TRAP ---
     public static void TheBootModifyHpPostfix(MegaCrit.Sts2.Core.Models.Relics.TheBoot __instance, decimal amount, ref decimal __result)
     {
         if (__result > amount)
         {
-            // Floor the incoming decimal to match integer HP logic!
-            var flooredAmount = (int)Math.Floor(amount);
-            var bootDamage = (int)Math.Floor(__result - flooredAmount);
-            
-            string relicId = "RELIC_" + (__instance.Id.Entry ?? "THE_BOOT");
-            CardRegistry.AddDamageById(relicId, bootDamage);
-            
-            CardRegistry.PendingBootDamage.Value += bootDamage;
-            
-            GD.Print($"[DeckTracker] The Boot increased damage from {flooredAmount} to {__result}. Awarded {bootDamage} damage.");
+            var floor = (int)Math.Floor(amount);
+            var boot = (int)Math.Floor(__result - floor);
+            GD.Print($"[DeckTracker] TheBootModifyHpPostfix. Damage: {boot}");
+            CardRegistry.AddDamageById("RELIC_" + (__instance.Id.Entry ?? "THE_BOOT"), boot);
+            CardRegistry.PendingBootDamage.Value += boot;
         }
     }
     
-    // --- HELPERS & EXTRACTORS ---
-    private static int ExtractFloorNum(IRunState? runState)
-    {
-        if (runState == null) return 1;
-        return runState.TotalFloor;
-    }
-
-    private static int ExtractActNum(IRunState? runState)
-    {
-        if (runState == null) return 1;
-        // CurrentActIndex is 0-based (Act 1 = 0), so we add 1 to match our 1-based registry.
-        return runState.CurrentActIndex + 1;
-    }
-    
-    
-    // --- INFERNO ---
-    public static void InfernoPrefix() { CardRegistry.IsInfernoExecuting.Value = true; }
-    public static void InfernoPostfix() { CardRegistry.IsInfernoExecuting.Value = false; }
-
-    // --- OUTBREAK ---
-    public static void OutbreakPrefix() { CardRegistry.IsOutbreakExecuting.Value = true; }
-    public static void OutbreakPostfix() { CardRegistry.IsOutbreakExecuting.Value = false; }
-
-    // --- SMOKESTACK ---
-    public static void SmokestackPrefix() { CardRegistry.IsSmokestackExecuting.Value = true; }
-    public static void SmokestackPostfix() { CardRegistry.IsSmokestackExecuting.Value = false; }
-    
-    // --- RUPTURE MIDDLEMAN ---
-    public static void RupturePrefix() { CardRegistry.IsRuptureExecuting.Value = true; }
-    public static void RupturePostfix() { CardRegistry.IsRuptureExecuting.Value = false; }
-    
+    private static int ExtractFloorNum(IRunState? runState) => runState?.TotalFloor ?? 1;
+    private static int ExtractActNum(IRunState? runState) => (runState?.CurrentActIndex ?? 0) + 1;
     private static string GetCombatType(IRunState? runState)
     {
         if (runState != null)
         {
             try
             {
-                var roomType = runState.BaseRoom?.RoomType;
-                if (roomType == RoomType.Monster) return "Hallway";
-                if (roomType == RoomType.Elite) return "Elite";
-                if (roomType == RoomType.Boss) return "Boss";
+                var t = runState.BaseRoom?.RoomType;
+                if (t == RoomType.Monster) return "Hallway";
+                if (t == RoomType.Elite) return "Elite";
+                if (t == RoomType.Boss) return "Boss";
             }
             catch { }
         }
         return "Hallway";
     }
-
     private static string ExtractRunSeed(IRunState? runState)
     {
         if (runState == null) return "";
-        try 
+        try
         {
-            var rngProp = runState.GetType().GetProperty("Rng");
-            var rng = rngProp?.GetValue(runState);
-            var seedProp = rng?.GetType().GetProperty("StringSeed");
-            return seedProp?.GetValue(rng)?.ToString() ?? "";
-        } 
-        catch { return ""; }
+            var r = runState.GetType().GetProperty("Rng")?.GetValue(runState);
+            return r?.GetType().GetProperty("StringSeed")?.GetValue(r)?.ToString() ?? "";
+        }
+        catch
+        {
+            return "";
+        }
     }
-
     private static List<string> ScanDeckForCards(IRunState? runState)
     {
-        List<string> deckIds = new();
-        if (runState == null) return deckIds;
-        var players = runState.Players;
-        if (players.Count == 0) return deckIds;
-
-        // THE FIX: Scan the decks of every player in the lobby!
-        foreach (var player in players)
+        List<string> ids = new();
+        if (runState != null)
         {
-            ScanPlayerPiles(player, deckIds);
+            foreach (var p in runState.Players)
+            {
+                foreach (var c in p.Deck.Cards)
+                {
+                    CardRegistry.RegisterCard(c);
+                    ids.Add(CardRegistry.GetTrackingId(c));
+                }
+            }
         }
-
-        return deckIds;
+        return ids;
     }
-    
-    private static void ScanPlayerPiles(Player player, List<string> deckIds)
-    {
-        var deck = player.Deck;
-
-        foreach (var card in deck.Cards) 
-        {
-            CardRegistry.RegisterCard(card);
-            deckIds.Add(CardRegistry.GetTrackingId(card));
-        }
-    }
-
-    public static void RunManagerCleanUpPrefix()
-    {
-        CardRegistry.ClearSession();
-    }
-    
-    private static System.Collections.IEnumerable? GetEnumerableProperty(object obj, string propertyName)
-    {
-        return obj.GetType().GetProperty(propertyName)?.GetValue(obj) as System.Collections.IEnumerable;
-    }
+    public static void RunManagerCleanUpPrefix() => CardRegistry.ClearSession();
 }

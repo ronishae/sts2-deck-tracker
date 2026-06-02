@@ -1,6 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Entities.Creatures;
-
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
@@ -27,8 +31,14 @@ public static partial class CardRegistry
     private static readonly AsyncLocal<OrbExecutionContext?> _executingOrb = new();
     public static OrbExecutionContext? ExecutingOrb
     {
-        get => _executingOrb.Value;
-        set => _executingOrb.Value = value;
+        get
+        {
+            return _executingOrb.Value;
+        }
+        set
+        {
+            _executingOrb.Value = value;
+        }
     }
     
     public static readonly List<string> UnattributedOrbLogs = new();
@@ -42,6 +52,7 @@ public static partial class CardRegistry
             UnattributedOrbLogs.Clear();
             DarkOrbLedgers.Clear();
             LoopHistory.Clear();
+            GD.Print("[DeckTracker] ResetOrbState. State cleared.");
         }
     }
 
@@ -51,60 +62,40 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            // If there is no card, it was channeled by a Relic, a Potion, or an Event
             string trackingId = sourceCard != null ? GetTrackingId(sourceCard) : 
                 (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
                     "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
                     "External_Relic");
             
-            if (IsStormExecuting.Value)
+            // --- GENERIC QUEUE TRACKER INTERCEPT ---
+            foreach (var queueTracker in QueueTrackers.Values)
             {
-                var stormId = GetNextStormTrackingId();
-                if (stormId != null) trackingId = stormId;
-            }
-            
-            // Check if Trash to Treasure is executing its loop!
-            if (IsTrashToTreasureExecuting.Value && TrashToTreasureAttributionQueue.Value != null)
-            {
-                // Pop the next ID off the queue!
-                if (TrashToTreasureAttributionQueue.Value.TryDequeue(out string? t2tId))
+                if (queueTracker.IsExecuting)
                 {
-                    trackingId = t2tId;
-                    GD.Print($"[DeckTracker] Routed random channeled orb to Trash to Treasure source: {trackingId}");
+                    var nextId = queueTracker.GetNextIdForOrb();
+                    if (nextId != null)
+                    {
+                        trackingId = nextId;
+                        GD.Print($"[DeckTracker] RegisterChanneledOrb. Routed {orb.Id.Entry} to QueueTracker {queueTracker.PowerId}: {trackingId}");
+                    }
+                    break; 
                 }
-            }
-            
-            if (IsLightningRodExecuting.Value && LightningRodQueue.Count > 0)
-            {
-                trackingId = LightningRodQueue.Dequeue();
-                GD.Print($"[DeckTracker] Routed Lightning Rod channeled orb to: {trackingId}");
-            }
-            
-            if (IsSpinnerExecuting.Value && SpinnerExecutionIndex < SpinnerSources.Count)
-            {
-                trackingId = SpinnerSources[SpinnerExecutionIndex];
-                SpinnerExecutionIndex++; // Move pointer to the next one in line
-                GD.Print($"[DeckTracker] Routed Spinner channeled orb to: {trackingId}");
             }
             
             if (sourceCard == null && CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potionId))
             {
                 trackingId = potionId;
-                GD.Print($"[DeckTracker] Tagging channeled Orb to Potion: {trackingId}");
+                GD.Print($"[DeckTracker] RegisterChanneledOrb. Tagging channeled Orb to Potion: {trackingId}");
             }
             
             OrbChannelers[orb] = trackingId;
-            GD.Print($"[DeckTracker] Channeled {orb.Id.Entry} and attributed to {trackingId}");
+            GD.Print($"[DeckTracker] RegisterChanneledOrb. Orb: {orb.Id.Entry}, Attributed To: {trackingId}");
             
             if (orb is DarkOrb)
             {
                 DarkOrbLedgers[orb] = new List<OrbContribution>();
-                
-                // Directly add the EvokeVal (which is strictly the base 6 on channel) 
-                // Focus gets 0 credit for the initial channel!
                 DarkOrbLedgers[orb].Add(new OrbContribution { TrackingId = trackingId, Amount = orb.EvokeVal });
-                
-                GD.Print($"[DeckTracker] Dark Orb Channel: Logged {orb.EvokeVal:F2} Initial Base to {trackingId}");
+                GD.Print($"[DeckTracker] RegisterChanneledOrb (Dark Orb). Initial Base: {orb.EvokeVal:F2}, To: {trackingId}");
             }
         }
     }
@@ -116,19 +107,26 @@ public static partial class CardRegistry
             if (OrbChannelers.ContainsKey(orb))
             {
                 OrbChannelers.Remove(orb);
-                if (DarkOrbLedgers.ContainsKey(orb)) DarkOrbLedgers.Remove(orb);
+                if (DarkOrbLedgers.ContainsKey(orb))
+                {
+                    DarkOrbLedgers.Remove(orb);
+                }
+                GD.Print($"[DeckTracker] DeregisterOrb. Removed {orb.Id.Entry}.");
             }
         }
     }
     
     public static void AddLoop(decimal amount, CardModel? cardSource)
     {
-        if (cardSource == null || amount <= 0) return;
+        if (cardSource == null || amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
             string id = GetTrackingId(cardSource);
             LoopHistory.Add(new LoopContribution { TrackingId = id, Amount = amount });
-            GD.Print($"[DeckTracker] Added {amount} Loop to ledger for {id}");
+            GD.Print($"[DeckTracker] AddLoop. Amount: {amount}, Source: {id}");
         }
     }
     
@@ -136,11 +134,16 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            if (!DarkOrbLedgers.TryGetValue(orb, out var ledger)) return;
+            if (!DarkOrbLedgers.TryGetValue(orb, out var ledger))
+            {
+                return;
+            }
 
-            // Snapshot the current focus state
             decimal totalFocus = 0;
-            foreach (var focus in FocusHistory) totalFocus += focus.Amount;
+            foreach (var focus in FocusHistory)
+            {
+                totalFocus += focus.Amount;
+            }
 
             decimal pureBase = waveAmount - totalFocus;
             if (totalFocus < 0)
@@ -149,17 +152,21 @@ public static partial class CardRegistry
                 totalFocus = 0;
             }
 
-            // 1. Log the Base Actor
             if (pureBase > 0)
             {
                 string? baseId = forcedActorId;
-                if (baseId == null && OrbChannelers.TryGetValue(orb, out var channeler)) baseId = channeler;
-                if (baseId == null) baseId = "External_Relic";
+                if (baseId == null && OrbChannelers.TryGetValue(orb, out var channeler))
+                {
+                    baseId = channeler;
+                }
+                if (baseId == null)
+                {
+                    baseId = "External_Relic";
+                }
 
                 ledger.Add(new OrbContribution { TrackingId = baseId, Amount = pureBase });
-                GD.Print($"[DeckTracker] Dark Wave: Logged {pureBase:F2} Base to {baseId}");
+                GD.Print($"[DeckTracker] RecordDarkOrbWave. Base: {pureBase:F2}, To: {baseId}");
             }
-            // 2. Log the active Focus Queue (Preserves exact ordering for this wave)
             if (totalFocus > 0)
             {
                 foreach (var focus in FocusHistory)
@@ -167,115 +174,112 @@ public static partial class CardRegistry
                     if (focus.Amount > 0)
                     {
                         ledger.Add(new OrbContribution { TrackingId = focus.TrackingId, Amount = focus.Amount });
-                        GD.Print($"[DeckTracker] Dark Orb Wave: Logged {focus.Amount:F2} Focus to {focus.TrackingId}");
+                        GD.Print($"[DeckTracker] RecordDarkOrbWave. Focus: {focus.Amount:F2}, To: {focus.TrackingId}");
                     }
                 }
             }
         }
     }
     
-    // --- FOCUS LEDGER ---
-    
     public static void LogFocusChange(CardModel? cardSource, decimal amount)
     {
-        // 2. STANDARD APPLICATION: (Cards, Relics, or Enemy Debuffs)
         string trackingId = cardSource != null ? GetTrackingId(cardSource) : 
             (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
                 "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
                 (amount > 0 ? "External_Buff" : "External_Debuff"));
         
+        GD.Print($"[DeckTracker] LogFocusChange (Forwarder). TrackingId: {trackingId}, Amount: {amount}");
         LogFocusChangeById(trackingId, amount);
     }
 
     public static void LogFocusChangeById(string trackingId, decimal amount)
     {
-        if (amount == 0) return;
-
-        lock (SyncRoot)
+        if (amount == 0)
         {
-            // 1. THE ERASURE TRAP: Is a temporary power currently falling off?
-            if (IsExpiringTemporaryFocus.Value)
-            {
-                decimal remainingToErase = Math.Abs(amount);
-                for (int i = 0; i < FocusHistory.Count; i++)
-                {
-                    if (remainingToErase <= 0) break;
-                    
-                    var contribution = FocusHistory[i];
-                    
-                    // CRITICAL: Only erase from contributions explicitly marked as temporary!
-                    if (contribution.Amount > 0 && contribution.IsTemporary)
-                    {
-                        decimal erased = Math.Min(remainingToErase, contribution.Amount);
-                        contribution.Amount -= erased;
-                        remainingToErase -= erased;
-                    }
-                }
-                FocusHistory.RemoveAll(c => c.Amount == 0);
-                GD.Print("[DeckTracker] Erased expired temporary focus from the ledger.");
-                return;
-            }
-            
-            // Check the Apply trap
-            bool isTemp = IsApplyingTemporaryFocus.Value;
-            
-            FocusHistory.Add(new FocusContribution { 
-                TrackingId = trackingId, 
-                Amount = amount, 
-                IsTemporary = isTemp 
-            });
-            
-            GD.Print($"[DeckTracker] Logged {amount} Focus for {trackingId} (Temporary: {isTemp})");
-        }
-    }
-    
-    // --- DAMAGE DISTRIBUTION (WATERFALL) ---
-    
-    public static void DistributeOrbDamage(OrbExecutionContext context, decimal totalDamage, Creature player)
-    {
-        if (totalDamage <= 0) return;
-
-        if (SimpleDamageTrackers["THUNDER_POWER"].IsExecuting)
-        {
-            SimpleDamageTrackers["THUNDER_POWER"].DistributeDamage(totalDamage);
             return;
         }
 
         lock (SyncRoot)
         {
-            decimal remainingDamageToDistributeModifyerPeel = totalDamage;
-            decimal totalRelicModifiers = 0m; // NEW: Track the total peeled modifiers!
+            if (IsExpiringTemporaryFocus.Value)
+            {
+                decimal rem = Math.Abs(amount);
+                GD.Print($"[DeckTracker] LogFocusChangeById (Erasing). Amount: {rem}");
+                for (int i = 0; i < FocusHistory.Count; i++)
+                {
+                    if (rem <= 0)
+                    {
+                        break;
+                    }
+                    var c = FocusHistory[i];
+                    if (c.Amount > 0 && c.IsTemporary)
+                    {
+                        decimal e = Math.Min(rem, c.Amount);
+                        c.Amount -= e;
+                        rem -= e;
+                        GD.Print($"[DeckTracker]   -> Erased {e} from {c.TrackingId}");
+                    }
+                }
+                FocusHistory.RemoveAll(c => c.Amount == 0);
+                return;
+            }
+            
+            FocusHistory.Add(new FocusContribution { 
+                TrackingId = trackingId, 
+                Amount = amount, 
+                IsTemporary = IsApplyingTemporaryFocus.Value 
+            });
+            GD.Print($"[DeckTracker] LogFocusChangeById. Amount: {amount}, Source: {trackingId}, Temp: {IsApplyingTemporaryFocus.Value}");
+        }
+    }
+    
+    public static void DistributeOrbDamage(OrbExecutionContext context, decimal totalDamage, Creature player)
+    {
+        if (totalDamage <= 0)
+        {
+            return;
+        }
 
-            // 1. PEEL ORB MODIFIER RELICS (e.g., Infused Core's +1 Lightning)
+        // Generic check for SimpleDamageTrackers (handles Thunder)
+        var executingSimple = SimpleDamageTrackers.Values.FirstOrDefault(t => t.IsExecuting);
+        if (executingSimple != null)
+        {
+            GD.Print($"[DeckTracker] DistributeOrbDamage. Redirecting {totalDamage} to SimpleTracker {executingSimple.PowerId}");
+            executingSimple.DistributeDamage(totalDamage);
+            return;
+        }
+
+        lock (SyncRoot)
+        {
+            decimal remaining = totalDamage;
+            decimal totalRelicMods = 0m;
+            GD.Print($"[DeckTracker] DistributeOrbDamage (Waterfall). Total: {totalDamage}, Orb: {context.Orb.Id.Entry}");
+
             if (RelicExecutionManager.PendingOrbModifiers.Value != null)
             {
                 foreach (var mod in RelicExecutionManager.PendingOrbModifiers.Value)
                 {
-                    decimal payout = Math.Min(remainingDamageToDistributeModifyerPeel, mod.delta);
+                    decimal payout = Math.Min(remaining, mod.delta);
                     AddRelicDamage(mod.relicId, payout);
-                    remainingDamageToDistributeModifyerPeel -= payout;
-                    totalRelicModifiers += mod.delta; // Track what we stripped!
+                    remaining -= payout;
+                    totalRelicMods += mod.delta;
+                    GD.Print($"[DeckTracker]   -> Peeled {payout} to Relic {mod.relicId}");
                 }
                 RelicExecutionManager.PendingOrbModifiers.Value.Clear();
             }
-            
+
             OrbModel orb = context.Orb;
-            
             if (!OrbChannelers.TryGetValue(orb, out string? channelerId))
             {
-                // --- THE GENERIC MULTI-EVOKE FALLBACK ---
-                // If the orb isn't in the ledger, it has already been evoked once and deregistered.
-                // If a card is currently playing, it forced this phantom evoke and gets 100% of the credit!
                 if (context.IsEvoke && CurrentPlayingCard != null)
                 {
-                    string multiEvokerId = GetTrackingId(CurrentPlayingCard);
-                    AddDamageById(multiEvokerId, remainingDamageToDistributeModifyerPeel);
-                    GD.Print($"[DeckTracker] Phantom Evoke! Paid {remainingDamageToDistributeModifyerPeel:F2} Bonus Evoke Damage to {multiEvokerId}");
+                    string multiId = GetTrackingId(CurrentPlayingCard);
+                    AddDamageById(multiId, remaining);
+                    GD.Print($"[DeckTracker] DistributeOrbDamage (Phantom Evoke). Attributed {remaining} to {multiId}");
                     return;
                 }
-                
-                // If no card is playing, it's a true unaccounted error.
-                UnattributedOrbLogs.Add($"Unattributed {orb.Id.Entry} Orb Damage ({remainingDamageToDistributeModifyerPeel}). Cause: No channeling card found.");
+                UnattributedOrbLogs.Add($"Unattributed {orb.Id.Entry} Orb Damage ({remaining}). Cause: No channeling card found.");
+                GD.Print($"[DeckTracker] DistributeOrbDamage (UNATTRIBUTED). Amount: {remaining}");
                 return;
             }
             
@@ -283,101 +287,77 @@ public static partial class CardRegistry
             {
                 if (DarkOrbLedgers.TryGetValue(orb, out var ledger))
                 {
-                    decimal remainingDamageToDistribute = remainingDamageToDistributeModifyerPeel;
-                    
-                    // Walk through the concatenated waves in pure FIFO order
-                    foreach (var contribution in ledger)
+                    GD.Print($"[DeckTracker] DistributeOrbDamage (Dark FIFO). Remaining: {remaining}");
+                    foreach (var c in ledger)
                     {
-                        if (remainingDamageToDistribute <= 0) break;
-                        
-                        decimal payout = Math.Min(remainingDamageToDistribute, contribution.Amount);
-                        AddDamageById(contribution.TrackingId, payout);
-                        remainingDamageToDistribute -= payout;
-                        
-                        GD.Print($"[DeckTracker] Dark Orb FIFO: Paid {payout:F2} to {contribution.TrackingId}");
-                    }
-
-                    if (remainingDamageToDistribute > 0)
-                    {
-                        GD.Print($"[DeckTracker] {remainingDamageToDistribute} Dark Orb Damage unaccounted for in ledger.");
+                        if (remaining <= 0)
+                        {
+                            break;
+                        }
+                        decimal p = Math.Min(remaining, c.Amount);
+                        AddDamageById(c.TrackingId, p);
+                        remaining -= p;
+                        GD.Print($"[DeckTracker]   -> Attributed {p} to {c.TrackingId}");
                     }
                 }
-                return; // Dark Orb processed. Exit before running the Lightning/Glass waterfall!
+                return;
             }
-            
-            decimal currentEngineOrbValue = context.ExpectedValue;
-            decimal totalFocus = player.GetPower<FocusPower>()?.Amount ?? 0m;
-            
-            // CRITICAL FIX: Subtract the relic modifiers from the pure base!
-            decimal pureBase = currentEngineOrbValue - totalFocus - totalRelicModifiers;
 
-            decimal channelerPayout;
-            decimal focusPayoutTotal;
+            decimal totalFocus = player.GetPower<FocusPower>()?.Amount ?? 0m;
+            decimal pureBase = context.ExpectedValue - totalFocus - totalRelicMods;
+            decimal cPayout;
+            decimal fPayoutTotal;
 
             if (totalFocus >= 0)
             {
-                // Standard Waterfall
-                channelerPayout = Math.Min(remainingDamageToDistributeModifyerPeel, pureBase);
-                focusPayoutTotal = remainingDamageToDistributeModifyerPeel - channelerPayout;
+                cPayout = Math.Min(remaining, pureBase);
+                fPayoutTotal = remaining - cPayout;
             }
             else
             {
-                // Negative Focus Waterfall (Damage Debt)
-                decimal theoreticalDamage = remainingDamageToDistributeModifyerPeel - totalFocus; 
-                channelerPayout = Math.Min(theoreticalDamage, pureBase);
-                focusPayoutTotal = remainingDamageToDistributeModifyerPeel - channelerPayout; 
+                cPayout = Math.Min(remaining - totalFocus, pureBase);
+                fPayoutTotal = remaining - cPayout;
             }
 
-            // 1. Payout the Channeler
-            if (channelerPayout != 0)
+            if (cPayout != 0)
             {
-                if (!context.IsEvoke && context.ForcedActorId != null)
+                string baseTarget = (!context.IsEvoke && context.ForcedActorId != null) ? context.ForcedActorId : channelerId;
+                AddDamageById(baseTarget, cPayout);
+                GD.Print($"[DeckTracker]   -> Base Payout: {cPayout}, To: {baseTarget}");
+            }
+
+            if (fPayoutTotal != 0)
+            {
+                foreach (var c in FocusHistory)
                 {
-                    // A Loop or Darkness card forced this passive trigger!
-                    AddDamageById(context.ForcedActorId, channelerPayout);
-                    GD.Print($"[DeckTracker] Waterfall Paid {channelerPayout:F2} Base to Forcing Actor ({context.ForcedActorId})");
-                }
-                else
-                {
-                    // Standard Natural Passive or Evoke
-                    AddDamageById(channelerId, channelerPayout);
-                    GD.Print($"[DeckTracker] Waterfall Paid {channelerPayout:F2} Base Orb Damage to {channelerId}");
+                    if (fPayoutTotal == 0)
+                    {
+                        break;
+                    }
+                    if (fPayoutTotal > 0 && c.Amount > 0)
+                    {
+                        decimal p = Math.Min(fPayoutTotal, c.Amount);
+                        AddDamageById(c.TrackingId, p);
+                        fPayoutTotal -= p;
+                        GD.Print($"[DeckTracker]   -> Focus Payout: {p}, To: {c.TrackingId}");
+                    }
+                    else if (fPayoutTotal < 0 && c.Amount < 0)
+                    {
+                        decimal p = Math.Max(fPayoutTotal, c.Amount);
+                        AddDamageById(c.TrackingId, p);
+                        fPayoutTotal -= p;
+                        GD.Print($"[DeckTracker]   -> Focus Debt: {p}, To: {c.TrackingId}");
+                    }
                 }
             }
             
-            // 2. Payout the Focus Queue (Positive Damage or Negative Debt)
-            if (focusPayoutTotal != 0)
+            if (fPayoutTotal > 0)
             {
-                foreach (var contribution in FocusHistory)
-                {
-                    if (focusPayoutTotal == 0) break;
-
-                    if (focusPayoutTotal > 0 && contribution.Amount > 0)
-                    {
-                        decimal payout = Math.Min(focusPayoutTotal, contribution.Amount);
-                        AddDamageById(contribution.TrackingId, payout);
-                        focusPayoutTotal -= payout;
-                        GD.Print($"[DeckTracker] Waterfall Paid {payout:F2} Focus Damage to {contribution.TrackingId}");
-                    }
-                    else if (focusPayoutTotal < 0 && contribution.Amount < 0)
-                    {
-                        decimal debtPayout = Math.Max(focusPayoutTotal, contribution.Amount); 
-                        AddDamageById(contribution.TrackingId, debtPayout);
-                        focusPayoutTotal -= debtPayout;
-                        GD.Print($"[DeckTracker] Waterfall Assigned {debtPayout:F2} Damage Debt to {contribution.TrackingId}");
-                    }
-                }
-            }
-
-            if (focusPayoutTotal > 0)
-            {
-                GD.Print($"[DeckTracker] {focusPayoutTotal} Orb Damage unaccounted for by Base/Focus (Likely Relic modification).");
+                GD.Print($"[DeckTracker] DistributeOrbDamage (Leak). {fPayoutTotal} damage unattributed.");
             }
         }
         Publish();
     }
-    
-    // --- ASYNC WRAPPERS ---
     
     public static async Task AwaitOrbExecutionTaskAsync(Task originalTask, OrbModel orb, bool isEvoke)
     {
@@ -387,15 +367,17 @@ public static partial class CardRegistry
             await originalTask;
             if (!isEvoke && orb is DarkOrb && context != null)
             {
-                GD.Print($"[DeckTracker] {orb.GetType().Name} Orb Execution Task");
-                // We use the ExpectedValue (PassiveVal) we cached in the Prefix
+                GD.Print($"[DeckTracker] AwaitOrbExecutionTaskAsync. Recording Dark Orb Wave for {orb.Id.Entry}");
                 RecordDarkOrbWave(orb, context.ExpectedValue, context.ForcedActorId);
             }
         }
         finally
         {
             ExecutingOrb = null;
-            if (isEvoke) DeregisterOrb(orb);
+            if (isEvoke)
+            {
+                DeregisterOrb(orb);
+            }
         }
     }
     
@@ -414,26 +396,41 @@ public static partial class CardRegistry
     
     public static async Task AwaitTempFocusApplyAsync(Task originalTask)
     {
-        try { await originalTask; }
-        finally { IsApplyingTemporaryFocus.Value = false; }
+        try
+        {
+            await originalTask;
+        }
+        finally
+        {
+            IsApplyingTemporaryFocus.Value = false;
+            GD.Print("[DeckTracker] AwaitTempFocusApplyAsync finished.");
+        }
     }
 
     public static async Task AwaitTempFocusExpireAsync(Task originalTask)
     {
-        try { await originalTask; }
-        finally { IsExpiringTemporaryFocus.Value = false; }
+        try
+        {
+            await originalTask;
+        }
+        finally
+        {
+            IsExpiringTemporaryFocus.Value = false;
+            GD.Print("[DeckTracker] AwaitTempFocusExpireAsync finished.");
+        }
     }
     
     public static async Task AwaitLoopTaskAsync(Task originalTask)
     {
-        try 
-        { 
-            await originalTask; 
+        try
+        {
+            await originalTask;
         }
-        finally 
-        { 
-            IsLoopExecuting.Value = false; 
+        finally
+        {
+            IsLoopExecuting.Value = false;
             CurrentTurnLoopQueue.Clear();
+            GD.Print("[DeckTracker] AwaitLoopTaskAsync finished.");
         }
     }
 }

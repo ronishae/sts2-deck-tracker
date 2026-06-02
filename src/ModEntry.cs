@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;
@@ -7,6 +9,8 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
+using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 
 namespace DeckTracker;
 
@@ -18,60 +22,36 @@ public static class ModEntry
     public static void Initialize()
     {
         if (_harmony != null) return;
+        GD.Print("[DeckTracker] Initializing DeckTracker mod...");
         _harmony = new Harmony("com.yourname.sts2.deck_tracker");
         
         var cleanUpMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.CleanUp));
         var cleanUpPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RunManagerCleanUpPrefix)));
         _harmony.Patch(cleanUpMethod, prefix: cleanUpPrefix);
         
-        // 1. Potion Procured
-        var afterPotionProcuredMethod = AccessTools.Method(typeof(Hook), nameof(Hook.AfterPotionProcured));
-        var afterPotionProcuredPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.AfterPotionProcuredPrefix)));
-        _harmony.Patch(afterPotionProcuredMethod, prefix: afterPotionProcuredPrefix);
-
-        // 2. Potion Discarded
-        var afterPotionDiscardedMethod = AccessTools.Method(typeof(Hook), nameof(Hook.AfterPotionDiscarded));
-        var afterPotionDiscardedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.AfterPotionDiscardedPrefix)));
-        _harmony.Patch(afterPotionDiscardedMethod, prefix: afterPotionDiscardedPrefix);
-
-        // 3. Before Potion Used (Opens the Trap)
-        var beforePotionUsedMethod = AccessTools.Method(typeof(Hook), nameof(Hook.BeforePotionUsed));
-        var beforePotionUsedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePotionUsedPrefix)));
-        _harmony.Patch(beforePotionUsedMethod, prefix: beforePotionUsedPrefix);
-
-        // 4. After Potion Used (Closes the Trap)
-        var afterPotionUsedMethod = AccessTools.Method(typeof(Hook), nameof(Hook.AfterPotionUsed));
-        var afterPotionUsedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.AfterPotionUsedPrefix)));
-        _harmony.Patch(afterPotionUsedMethod, prefix: afterPotionUsedPrefix);
+        // --- Potion Lifecycle ---
+        PatchHook(nameof(Hook.AfterPotionProcured), nameof(HookPatches.AfterPotionProcuredPrefix));
+        PatchHook(nameof(Hook.AfterPotionDiscarded), nameof(HookPatches.AfterPotionDiscardedPrefix));
+        PatchHook(nameof(Hook.BeforePotionUsed), nameof(HookPatches.BeforePotionUsedPrefix));
+        PatchHook(nameof(Hook.AfterPotionUsed), nameof(HookPatches.AfterPotionUsedPrefix));
         
+        // --- Relic Lifecycle ---
         var afterObtainedMethod = AccessTools.Method(typeof(RelicModel), nameof(RelicModel.AfterObtained));
-        var afterObtainedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RelicAfterObtainedPrefix)));
-        
-        _harmony.Patch(afterObtainedMethod, prefix: afterObtainedPrefix);
+        _harmony.Patch(afterObtainedMethod, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RelicAfterObtainedPrefix))));
 
-        var removeRelicMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Entities.Players.Player), nameof(MegaCrit.Sts2.Core.Entities.Players.Player.RemoveRelicInternal));
-        var removeRelicPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PlayerRemoveRelicPostfix)));
-        
-        _harmony.Patch(removeRelicMethod, postfix: removeRelicPostfix);
-        
-        var ritualTurnEndMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.RitualPower), nameof(MegaCrit.Sts2.Core.Models.Powers.RitualPower.AfterSideTurnEnd));
-        _harmony.Patch(ritualTurnEndMethod, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPostfix))));
+        var removeRelicMethod = AccessTools.Method(typeof(Player), nameof(Player.RemoveRelicInternal));
+        _harmony.Patch(removeRelicMethod, postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PlayerRemoveRelicPostfix))));
         
         RelicExecutionManager.PatchAllDamageRelics(_harmony);
-        // Hook the universal Relic power modifier
-        var tryModifyPower = AccessTools.Method(typeof(RuinedHelmet), nameof(RuinedHelmet.TryModifyPowerAmountReceived));
-        _harmony.Patch(tryModifyPower,
+        
+        // --- Core Power Modifiers ---
+        _harmony.Patch(AccessTools.Method(typeof(RuinedHelmet), nameof(RuinedHelmet.TryModifyPowerAmountReceived)),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.TryModifyPowerAmountReceivedPostfix))));
     
-        var modifyOrbValue = AccessTools.Method(typeof(InfusedCore), nameof(InfusedCore.ModifyOrbValue));
-        _harmony.Patch(modifyOrbValue,
+        _harmony.Patch(AccessTools.Method(typeof(InfusedCore), nameof(InfusedCore.ModifyOrbValue)),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.ModifyOrbValuePostfix))));
         
-        // Hook the universal Relic outgoing power modifier (Snecko Skull)
-        var modifyPowerGiven = AccessTools.Method(typeof(SneckoSkull), nameof(SneckoSkull.ModifyPowerAmountGiven));
-        _harmony.Patch(modifyPowerGiven,
+        _harmony.Patch(AccessTools.Method(typeof(SneckoSkull), nameof(SneckoSkull.ModifyPowerAmountGiven)),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.ModifyPowerAmountGivenPostfix))));
         
         // --- Core Lifecycle Hooks ---
@@ -79,288 +59,158 @@ public static class ModEntry
         PatchHook(nameof(Hook.BeforeCombatStart), nameof(HookPatches.BeforeCombatStartPostfix));
         PatchHook(nameof(Hook.AfterSideTurnStart), nameof(HookPatches.AfterSideTurnStartPostfix));
         PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
-        
-        var beforeRoomEnteredMethod = AccessTools.Method(typeof(Hook), nameof(Hook.BeforeRoomEntered));
-        var beforeRoomEnteredPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforeRoomEnteredPrefix)));
-        _harmony.Patch(beforeRoomEnteredMethod, prefix: beforeRoomEnteredPrefix);
+        PatchHook(nameof(Hook.BeforeRoomEntered), nameof(HookPatches.BeforeRoomEnteredPrefix));
         
         // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
         PatchHook(nameof(Hook.AfterForge), nameof(HookPatches.AfterForgePostfix));
-        
-        // --- Card Removal Hook ---
         PatchHook(nameof(Hook.BeforeCardRemoved), nameof(HookPatches.BeforeCardRemovedPostfix));
-        
-        // --- Card Event Hooks ---
         PatchHook(nameof(Hook.AfterCardDrawn), nameof(HookPatches.AfterCardDrawnPostfix));
         PatchHook(nameof(Hook.AfterCardChangedPiles), nameof(HookPatches.AfterCardChangedPilesPostfix));
         PatchHook(nameof(Hook.BeforeCardPlayed), nameof(HookPatches.BeforeCardPlayedPostfix));
         PatchHook(nameof(Hook.AfterCardPlayed), nameof(HookPatches.AfterCardPlayedPostfix));
         PatchHook(nameof(Hook.BeforePowerAmountChanged), nameof(HookPatches.BeforePowerAmountChangedPostfix));
-        
-        var poisonOriginal = AccessTools.Method(typeof(PoisonPower), nameof(PoisonPower.AfterSideTurnStart));
-        var poisonPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PoisonAfterSideTurnStartPrefix));
-        var poisonPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PoisonAfterSideTurnStartPostfix));
-        
-        _harmony.Patch(poisonOriginal, 
-            prefix: new HarmonyMethod(poisonPrefix), 
-            postfix: new HarmonyMethod(poisonPostfix));
-        
-        var fumesOriginal = AccessTools.Method(typeof(NoxiousFumesPower), nameof(NoxiousFumesPower.AfterSideTurnStart));
-        var fumesPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FumesAfterSideTurnStartPrefix));
-        var fumesPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.FumesAfterSideTurnStartPostfix));
-        
-        _harmony.Patch(fumesOriginal, 
-            prefix: new HarmonyMethod(fumesPrefix), 
-            postfix: new HarmonyMethod(fumesPostfix));
-        
-        var waveOriginal = AccessTools.Method(typeof(CorrosiveWavePower), nameof(CorrosiveWavePower.AfterCardDrawn));
-        var wavePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.WaveAfterCardDrawnPrefix));
-        var wavePostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.WaveAfterCardDrawnPostfix));
-        
-        _harmony.Patch(waveOriginal, 
-            prefix: new HarmonyMethod(wavePrefix), 
-            postfix: new HarmonyMethod(wavePostfix));
-        
+        PatchHook(nameof(Hook.ModifyDamage), nameof(HookPatches.ModifyDamagePostfix));
         PatchHook(nameof(Hook.AfterDiedToDoom), nameof(HookPatches.AfterDiedToDoomPostfix));
+
+        // --- UNIQUE POWER HOOKS ---
+        _harmony.Patch(AccessTools.Method(typeof(PoisonPower), nameof(PoisonPower.AfterSideTurnStart)), 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PoisonAfterSideTurnStartPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PoisonAfterSideTurnStartPostfix))));
         
-        var doomKillOriginal = AccessTools.Method(typeof(DoomPower), nameof(DoomPower.DoomKill));
-        var doomKillPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DoomKillPrefix));
-        _harmony.Patch(doomKillOriginal, prefix: new HarmonyMethod(doomKillPrefix));
+        _harmony.Patch(AccessTools.Method(typeof(DoomPower), nameof(DoomPower.DoomKill)), 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DoomKillPrefix))));
         
-        var countdownOriginal = AccessTools.Method(typeof(CountdownPower), nameof(CountdownPower.AfterSideTurnStart));
-        var countdownPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CountdownAfterSideTurnStartPrefix));
-        var countdownPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CountdownAfterSideTurnStartPostfix));
+        _harmony.Patch(AccessTools.Method(typeof(CountdownPower), nameof(CountdownPower.AfterSideTurnStart)), 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CountdownAfterSideTurnStartPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CountdownAfterSideTurnStartPostfix))));
+
+        _harmony.Patch(AccessTools.Method(typeof(ReaperFormPower), nameof(ReaperFormPower.AfterDamageGiven)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReaperFormAfterDamageGivenPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReaperFormAfterDamageGivenPostfix))));
+
+        _harmony.Patch(AccessTools.Method(typeof(NecroMasteryPower), nameof(NecroMasteryPower.AfterCurrentHpChanged)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPostfix))));
+
+        _harmony.Patch(AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) }), 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix))));
         
-        _harmony.Patch(countdownOriginal, 
-            prefix: new HarmonyMethod(countdownPrefix), 
-            postfix: new HarmonyMethod(countdownPostfix));
+        _harmony.Patch(AccessTools.Method(typeof(LoopPower), nameof(LoopPower.AfterPlayerTurnStart)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPostfix))));
 
-        var strangleOriginal = AccessTools.Method(typeof(StranglePower), nameof(StranglePower.AfterCardPlayed));
-        var stranglePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StrangleAfterCardPlayedPrefix));
-        var stranglePostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StrangleAfterCardPlayedPostfix));
+        _harmony.Patch(AccessTools.Method(typeof(RollingBoulderPower), nameof(RollingBoulderPower.AfterPlayerTurnStart)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPostfix))));
         
-        _harmony.Patch(strangleOriginal, 
-            prefix: new HarmonyMethod(stranglePrefix), 
-            postfix: new HarmonyMethod(stranglePostfix));
+        _harmony.Patch(AccessTools.Method(typeof(PrepTimePower), nameof(PrepTimePower.AfterSideTurnStart)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePostfix))));
 
-        var oblivionOriginal = AccessTools.Method(typeof(OblivionPower), nameof(OblivionPower.AfterCardPlayed));
-        var oblivionPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OblivionAfterCardPlayedPrefix));
-        var oblivionPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OblivionAfterCardPlayedPostfix));
+        _harmony.Patch(AccessTools.Method(typeof(RitualPower), nameof(RitualPower.AfterSideTurnEnd)), 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPostfix))));
 
-        _harmony.Patch(oblivionOriginal,
-            prefix: new HarmonyMethod(oblivionPrefix),
-            postfix: new HarmonyMethod(oblivionPostfix));
+        _harmony.Patch(AccessTools.Method(typeof(HandDrill), nameof(HandDrill.AfterDamageGiven)), 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePostfix))));
+        
+        _harmony.Patch(AccessTools.Method(typeof(TheBoot), nameof(TheBoot.ModifyHpLostAfterOstyLate)), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TheBootModifyHpPostfix))));
 
-        var genericPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPrefix)));
-        var genericPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPostfix)));
-
-        var simplePowerMethods = new (Type, string)[]
-        {
+        // --- UNIFIED DYNAMIC PATCHING ---
+        
+        // 1. Simple FIFO Damage Trackers
+        var simpleMethods = new (Type, string)[] {
             (typeof(FlameBarrierPower), nameof(FlameBarrierPower.AfterDamageReceived)),
             (typeof(JuggernautPower), nameof(JuggernautPower.AfterBlockGained)),
-            (typeof(SerpentFormPower), nameof(SerpentFormPower.AfterCardPlayed)),
-            (typeof(BlackHolePower), nameof(BlackHolePower.AfterCardPlayed)),
-            (typeof(BlackHolePower), nameof(BlackHolePower.AfterStarsGained)),
-            (typeof(SleightOfFleshPower), nameof(SleightOfFleshPower.AfterPowerAmountChanged)),
             (typeof(HauntPower), nameof(HauntPower.AfterCardPlayed)),
             (typeof(SpeedsterPower), nameof(SpeedsterPower.AfterCardDrawn)),
             (typeof(ThunderPower), nameof(ThunderPower.AfterOrbEvoked)),
             (typeof(HailstormPower), nameof(HailstormPower.BeforeSideTurnEnd)),
             (typeof(ThornsPower), nameof(ThornsPower.BeforeDamageReceived)),
+            (typeof(SerpentFormPower), nameof(SerpentFormPower.AfterCardPlayed)),
+            (typeof(BlackHolePower), nameof(BlackHolePower.AfterCardPlayed)),
+            (typeof(BlackHolePower), nameof(BlackHolePower.AfterStarsGained)),
+            (typeof(SleightOfFleshPower), nameof(SleightOfFleshPower.AfterPowerAmountChanged)),
         };
+        var simplePrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPrefix)));
+        var simplePostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPostfix)));
+        foreach (var (t, m) in simpleMethods) _harmony.Patch(AccessTools.Method(t, m), prefix: simplePrefix, postfix: simplePostfix);
 
-        foreach (var (powerType, methodName) in simplePowerMethods)
-        {
-            var original = AccessTools.Method(powerType, methodName);
-            if (original != null)
-            {
-                _harmony.Patch(original, prefix: genericPrefix, postfix: genericPostfix);
-            }
+        // 2. Targeted FIFO Damage Trackers
+        var targetedMethods = new (Type, string)[] {
+            (typeof(StranglePower), nameof(StranglePower.AfterCardPlayed)),
+            (typeof(OblivionPower), nameof(OblivionPower.AfterCardPlayed)),
+        };
+        var targetedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TargetedPowerPrefix)));
+        var targetedPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TargetedPowerPostfix)));
+        foreach (var (t, m) in targetedMethods) _harmony.Patch(AccessTools.Method(t, m), prefix: targetedPrefix, postfix: targetedPostfix);
+
+        // 3. Middleman Buff Handoffs
+        var handoffMethods = new (Type, string)[] {
+            (typeof(DemonFormPower), nameof(DemonFormPower.AfterSideTurnStart)),
+            (typeof(ArsenalPower), nameof(ArsenalPower.AfterCardGeneratedForCombat)),
+            (typeof(ShadowStepPower), nameof(ShadowStepPower.AfterSideTurnStart)),
+            (typeof(MonologuePower), nameof(MonologuePower.AfterCardPlayed)),
+        };
+        var handoffPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandoffPowerPrefix)));
+        var handoffPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandoffPowerPostfix)));
+        foreach (var (t, m) in handoffMethods) _harmony.Patch(AccessTools.Method(t, m), prefix: handoffPrefix, postfix: handoffPostfix);
+
+        // 4. Proportional Share Trackers
+        var propMethods = new (Type, string)[] {
+            (typeof(NoxiousFumesPower), nameof(NoxiousFumesPower.AfterSideTurnStart)),
+            (typeof(CorrosiveWavePower), nameof(CorrosiveWavePower.AfterCardDrawn)),
+            (typeof(EnvenomPower), nameof(EnvenomPower.AfterDamageGiven)),
+            (typeof(InfernoPower), nameof(InfernoPower.AfterPlayerTurnStart)),
+            (typeof(InfernoPower), nameof(InfernoPower.AfterDamageReceived)),
+            (typeof(OutbreakPower), nameof(OutbreakPower.AfterPowerAmountChanged)),
+            (typeof(SmokestackPower), nameof(SmokestackPower.AfterCardGeneratedForCombat)),
+            (typeof(RupturePower), nameof(RupturePower.AfterDamageReceived)),
+            (typeof(RupturePower), nameof(RupturePower.AfterCardPlayed)),
+            (typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd)),
+        };
+        var propPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ProportionalPowerPrefix)));
+        var propPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ProportionalPowerPostfix)));
+        foreach (var (t, m) in propMethods) _harmony.Patch(AccessTools.Method(t, m), prefix: propPrefix, postfix: propPostfix);
+
+        // 5. Queue Builders
+        var queueMethods = new (Type, string)[] {
+            (typeof(TrashToTreasurePower), nameof(TrashToTreasurePower.AfterCardGeneratedForCombat)),
+            (typeof(LightningRodPower), nameof(LightningRodPower.AfterEnergyReset)),
+            (typeof(SpinnerPower), nameof(SpinnerPower.AfterEnergyReset)),
+        };
+        var queuePrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.QueuePowerPrefix)));
+        var queuePostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.QueuePowerPostfix)));
+        foreach (var (t, m) in queueMethods) _harmony.Patch(AccessTools.Method(t, m), prefix: queuePrefix, postfix: queuePostfix);
+
+        // --- ORB PATTERNS ---
+        var orbMethods = new (Type powerType, string methodName, string prefixName, string postfixName)[] {
+            (typeof(LightningOrb), nameof(LightningOrb.Passive), nameof(HookPatches.OrbPassivePrefix), nameof(HookPatches.OrbPassivePostfix)),
+            (typeof(LightningOrb), nameof(LightningOrb.Evoke), nameof(HookPatches.OrbEvokePrefix), nameof(HookPatches.OrbEvokePostfix)),
+            (typeof(GlassOrb), nameof(GlassOrb.Passive), nameof(HookPatches.OrbPassivePrefix), nameof(HookPatches.OrbPassivePostfix)),
+            (typeof(GlassOrb), nameof(GlassOrb.Evoke), nameof(HookPatches.OrbEvokePrefix), nameof(HookPatches.OrbEvokePostfix)),
+            (typeof(DarkOrb), nameof(DarkOrb.Passive), nameof(HookPatches.OrbPassivePrefix), nameof(HookPatches.OrbPassivePostfix)),
+            (typeof(DarkOrb), nameof(DarkOrb.Evoke), nameof(HookPatches.OrbEvokePrefix), nameof(HookPatches.OrbEvokePostfix)),
+        };
+        foreach (var (powerType, methodName, prefixName, postfixName) in orbMethods) {
+            _harmony.Patch(AccessTools.Method(powerType, methodName), 
+                prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), prefixName)), 
+                postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), postfixName)));
         }
 
-        var reaperOriginal = AccessTools.Method(typeof(ReaperFormPower), nameof(ReaperFormPower.AfterDamageGiven));
-        var reaperPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReaperFormAfterDamageGivenPrefix));
-        var reaperPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReaperFormAfterDamageGivenPostfix));
-
-        _harmony.Patch(reaperOriginal,
-            prefix: new HarmonyMethod(reaperPrefix),
-            postfix: new HarmonyMethod(reaperPostfix));
-
-        var necroMasteryOriginal = AccessTools.Method(typeof(NecroMasteryPower), nameof(NecroMasteryPower.AfterCurrentHpChanged));
-        var necroMasteryPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPrefix));
-        var necroMasteryPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPostfix));
-
-        _harmony.Patch(necroMasteryOriginal,
-            prefix: new HarmonyMethod(necroMasteryPrefix),
-            postfix: new HarmonyMethod(necroMasteryPostfix));
-
-        var reflectOriginal = AccessTools.Method(typeof(ReflectPower), nameof(ReflectPower.AfterDamageReceived));
-        var reflectPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReflectAfterDamageReceivedPrefix));
-        var reflectPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReflectAfterDamageReceivedPostfix));
-        
-        _harmony.Patch(reflectOriginal, 
-            prefix: new HarmonyMethod(reflectPrefix), 
-            postfix: new HarmonyMethod(reflectPostfix));
-
-        var stormOriginal = AccessTools.Method(typeof(StormPower), nameof(StormPower.AfterCardPlayed));
-        var stormPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StormAfterCardPlayedPrefix));
-        var stormPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.StormAfterCardPlayedPostfix));
-
-        _harmony.Patch(stormOriginal,
-            prefix: new HarmonyMethod(stormPrefix),
-            postfix: new HarmonyMethod(stormPostfix));
-
-        var powerRemoveOriginal = AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) });        var powerRemovePrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix));
-        _harmony.Patch(powerRemoveOriginal, prefix: new HarmonyMethod(powerRemovePrefix));
-        
-        // --- LIGHTNING ORB PATTERN ---
-        var lightningPassive = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Passive));
-        _harmony.Patch(lightningPassive, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePostfix))));
-
-        var lightningEvoke = AccessTools.Method(typeof(LightningOrb), nameof(LightningOrb.Evoke));
-        _harmony.Patch(lightningEvoke, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePostfix))));
-
-        // --- GLASS ORB PATTERN ---
-        var glassPassive = AccessTools.Method(typeof(GlassOrb), nameof(GlassOrb.Passive));
-        _harmony.Patch(glassPassive, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePostfix))));
-
-        var glassEvoke = AccessTools.Method(typeof(GlassOrb), nameof(GlassOrb.Evoke));
-        _harmony.Patch(glassEvoke, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePostfix))));
-        
-        var darkPassive = AccessTools.Method(typeof(DarkOrb), nameof(DarkOrb.Passive));
-        _harmony.Patch(darkPassive, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbPassivePostfix))));
-
-        var darkEvoke = AccessTools.Method(typeof(DarkOrb), nameof(DarkOrb.Evoke));
-        _harmony.Patch(darkEvoke, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbEvokePostfix))));
-        
-        var orbChannel = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Commands.OrbCmd), nameof(MegaCrit.Sts2.Core.Commands.OrbCmd.Channel),
-            [typeof(MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext), typeof(OrbModel), typeof(MegaCrit.Sts2.Core.Entities.Players.Player)
-            ]);
-        _harmony.Patch(orbChannel, postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbChannelPostfix))));
-        
-        var tempBefore = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.BeforeApplied));
-        _harmony.Patch(tempBefore, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPostfix))));
-
-        var tempAfterAmount = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterPowerAmountChanged));
-        _harmony.Patch(tempAfterAmount, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPostfix))));
-
-        var tempEnd = AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterSideTurnEnd));
-        _harmony.Patch(tempEnd, prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePostfix))));
-        
-        var loopOriginal = AccessTools.Method(typeof(LoopPower), nameof(LoopPower.AfterPlayerTurnStart));
-        _harmony.Patch(loopOriginal,
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPrefix))),
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LoopPostfix))));
-
-        var boulderOriginal = AccessTools.Method(typeof(RollingBoulderPower), nameof(RollingBoulderPower.AfterPlayerTurnStart));
-        var boulderPrefix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPrefix));
-        var boulderPostfix = AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPostfix));
-
-        _harmony.Patch(boulderOriginal,
-            prefix: new HarmonyMethod(boulderPrefix),
-            postfix: new HarmonyMethod(boulderPostfix));
-        
-        // --- PREP TIME POWER ---
-        var prepTimeOriginal = AccessTools.Method(typeof(PrepTimePower), nameof(PrepTimePower.AfterSideTurnStart));
-        _harmony.Patch(prepTimeOriginal,
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePrefix))),
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePostfix))));
-        
-        // --- ADDITIVE/MULTIPLICATIVE DAMAGE CALCULATOR ---
-        var modifyDamage = AccessTools.Method(typeof(Hook), nameof(Hook.ModifyDamage));
-        _harmony.Patch(modifyDamage, 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ModifyDamagePostfix))));
-        
-        // --- SHADOW STEP POWER ---
-        var shadowStepOriginal = AccessTools.Method(typeof(ShadowStepPower), nameof(ShadowStepPower.AfterSideTurnStart));
-        _harmony.Patch(shadowStepOriginal,
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ShadowStepPrefix))),
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ShadowStepPostfix))));
-        
-        var demonFormOriginal = AccessTools.Method(typeof(DemonFormPower), nameof(DemonFormPower.AfterSideTurnStart));
-        _harmony.Patch(demonFormOriginal,
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemonFormPrefix))),
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemonFormPostfix))));
-        
-        var arsenalOriginal = AccessTools.Method(typeof(ArsenalPower), nameof(ArsenalPower.AfterCardGeneratedForCombat));
-        _harmony.Patch(arsenalOriginal,
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ArsenalPrefix))),
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ArsenalPostfix))));
-        
-        // --- MONOLOGUE POWER ---
-        var monologueOriginal = AccessTools.Method(typeof(MonologuePower), nameof(MonologuePower.AfterCardPlayed));
-        _harmony.Patch(monologueOriginal,
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MonologuePrefix))),
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MonologuePostfix))));
-        
-        var envenomMethod = AccessTools.Method(typeof(EnvenomPower), nameof(EnvenomPower.AfterDamageGiven));
-        var envenomPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.EnvenomPrefix)));
-        var envenomPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.EnvenomPostfix)));
-        
-        _harmony.Patch(envenomMethod, prefix: envenomPrefix, postfix: envenomPostfix);
-        
-        // Trash to Treasure Execution Hook
-        var t2tMethod = AccessTools.Method(typeof(TrashToTreasurePower), nameof(TrashToTreasurePower.AfterCardGeneratedForCombat));
-        _harmony.Patch(t2tMethod, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TrashToTreasurePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TrashToTreasurePostfix))));
-        
-        var demiseTurnEndMethod = AccessTools.Method(typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd));
-        _harmony.Patch(demiseTurnEndMethod, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemisePowerTurnEndPrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.DemisePowerTurnEndPostfix))));
-        
-        var lightningRodMethod = AccessTools.Method(typeof(LightningRodPower), nameof(LightningRodPower.AfterEnergyReset));
-        _harmony.Patch(lightningRodMethod, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LightningRodTurnStartPrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.LightningRodTurnStartPostfix))));
-        
-        var spinnerMethod = AccessTools.Method(typeof(SpinnerPower), nameof(SpinnerPower.AfterEnergyReset));
-        _harmony.Patch(spinnerMethod, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpinnerTurnStartPrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SpinnerTurnStartPostfix))));
-        
-        var handDrillMethod = AccessTools.Method(typeof(HandDrill), nameof(HandDrill.AfterDamageGiven));
-    
-        _harmony.Patch(handDrillMethod, 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePrefix))), 
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePostfix))));
-        
-        var theBootMethod = AccessTools.Method(typeof(TheBoot), nameof(TheBoot.ModifyHpLostAfterOstyLate));
-        _harmony.Patch(theBootMethod, postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TheBootModifyHpPostfix))));
-        
-        // Inferno triggers
-    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower), nameof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower.AfterPlayerTurnStart)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPostfix))));
-    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower), nameof(MegaCrit.Sts2.Core.Models.Powers.InfernoPower.AfterDamageReceived)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfernoPostfix))));
-
-    // Outbreak trigger
-    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.OutbreakPower), nameof(MegaCrit.Sts2.Core.Models.Powers.OutbreakPower.AfterPowerAmountChanged)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OutbreakPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OutbreakPostfix))));
-
-    // Smokestack trigger
-    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.SmokestackPower), nameof(MegaCrit.Sts2.Core.Models.Powers.SmokestackPower.AfterCardGeneratedForCombat)), prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SmokestackPrefix))), postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SmokestackPostfix)))); 
-    
-    // Rupture trigger 1: Damage outside of a card play
-    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.RupturePower), nameof(MegaCrit.Sts2.Core.Models.Powers.RupturePower.AfterDamageReceived)), 
-        prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePrefix))), 
-        postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePostfix))));
-
-    // Rupture trigger 2: Delayed damage during a card play
-    _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Powers.RupturePower), nameof(MegaCrit.Sts2.Core.Models.Powers.RupturePower.AfterCardPlayed)), 
-        prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePrefix))), 
-        postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RupturePostfix))));
+        _harmony.Patch(AccessTools.Method(typeof(OrbCmd), nameof(OrbCmd.Channel), [typeof(PlayerChoiceContext), typeof(OrbModel), typeof(Player)]),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OrbChannelPostfix))));
+            
+        var tempApplyPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPrefix)));
+        var tempApplyPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusApplyPostfix)));
+        _harmony.Patch(AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.BeforeApplied)), prefix: tempApplyPrefix, postfix: tempApplyPostfix);
+        _harmony.Patch(AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterPowerAmountChanged)), prefix: tempApplyPrefix, postfix: tempApplyPostfix);
+        _harmony.Patch(AccessTools.Method(typeof(TemporaryFocusPower), nameof(TemporaryFocusPower.AfterSideTurnEnd)), 
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePrefix))), 
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TempFocusExpirePostfix))));
     }
 
     private static void PatchHook(string hookName, string postfixName)

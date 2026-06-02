@@ -92,7 +92,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Content Include="GEMINI.md" />
+      <Content Include="CLUADE.md" />
     </ItemGroup>
 
     <Target Name="GodotPublish" AfterTargets="Publish" Condition="'$(GodotPath)' != '' and Exists('$(GodotPath)') and '$(IsInnerGodotExport)' != 'true'" Inputs="@(GodotResourceFiles)" Outputs="$(ModsPath)$(MSBuildProjectName)/$(MSBuildProjectName).pck">

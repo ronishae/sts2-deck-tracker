@@ -11,3 +11,4 @@ packages/
 *.user
 Directory.Build.props
 GEMINI.md
+CLAUDE.md

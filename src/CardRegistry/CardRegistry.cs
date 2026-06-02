@@ -30,29 +30,44 @@ public static partial class CardRegistry
     // Cards added to hand during a play (to wait for enchantments)
     private static readonly AsyncLocal<List<CardModel>?> _deferredDraws = new();
 
-    public static CardModel? CurrentPlayingCard => _currentPlayingCard.Value;
+    public static CardModel? CurrentPlayingCard
+    {
+        get
+        {
+            return _currentPlayingCard.Value;
+        }
+    }
 
     public static void StartCardPlay(CardModel card)
     {
         _currentPlayingCard.Value = card;
         _deferredDraws.Value = new List<CardModel>();
+        GD.Print($"[DeckTracker] StartCardPlay. Card: {card.Id.Entry}");
     }
 
     public static void EndCardPlay()
     {
+        GD.Print("[DeckTracker] EndCardPlay.");
         ProcessDeferredDraws();
         _deferredDraws.Value = null;
         _currentPlayingCard.Value = null;
     }
 
-    public static bool IsCardPlayActive() => _currentPlayingCard.Value != null;
+    public static bool IsCardPlayActive()
+    {
+        return _currentPlayingCard.Value != null;
+    }
     
     public static void ClearStateForTarget(Creature target)
     {
         lock (SyncRoot)
         {
+            GD.Print($"[DeckTracker] ClearStateForTarget. Target: {target.Name}");
             PoisonShares.Remove(target);
-            ClearStrangle(target);
+            foreach (var tracker in TargetedTrackers.Values)
+            {
+                tracker.ClearTarget(target);
+            }
         }
     }
     
@@ -63,10 +78,14 @@ public static partial class CardRegistry
 
     private static void ProcessDeferredDraws()
     {
-        if (_deferredDraws.Value == null) return;
+        if (_deferredDraws.Value == null)
+        {
+            return;
+        }
         
         foreach (var card in _deferredDraws.Value)
         {
+            GD.Print($"[DeckTracker] ProcessDeferredDraws. Registering deferred draw: {card.Id.Entry}");
             RegisterCard(card);
             AddDraw(card);
         }
@@ -75,14 +94,14 @@ public static partial class CardRegistry
 
     private static ActData? GetActData(EntityStats stat, int actNum)
     {
-        return actNum switch
+        switch (actNum)
         {
-            1 => stat.Act1,
-            2 => stat.Act2,
-            3 => stat.Act3,
-            4 => stat.Act4,
-            _ => null
-        };
+            case 1: return stat.Act1;
+            case 2: return stat.Act2;
+            case 3: return stat.Act3;
+            case 4: return stat.Act4;
+            default: return null;
+        }
     }
     
     private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
@@ -93,24 +112,29 @@ public static partial class CardRegistry
 
     public static void SyncRun(string runSeed)
     {
-        if (string.IsNullOrEmpty(runSeed)) return;
+        if (string.IsNullOrEmpty(runSeed))
+        {
+            return;
+        }
 
         lock (SyncRoot)
         {
-            if (_currentRunSeed == runSeed) return;
+            if (_currentRunSeed == runSeed)
+            {
+                return;
+            }
 
             _currentRunSeed = runSeed;
 
             if (TryLoadState(runSeed))
             {
-                GD.Print($"[DeckTracker] Successfully resumed run data for seed: {runSeed}");
+                GD.Print($"[DeckTracker] SyncRun. Resumed run data for seed: {runSeed}");
             }
             else
             {
-                GD.Print($"[DeckTracker] Starting fresh tracker for new run seed: {runSeed}");
+                GD.Print($"[DeckTracker] SyncRun. Starting fresh tracker for seed: {runSeed}");
                 ResetRun();
             }
-            // CLEAN ARCHITECTURE: Re-map the live memory objects immediately after a Load or Reset!
             RestoreLiveInstances();
         }
         Publish();
@@ -123,23 +147,26 @@ public static partial class CardRegistry
             SavedRunState state;
             lock (SyncRoot)
             {
-                if (string.IsNullOrEmpty(_currentRunSeed)) return;
+                if (string.IsNullOrEmpty(_currentRunSeed))
+                {
+                    return;
+                }
 
                 state = new SavedRunState
                 {
                     RunSeed = _currentRunSeed,
                     Totals = Totals.ToDictionary(kvp => kvp.Key, kvp => (CardStats)kvp.Value.Clone()),
-                    // Save the potions!
                     Potions = PotionLedger.ToDictionary(kvp => kvp.Key, kvp => (PotionStats)kvp.Value.Clone())
                 };
             }
 
             string json = JsonSerializer.Serialize(state, SavedStateCtx.Default.SavedRunState);
             System.IO.File.WriteAllText(SavePath, json);
+            GD.Print("[DeckTracker] SaveState. State saved successfully.");
         }
         catch (Exception e)
         {
-            GD.PrintErr($"[DeckTracker] Failed to save state: {e.Message}");
+            GD.PrintErr($"[DeckTracker] SaveState Failed: {e.Message}");
         }
     }
 
@@ -147,12 +174,18 @@ public static partial class CardRegistry
     {
         try
         {
-            if (!System.IO.File.Exists(SavePath)) return false;
+            if (!System.IO.File.Exists(SavePath))
+            {
+                return false;
+            }
 
             string json = System.IO.File.ReadAllText(SavePath);
             SavedRunState? state = JsonSerializer.Deserialize(json, SavedStateCtx.Default.SavedRunState);
             
-            if (state == null || state.RunSeed != targetSeed) return false;
+            if (state == null || state.RunSeed != targetSeed)
+            {
+                return false;
+            }
 
             Totals = state.Totals;
             PotionLedger = state.Potions ?? new Dictionary<string, PotionStats>();
@@ -162,10 +195,14 @@ public static partial class CardRegistry
         {
             return false;
         }
-        }
+    }
 
-        public static string GetTrackingId(CardModel? card)    {
-        if (card == null) return "";
+    public static string GetTrackingId(CardModel? card)
+    {
+        if (card == null)
+        {
+            return "";
+        }
         CardModel sourceCard = card.DeckVersion ?? card;
 
         string baseId = sourceCard.Id.Entry ?? "Unknown";
@@ -176,66 +213,89 @@ public static partial class CardRegistry
         return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}";
     }
 
-    // Dynamic tracking for generic FIFO damage powers
+    // --- UNIFIED TRACKER REGISTRY ---
+    
     public static readonly Dictionary<string, GenericDamageTracker> SimpleDamageTrackers = new()
     {
         { "FLAME_BARRIER_POWER", new GenericDamageTracker("FLAME_BARRIER_POWER") },
         { "JUGGERNAUT_POWER", new GenericDamageTracker("JUGGERNAUT_POWER") },
-        { "SERPENT_FORM_POWER", new GenericDamageTracker("SERPENT_FORM_POWER") },
-        { "BLACK_HOLE_POWER", new GenericDamageTracker("BLACK_HOLE_POWER") },
-        { "SLEIGHT_OF_FLESH_POWER", new GenericDamageTracker("SLEIGHT_OF_FLESH_POWER") },
         { "HAUNT_POWER", new GenericDamageTracker("HAUNT_POWER") },
         { "SPEEDSTER_POWER", new GenericDamageTracker("SPEEDSTER_POWER") },
         { "THUNDER_POWER", new GenericDamageTracker("THUNDER_POWER") },
         { "HAILSTORM_POWER", new GenericDamageTracker("HAILSTORM_POWER") },
         { "THORNS_POWER", new GenericDamageTracker("THORNS_POWER") },
+        { "SERPENT_FORM_POWER", new GenericDamageTracker("SERPENT_FORM_POWER") },
+        { "BLACK_HOLE_POWER", new GenericDamageTracker("BLACK_HOLE_POWER") },
+        { "SLEIGHT_OF_FLESH_POWER", new GenericDamageTracker("SLEIGHT_OF_FLESH_POWER") },
     };
+
+    public static readonly Dictionary<string, TargetedDamageTracker> TargetedTrackers = new()
+    {
+        { "STRANGLE_POWER", new TargetedDamageTracker("STRANGLE_POWER") },
+        { "OBLIVION_POWER", new TargetedDamageTracker("OBLIVION_POWER") },
+    };
+
+    public static readonly Dictionary<string, BuffHandoffTracker> HandoffTrackers = new()
+    {
+        { "DEMON_FORM_POWER", new BuffHandoffTracker("DEMON_FORM_POWER", "DEMON_FORM_POWER", HandoffStrategy.ExactFifo) },
+        { "ARSENAL_POWER", new BuffHandoffTracker("ARSENAL_POWER", "ARSENAL_POWER", HandoffStrategy.ExactFifo) },
+        { "PREP_TIME_POWER", new BuffHandoffTracker("PREP_TIME_POWER", "PREP_TIME_POWER", HandoffStrategy.Proportional) },
+        { "SHADOW_STEP_POWER", new BuffHandoffTracker("SHADOW_STEP_POWER", "SHADOW_STEP_POWER", HandoffStrategy.ExactFifo) },
+        { "MONOLOGUE_POWER", new BuffHandoffTracker("MONOLOGUE_POWER", "MONOLOGUE_POWER", HandoffStrategy.ExactFifo) },
+    };
+
+    public static readonly Dictionary<string, ProportionalShareTracker> ProportionalTrackers = new()
+    {
+        { "INFERNO_POWER", new ProportionalShareTracker("INFERNO_POWER") },
+        { "OUTBREAK_POWER", new ProportionalShareTracker("OUTBREAK_POWER") },
+        { "SMOKESTACK_POWER", new ProportionalShareTracker("SMOKESTACK_POWER") },
+        { "RUPTURE_POWER", new ProportionalShareTracker("RUPTURE_POWER") },
+        { "CORROSIVE_WAVE_POWER", new ProportionalShareTracker("CORROSIVE_WAVE_POWER") },
+        { "ENVENOM_POWER", new ProportionalShareTracker("ENVENOM_POWER") },
+        { "NOXIOUS_FUMES_POWER", new ProportionalShareTracker("NOXIOUS_FUMES_POWER") },
+        { "DEMISE_POWER", new ProportionalShareTracker("DEMISE_POWER") },
+    };
+
+    public static readonly Dictionary<string, QueueBuilderTracker> QueueTrackers = new()
+    {
+        { "STORM_POWER", new QueueBuilderTracker("STORM_POWER", needsFlattening: true) },
+        { "TRASH_TO_TREASURE_POWER", new QueueBuilderTracker("TRASH_TO_TREASURE_POWER", needsFlattening: true) },
+        { "LIGHTNING_ROD_POWER", new QueueBuilderTracker("LIGHTNING_ROD_POWER") },
+        { "SPINNER_POWER", new QueueBuilderTracker("SPINNER_POWER") },
+    };
+
+    public static readonly InstancedPowerTracker InstancedTracker = new();
 
     private static void ResetInternalsCombat()
     {
-        _currentCombatType = "Unknown"; // Clear the state
-        _incrementedThisCombat.Clear(); 
-        ForgeHistory.Clear();
-        ConquerorTracker.Clear();
-        BladeReplayModifierTracker.Clear();
-        ResetPoisonState();
-        ResetStrangleState();
-        ResetOblivionState();
-        ResetReaperFormState();
-        ResetStormState();
-        ResetFanOfKnivesState();
-        ResetNecroMasteryState();
-        ResetFumesState();
-        ResetDoomState();
-        ResetCountdownState();
-        ResetReflectState();
-        ResetRollingBoulderState();
-        ClearCorrosiveWaveShares();
-        EnvenomShares.Clear();
-        ResetOrbState();
-        ResetBuffState();
-        TrashToTreasureShares.Clear();
-        InstancedPowerSources.Clear();
-        ResetRitualState();
-        DemiseLedgers.Clear();
-        IsDemiseExecuting.Value = false;
-        LightningRodQueue.Clear();
-        IsLightningRodExecuting.Value = false;
-        SpinnerSources.Clear();
-        IsSpinnerExecuting.Value = false;
-        SpinnerExecutionIndex = 0;
-        IsInfernoExecuting.Value = false;
-        IsOutbreakExecuting.Value = false;
-        IsSmokestackExecuting.Value = false;
-        IsRuptureExecuting.Value = false;
-        RuptureLedger.Clear();
-        InfernoLedger.Clear();
-        OutbreakLedger.Clear();
-        SmokestackLedger.Clear();
-        
-        foreach (var tracker in SimpleDamageTrackers.Values)
+        lock (SyncRoot)
         {
-            tracker.Reset();
+            _currentCombatType = "Unknown";
+            _incrementedThisCombat.Clear(); 
+            ForgeHistory.Clear();
+            BladeReplayModifierTracker.Clear();
+            ResetPoisonState();
+            ResetReaperFormState();
+            ResetDoomState();
+            ResetCountdownState();
+            ResetReflectState();
+            ResetOrbState();
+            ResetBuffState();
+            ResetRitualState();
+        
+            List<ITrackerState> trackers = new();
+            trackers.AddRange(SimpleDamageTrackers.Values);
+            trackers.AddRange(TargetedTrackers.Values);
+            trackers.AddRange(HandoffTrackers.Values);
+            trackers.AddRange(ProportionalTrackers.Values);
+            trackers.AddRange(QueueTrackers.Values);
+            trackers.Add(InstancedTracker);
+
+            foreach (var tracker in trackers)
+            {
+                tracker.Reset();
+            }
+            GD.Print("[DeckTracker] ResetInternalsCombat. All state reset.");
         }
     }
     
@@ -244,7 +304,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             _currentRunSeed = "";
-            Godot.GD.Print("[DeckTracker] Session cleared. Ready for next run/continue.");
+            GD.Print("[DeckTracker] ClearSession. Session cleared.");
         }
     }
     
@@ -257,11 +317,11 @@ public static partial class CardRegistry
             ResetInternalsCombat();
             RelicLedger.Clear();
             RelicExecutionManager.ResetState();
-            RelicLedger.Clear(); 
             RelicNameCache.Clear();
             PotionLedger.Clear();
             PotionInstanceIds.Clear();
             _potionCounter = 0;
+            GD.Print("[DeckTracker] ResetRun. Run state cleared.");
         }
         Publish();
     }
@@ -271,16 +331,14 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var copyCounts = activeDeckIds.GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());
-            
             HashSet<string> uniqueActiveIds = new HashSet<string>(activeDeckIds);
             
-            GD.Print($"[DeckTracker] {activeDeckIds}");
+            GD.Print($"[DeckTracker] SyncDeckState. Floor: {currentFloor}, Active Count: {activeDeckIds.Count}");
             foreach (var stat in Totals.Values)
             {
-                // DIFF CHECK: If we think the card is in the deck, but the game scan didn't find it
                 if (stat.IsActive && !uniqueActiveIds.Contains(stat.Id))
                 {
-                    GD.Print($"[DeckTracker] {stat.Id} is gone");
+                    GD.Print($"[DeckTracker]   -> {stat.Id} removed from deck");
                     stat.IsActive = false;
                     stat.CopiesInDeck = 0;
                         
@@ -288,7 +346,6 @@ public static partial class CardRegistry
                     if (stat.FloorRemoved == -1)
                     {
                         stat.FloorLeftDeck = floorLeft;
-                        GD.Print($"[DeckTracker] {stat.Id} FloorLeftDeck updated to {stat.FloorLeftDeck}");
                     }
                 }
                 else if (copyCounts.TryGetValue(stat.Id, out int count))
@@ -298,14 +355,12 @@ public static partial class CardRegistry
                 }
             }
         }
-        Publish(); // Instantly update the UI, even outside of combat!
+        Publish();
     }
     
     public static MegaCrit.Sts2.Core.Runs.RunState? GetLiveRunState()
     {
-        // Uses Harmony to securely fetch the private 'State' property from RunManager
         var stateProperty = AccessTools.Property(typeof(MegaCrit.Sts2.Core.Runs.RunManager), "State");
-        
         if (stateProperty != null)
         {
             return stateProperty.GetValue(MegaCrit.Sts2.Core.Runs.RunManager.Instance) as MegaCrit.Sts2.Core.Runs.RunState;
@@ -316,11 +371,13 @@ public static partial class CardRegistry
     private static void RestoreLiveInstances()
     {
         var run = GetLiveRunState();
-        if (run == null) return;
+        if (run == null)
+        {
+            return;
+        }
 
         foreach (var player in run.Players)
         {
-            // 1. Restore Relic Instances
             foreach (var relic in player.Relics)
             {
                 RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
@@ -329,7 +386,6 @@ public static partial class CardRegistry
                 stats.IsActive = true; 
             }
 
-            // 2. Restore Master Deck Card Instances (Fixes the JSON load issue for cards too!)
             foreach (var card in player.Deck.Cards)
             {
                 string trackingId = GetTrackingId(card);
@@ -339,23 +395,22 @@ public static partial class CardRegistry
                 }
             }
             
-            // 3. Restore Potion Instances cleanly
             for (int i = 0; i < player.PotionSlots.Count; i++)
             {
                 var potion = player.PotionSlots[i];
-                if (potion == null) continue;
+                if (potion == null)
+                {
+                    continue;
+                }
 
-                // Find if this live object already has a tracked ID mapped
                 string? existingId = PotionInstanceIds.FirstOrDefault(kvp => kvp.Key == potion).Value;
 
                 if (string.IsNullOrEmpty(existingId))
                 {
-                    // If it's not mapped in memory, check if a ledger entry from JSON matches this potion type and lacks an instance
                     existingId = PotionLedger.Values.FirstOrDefault(p => p.Model == null && p.Id.Contains(potion.Id.Entry))?.Id;
                     
                     if (string.IsNullOrEmpty(existingId))
                     {
-                        // Fresh Run Startup: It's a Neow potion!
                         _potionCounter++;
                         existingId = $"POTION_{potion.Id.Entry}_{_potionCounter}";
                         
@@ -364,41 +419,39 @@ public static partial class CardRegistry
                         {
                             Id = existingId,
                             DisplayName = displayName,
-                            FloorObtained = 1, // Guaranteed Floor 1 on clean startups
+                            FloorObtained = 1,
                             IsActive = true
                         };
                     }
-                    
-                    // Map the live memory reference to the ID
                     PotionInstanceIds[potion] = existingId;
                 }
-
-                // Bind the live instance back to the stats object
                 PotionLedger[existingId].Model = potion;
             }
         }
-        Godot.GD.Print("[DeckTracker] Restored live object instances to the ledger.");
+        GD.Print("[DeckTracker] RestoreLiveInstances. Live object references restored.");
     }
     
     public static void StartCombat(string combatType, int currentFloor, int currentAct, List<string> activeDeckIds)
     {
-        // Diff the deck immediately before processing encounters
         SyncDeckState(currentFloor, activeDeckIds);
 
         lock (SyncRoot)
         {
             _currentAct = currentAct;
             _currentCombatType = combatType;
-            GD.Print($"[DeckTracker] Starting combat state: {_currentCombatType} (Act: {_currentAct})");
+            GD.Print($"[DeckTracker] StartCombat. Type: {_currentCombatType}, Act: {_currentAct}");
             
             foreach (var stat in Totals.Values)
             {
-                stat.CombatDamage = 0; // Wipe the previous combat's text
+                stat.CombatDamage = 0;
                 stat.RawForgeCombat = 0;
                 stat.ConnectedForgeCombat = 0;
                 stat.ReceivedForgeCombat = 0;
                 
-                if (!stat.IsActive) continue; // Skip cards not in the deck
+                if (!stat.IsActive)
+                {
+                    continue;
+                }
                 
                 var actData = GetActData(stat, _currentAct);
                 if (actData != null)
@@ -407,7 +460,6 @@ public static partial class CardRegistry
                     else if (combatType == "Boss") actData.EncountersSeenBoss++;
                     else actData.EncountersSeenHallway++;
                 }
-
                 _incrementedThisCombat.Add(stat.Id);
             }
 
@@ -418,7 +470,10 @@ public static partial class CardRegistry
                 stat.ConnectedForgeCombat = 0;
                 stat.ReceivedForgeCombat = 0;
 
-                if (!stat.IsActive) continue;
+                if (!stat.IsActive)
+                {
+                    continue;
+                }
 
                 var actData = GetActData(stat, _currentAct);
                 if (actData != null)
@@ -434,12 +489,12 @@ public static partial class CardRegistry
     
     public static void ProcessCombatEnd()
     {
+        GD.Print("[DeckTracker] ProcessCombatEnd.");
         lock (SyncRoot)
         {
             ResetInternalsCombat();
         }
-        
-        SaveState(); // Lock the victory into the hard drive
+        SaveState();
         Publish();
     }
     
@@ -450,6 +505,7 @@ public static partial class CardRegistry
         {
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
+                GD.Print($"[DeckTracker] HandleRemove. Card: {uniqueTrackingId}");
                 if (stat.CopiesInDeck > 1)
                 {
                     stat.CopiesInDeck--;
@@ -472,14 +528,13 @@ public static partial class CardRegistry
             
         lock (SyncRoot)
         {
-            // card.DeckVersion will be null for the master deck cards, so check FloorAddedToDeck for
-            // whether the card is generated
             bool isGenerated = card.FloorAddedToDeck == null;
             if (!Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
                 CardModel sourceCard = card.DeckVersion ?? card;
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
                 string enchantName = sourceCard.Enchantment?.Id.Entry ?? "";
+                GD.Print($"[DeckTracker] RegisterCard. NEW Card: {uniqueTrackingId}, Generated: {isGenerated}");
                 stat = new CardStats 
                 { 
                     Id = uniqueTrackingId, 
@@ -489,19 +544,16 @@ public static partial class CardRegistry
                     Enchantment = enchantName,
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
                     FloorRemoved = isGenerated ? 0 : -1, 
-                    IsActive = !isGenerated, // Normal cards are True, Generated are False
+                    IsActive = !isGenerated,
                     CopiesInDeck = isGenerated ? 0 : 1,
                     CombatDamage = 0,
                     RunDamage = 0
                 };
-                
                 Totals[uniqueTrackingId] = stat;
             }
             
             if (_currentCombatType != "Unknown" && isGenerated)
             {
-                // HashSet.Add returns 'true' ONLY if the item wasn't already in the list.
-                // This ensures 10 Shivs generated in one fight only increment the denominator by 1.
                 if (_incrementedThisCombat.Add(uniqueTrackingId))
                 {
                     var actData = GetActData(stat, _currentAct);
@@ -524,10 +576,14 @@ public static partial class CardRegistry
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
                 var actData = GetActData(stat, _currentAct);
-                if (actData != null) actData.TimesDrawn++;
+                if (actData != null)
+                {
+                    actData.TimesDrawn++;
+                }
+                GD.Print($"[DeckTracker] AddDraw. Card: {uniqueTrackingId}");
             }
         }
-        Publish(); // Instantly update UI when drawn
+        Publish();
     }
     
     public static void AddPlay(CardModel card)
@@ -538,7 +594,11 @@ public static partial class CardRegistry
             if (Totals.TryGetValue(uniqueTrackingId, out CardStats? stat))
             {
                 var actData = GetActData(stat, _currentAct);
-                if (actData != null) actData.TimesPlayed++;
+                if (actData != null)
+                {
+                    actData.TimesPlayed++;
+                }
+                GD.Print($"[DeckTracker] AddPlay. Card: {uniqueTrackingId}");
             }
         }
         Publish();
@@ -552,19 +612,18 @@ public static partial class CardRegistry
     
     public static void AddDamageById(string trackingId, decimal amount)
     {
-        if (amount <= 0 || string.IsNullOrEmpty(trackingId)) return;
+        if (amount <= 0 || string.IsNullOrEmpty(trackingId))
+        {
+            return;
+        }
 
-        // --- NEW: THE ROUTING INTERCEPTOR ---
-        // If the ID starts with RELIC_, strip the prefix and send it to the Relic Ledger!
         if (trackingId.StartsWith("RELIC_"))
         {
-            // "RELIC_Vajra" becomes "Vajra"
             string relicId = trackingId.Substring(6); 
             AddRelicDamage(relicId, amount);
             return;
         }
         
-        // NEW: Intercept Potion Damage!
         if (trackingId.StartsWith("POTION_"))
         {
             lock (SyncRoot)
@@ -573,7 +632,7 @@ public static partial class CardRegistry
                 {
                     stat.CombatDamage += amount;
                     stat.RunDamage += amount;
-                    GD.Print($"Added {amount} damage to Potion: {trackingId}.");
+                    GD.Print($"[DeckTracker] AddDamageById (Potion). Amount: {amount}, ID: {trackingId}");
                     
                     var actData = GetActData(stat, _currentAct);
                     if (actData != null)
@@ -597,21 +656,15 @@ public static partial class CardRegistry
             {
                 stat.CombatDamage += amount;
                 stat.RunDamage += amount;
-                GD.Print($"Added {amount} damage to {trackingId}.");
+                GD.Print($"[DeckTracker] AddDamageById. Amount: {amount}, Card: {trackingId}");
                 var actData = GetActData(stat, _currentAct);
                 if (actData != null)
                 {
                     switch (_currentCombatType)
                     {
-                        case "Elite":
-                            actData.DamageElite += amount;
-                            break;
-                        case "Boss":
-                            actData.DamageBoss += amount;
-                            break;
-                        case "Hallway":
-                            actData.DamageHallway += amount;
-                            break;
+                        case "Elite": actData.DamageElite += amount; break;
+                        case "Boss": actData.DamageBoss += amount; break;
+                        case "Hallway": actData.DamageHallway += amount; break;
                     }
                 }
             }
@@ -619,7 +672,10 @@ public static partial class CardRegistry
         Publish();
     }
     
-    public static void ForcePublish() => Publish();
+    public static void ForcePublish()
+    {
+        Publish();
+    }
 
     private static void Publish()
     {

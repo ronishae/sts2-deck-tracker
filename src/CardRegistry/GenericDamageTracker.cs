@@ -13,7 +13,13 @@ public class GenericDamageTracker : ITrackerState
     private readonly List<PowerContribution> _ledger = new();
     private readonly AsyncLocal<bool> _isExecuting = new();
 
-    public bool IsExecuting => _isExecuting.Value;
+    public bool IsExecuting
+    {
+        get
+        {
+            return _isExecuting.Value;
+        }
+    }
 
     public GenericDamageTracker(string powerId)
     {
@@ -26,17 +32,27 @@ public class GenericDamageTracker : ITrackerState
         {
             _ledger.Clear();
             _isExecuting.Value = false;
+            GD.Print($"[DeckTracker] Reset ({PowerId}). Ledger and execution flag cleared.");
         }
     }
 
     public void LogApply(CardModel? cardSource, decimal amount, string fallbackTrackingId = "External_Source")
     {
-        if (amount <= 0) return;
+        if (amount <= 0)
+        {
+            return;
+        }
         lock (CardRegistry.SyncRoot)
         {
             string trackingId;
-            if (cardSource != null) trackingId = CardRegistry.GetTrackingId(cardSource);
-            else trackingId = fallbackTrackingId;
+            if (cardSource != null)
+            {
+                trackingId = CardRegistry.GetTrackingId(cardSource);
+            }
+            else
+            {
+                trackingId = fallbackTrackingId;
+            }
 
             _ledger.Add(new PowerContribution { TrackingId = trackingId, Amount = amount });
             GD.Print($"[DeckTracker] LogApply ({PowerId}). Source: {trackingId}, Amount: {amount}");
@@ -45,7 +61,10 @@ public class GenericDamageTracker : ITrackerState
 
     public void DistributeDamage(decimal totalDamage)
     {
-        if (totalDamage <= 0) return;
+        if (totalDamage <= 0)
+        {
+            return;
+        }
         lock (CardRegistry.SyncRoot)
         {
             var remainingDamage = totalDamage;
@@ -60,18 +79,22 @@ public class GenericDamageTracker : ITrackerState
                 {
                     CardRegistry.AddDamageById(contribution.TrackingId, share);
                     remainingDamage -= share;
-                    GD.Print($"[DeckTracker] DistributeDamage ({PowerId}). Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
+                    GD.Print($"[DeckTracker]   -> Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
                 }
             }
             
             if (remainingDamage > 0)
             {
-                GD.Print($"[DeckTracker] DistributeDamage ({PowerId}). {remainingDamage} damage unattributed.");
+                GD.Print($"[DeckTracker]   -> {remainingDamage} damage unattributed (ledger exhausted).");
             }
         }
     }
 
-    public void StartExecution() => _isExecuting.Value = true;
+    public void StartExecution()
+    {
+        _isExecuting.Value = true;
+        GD.Print($"[DeckTracker] StartExecution ({PowerId}).");
+    }
 
     public async Task AwaitTaskAsync(Task originalTask)
     {
@@ -83,6 +106,7 @@ public class GenericDamageTracker : ITrackerState
         finally
         {
             _isExecuting.Value = false;
+            GD.Print($"[DeckTracker] AwaitTaskAsync ({PowerId}) finished.");
         }
     }
 }

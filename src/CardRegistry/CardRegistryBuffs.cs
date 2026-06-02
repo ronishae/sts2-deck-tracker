@@ -2,7 +2,9 @@ using Godot;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
@@ -46,19 +48,6 @@ public static partial class CardRegistry
     // The Snapshot trap we will use in Phase 3
     public static readonly AsyncLocal<DamageSnapshot?> CurrentAttackSnapshot = new();
 
-    // --- INSTANCED POWER TRACKING ---
-    // Maps a specific Power object to the Tracking ID of the card that created it!
-    public static readonly Dictionary<PowerModel, string> InstancedPowerSources = new();
-
-    // Instead of a boolean, we store the exact tracking ID of the executing power!
-    public static readonly AsyncLocal<string?> ExecutingInstancedSource = new();
-
-    public static async Task AwaitInstancedTaskAsync(Task originalTask)
-    {
-        try { await originalTask; }
-        finally { ExecutingInstancedSource.Value = null; }
-    }
-    
     public static void ResetBuffState()
     {
         lock (SyncRoot)
@@ -66,6 +55,24 @@ public static partial class CardRegistry
             PersistentLedgers.Clear();
             ConsumableLedgers.Clear();
             EnemyDebuffLedgers.Clear();
+            GD.Print("[DeckTracker] ResetBuffState. All buff ledgers cleared.");
+        }
+    }
+
+    public static void AddConsumableBuffById(string buffType, decimal amount, string trackingId)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+        lock (SyncRoot)
+        {
+            if (!ConsumableLedgers.ContainsKey(buffType))
+            {
+                ConsumableLedgers[buffType] = new List<BuffContribution>();
+            }
+            ConsumableLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
+            GD.Print($"[DeckTracker] AddConsumableBuffById. Added {amount} {buffType} to Consumable FIFO ledger for {trackingId}");
         }
     }
 
@@ -77,34 +84,58 @@ public static partial class CardRegistry
 
     public static void AddDurationBuff(Creature target, string buffType, decimal amount, string trackingId)
     {
-        if (target == null || amount <= 0) return;
+        if (target == null || amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
-            if (!DurationLedgers.ContainsKey(target)) DurationLedgers[target] = new();
-            if (!DurationLedgers[target].ContainsKey(buffType)) DurationLedgers[target][buffType] = new List<BuffContribution>();
+            if (!DurationLedgers.ContainsKey(target))
+            {
+                DurationLedgers[target] = new();
+            }
+            if (!DurationLedgers[target].ContainsKey(buffType))
+            {
+                DurationLedgers[target][buffType] = new List<BuffContribution>();
+            }
             
             DurationLedgers[target][buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] Added {amount} {buffType} to Duration FIFO ledger for {trackingId} on {target.Name}");
+            GD.Print($"[DeckTracker] AddDurationBuff. Added {amount} {buffType} to Duration FIFO ledger for {trackingId} on {target.Name}");
         }
     }
 
     public static void RemoveDurationBuff(Creature target, string buffType, decimal amount)
     {
-        if (target == null || amount <= 0) return;
+        if (target == null || amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
-            if (!DurationLedgers.TryGetValue(target, out var targetLedger)) return;
-            if (!targetLedger.TryGetValue(buffType, out var ledger)) return;
+            if (!DurationLedgers.TryGetValue(target, out var targetLedger))
+            {
+                return;
+            }
+            if (!targetLedger.TryGetValue(buffType, out var ledger))
+            {
+                return;
+            }
 
             decimal remainingToRemove = amount;
+            GD.Print($"[DeckTracker] RemoveDurationBuff. Removing {amount} {buffType} from {target.Name}");
+            
             // FIFO removal because older durations tick down first!
             for (int i = 0; i < ledger.Count; i++)
             {
-                if (remainingToRemove <= 0) break;
+                if (remainingToRemove <= 0)
+                {
+                    break;
+                }
                 var contribution = ledger[i];
                 decimal erased = Math.Min(remainingToRemove, contribution.Amount);
                 contribution.Amount -= erased;
                 remainingToRemove -= erased;
+                GD.Print($"[DeckTracker]   -> Erased {erased} from {contribution.TrackingId}");
             }
             ledger.RemoveAll(c => c.Amount <= 0);
         }
@@ -115,96 +146,142 @@ public static partial class CardRegistry
     // For Strength, Accuracy, Phantom Blades
     public static void AddPersistentBuff(string buffType, decimal amount, CardModel? cardSource)
     {
-        if (amount <= 0) return;
+        if (amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
-            if (!PersistentLedgers.ContainsKey(buffType)) PersistentLedgers[buffType] = new List<BuffContribution>();
+            if (!PersistentLedgers.ContainsKey(buffType))
+            {
+                PersistentLedgers[buffType] = new List<BuffContribution>();
+            }
             
             string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
             PersistentLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] Added {amount} {buffType} to persistent ledger for {trackingId}");
+            GD.Print($"[DeckTracker] AddPersistentBuff. Added {amount} {buffType} to persistent ledger for {trackingId}");
         }
     }
     
     // Helper to add persistent buffs when we already know the exact ID
     public static void AddPersistentBuffById(string buffType, decimal amount, string trackingId)
     {
-        if (amount <= 0) return;
+        if (amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
-            if (!PersistentLedgers.ContainsKey(buffType)) PersistentLedgers[buffType] = new List<BuffContribution>();
+            if (!PersistentLedgers.ContainsKey(buffType))
+            {
+                PersistentLedgers[buffType] = new List<BuffContribution>();
+            }
             PersistentLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] Handoff: Added {amount} {buffType} to Persistent ledger for {trackingId}");
+            GD.Print($"[DeckTracker] AddPersistentBuffById. Added {amount} {buffType} to Persistent ledger for {trackingId}");
         }
     }
     
     public static void RemovePersistentBuff(string buffType, decimal amount)
     {
-        if (amount <= 0) return;
+        if (amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
-            if (!PersistentLedgers.TryGetValue(buffType, out var ledger)) return;
+            if (!PersistentLedgers.TryGetValue(buffType, out var ledger))
+            {
+                return;
+            }
             
             decimal remainingToRemove = amount;
+            GD.Print($"[DeckTracker] RemovePersistentBuff. Removing {amount} {buffType}");
+            
             // Remove LIFO (Last-In-First-Out) for things like Temporary Strength expiring or Debuffs
             for (int i = ledger.Count - 1; i >= 0; i--)
             {
-                if (remainingToRemove <= 0) break;
+                if (remainingToRemove <= 0)
+                {
+                    break;
+                }
                 
                 var contribution = ledger[i];
                 decimal erased = Math.Min(remainingToRemove, contribution.Amount);
                 contribution.Amount -= erased;
                 remainingToRemove -= erased;
+                GD.Print($"[DeckTracker]   -> Erased {erased} from {contribution.TrackingId}");
             }
             ledger.RemoveAll(c => c.Amount <= 0);
-            GD.Print($"[DeckTracker] Removed {amount} {buffType} from persistent ledger.");
         }
     }
 
     // For Vigor, Pen Nib
     public static void AddConsumableBuff(string buffType, decimal amount, CardModel? cardSource)
     {
-        if (amount <= 0) return;
+        if (amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
-            if (!ConsumableLedgers.ContainsKey(buffType)) ConsumableLedgers[buffType] = new List<BuffContribution>();
+            if (!ConsumableLedgers.ContainsKey(buffType))
+            {
+                ConsumableLedgers[buffType] = new List<BuffContribution>();
+            }
             
             string trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
             ConsumableLedgers[buffType].Add(new BuffContribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] Added {amount} {buffType} to consumable FIFO ledger for {trackingId}");
+            GD.Print($"[DeckTracker] AddConsumableBuff. Added {amount} {buffType} to consumable FIFO ledger for {trackingId}");
         }
     }
 
     public static void RemoveConsumableBuff(string buffType, decimal amount)
     {
-        if (amount <= 0) return;
+        if (amount <= 0)
+        {
+            return;
+        }
         lock (SyncRoot)
         {
-            if (!ConsumableLedgers.TryGetValue(buffType, out var ledger)) return;
+            if (!ConsumableLedgers.TryGetValue(buffType, out var ledger))
+            {
+                return;
+            }
 
             decimal remainingToRemove = amount;
+            GD.Print($"[DeckTracker] RemoveConsumableBuff. Consuming {amount} {buffType}");
+            
             // Remove FIFO (First-In-First-Out) because older Vigor gets consumed first!
             for (int i = 0; i < ledger.Count; i++)
             {
-                if (remainingToRemove <= 0) break;
+                if (remainingToRemove <= 0)
+                {
+                    break;
+                }
                 
                 var contribution = ledger[i];
                 decimal erased = Math.Min(remainingToRemove, contribution.Amount);
                 contribution.Amount -= erased;
                 remainingToRemove -= erased;
+                GD.Print($"[DeckTracker]   -> Erased {erased} from {contribution.TrackingId}");
             }
             ledger.RemoveAll(c => c.Amount <= 0);
-            GD.Print($"[DeckTracker] Consumed {amount} {buffType} from FIFO ledger.");
         }
     }
     
     public static decimal ProcessDamageSnapshot(DamageSnapshot snapshot, decimal actualDealtDamage)
     {
         decimal basePlusAdditives = snapshot.BaseDamage;
-        foreach (var a in snapshot.AdditiveModifiers) basePlusAdditives += a.Amount;
+        foreach (var a in snapshot.AdditiveModifiers)
+        {
+            basePlusAdditives += a.Amount;
+        }
 
         decimal totalMultipliers = 1m;
-        foreach (var m in snapshot.MultiplicativeModifiers) totalMultipliers *= m.Amount;
+        foreach (var m in snapshot.MultiplicativeModifiers)
+        {
+            totalMultipliers *= m.Amount;
+        }
 
         decimal currentCalculatedDamage = Math.Max(0, Math.Floor(basePlusAdditives * totalMultipliers));
 
@@ -214,12 +291,13 @@ public static partial class CardRegistry
         // NEW: A rolling multiplier pool. Debuffs will permanently stay in this pool!
         decimal activeMultipliers = totalMultipliers;
 
+        GD.Print($"[DeckTracker] ProcessDamageSnapshot. Total Calculated: {currentCalculatedDamage}, Actual: {actualDealtDamage}, Overkill: {overkill}, Extra: {extraDamage}");
+
         // --- MULTIPLIER PEEL (First) ---
         for (int i = snapshot.MultiplicativeModifiers.Count - 1; i >= 0; i--)
         {
             var multMod = snapshot.MultiplicativeModifiers[i];
 
-            // NEW: Special Decomposition for Vulnerable!
             // NEW: Special Decomposition for Vulnerable!
             if (multMod.PowerId == "VULNERABLE_POWER")
             {
@@ -241,10 +319,6 @@ public static partial class CardRegistry
                     ? cruelty.ModifyVulnerableMultiplier(snapshot.Target!, m_phrog, snapshot.Props, snapshot.Dealer, snapshot.CardSource) 
                     : m_phrog;
                     
-                // decimal m_deb = debilitate != null 
-                //     ? debilitate.ModifyVulnerableMultiplier(snapshot.Target!, m_cruel, snapshot.Props, snapshot.Dealer, snapshot.CardSource) 
-                //     : m_cruel;
-
                 decimal multsWithoutVuln = activeMultipliers / multMod.Amount;
 
                 // Helper to cleanly peel a sub-layer and pass the Diff
@@ -265,7 +339,7 @@ public static partial class CardRegistry
                             if (!paid)
                             {
                                 extraDamage += awarded;
-                                GD.Print($"[DeckTracker] Unattributed {awarded} damage from {id} routed to Base Card.");
+                                GD.Print($"[DeckTracker] ProcessDamageSnapshot. Unattributed {awarded} damage from {id} routed to Base Card.");
                             }
                         }
                     }
@@ -273,9 +347,18 @@ public static partial class CardRegistry
                 }
 
                 // 4. Reverse Execution Order: Debilitate -> Cruelty -> Phrog -> Base
-                if (debilitate != null) PeelSubMultiplier("DEBILITATE_POWER", m_cruel);
-                if (cruelty != null) PeelSubMultiplier("CRUELTY_POWER", m_phrog);
-                if (phrog != null) PeelSubMultiplier("PAPER_PHROG", m_base);
+                if (debilitate != null)
+                {
+                    PeelSubMultiplier("DEBILITATE_POWER", m_cruel);
+                }
+                if (cruelty != null)
+                {
+                    PeelSubMultiplier("CRUELTY_POWER", m_phrog);
+                }
+                if (phrog != null)
+                {
+                    PeelSubMultiplier("PAPER_PHROG", m_base);
+                }
                 PeelSubMultiplier("VULNERABLE_POWER", 1m);
 
                 activeMultipliers = multsWithoutVuln;
@@ -296,11 +379,11 @@ public static partial class CardRegistry
 
                 if (awardedDamage > 0)
                 {
-                    var paid = PayoutMultiplierDamage(multMod.PowerId, awardedDamage, snapshot.Target, snapshot.Dealer);
+                    var paid = PayoutMultiplierDamage(multMod.PowerId, awardedDamage, snapshot.Target, snapshot.Dealer, multMod.PowerInstance);
                     if (!paid)
                     {
                         extraDamage += awardedDamage;
-                        GD.Print($"[DeckTracker] Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
+                        GD.Print($"[DeckTracker] ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
                     }
                 }
                 
@@ -315,7 +398,10 @@ public static partial class CardRegistry
             var addMod = snapshot.AdditiveModifiers[i];
 
             decimal damageWithout = snapshot.BaseDamage;
-            for (int j = 0; j < i; j++) damageWithout += snapshot.AdditiveModifiers[j].Amount;
+            for (int j = 0; j < i; j++)
+            {
+                damageWithout += snapshot.AdditiveModifiers[j].Amount;
+            }
             
             // CRITICAL FIX: Multiply by the activeMultipliers (which contains the Debuffs!)
             damageWithout = Math.Max(0, Math.Floor(damageWithout * activeMultipliers));
@@ -333,7 +419,7 @@ public static partial class CardRegistry
                 {
                     // UNTRACKED POWER DETECTED! Route it back to the Base Card!
                     extraDamage += awardedDamage;
-                    GD.Print($"[DeckTracker] Unattributed {awardedDamage} damage from {addMod.PowerId} routed to Base Card.");
+                    GD.Print($"[DeckTracker] ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {addMod.PowerId} routed to Base Card.");
                 }
             }
 
@@ -346,19 +432,23 @@ public static partial class CardRegistry
     // Returns true if it found a card to payout to, false if it did not (un-attributed environmental damage -- e.g. slow)
     private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer, PowerModel? powerInstance = null)
     {
-        GD.Print($"[DeckTracker] PayoutMultiplierDamage powerId: {powerId}, amount: {amount}");
-        if (RelicLedger.ContainsKey(powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG") // Add your relic class names here!
+        GD.Print($"[DeckTracker] PayoutMultiplierDamage. Power: {powerId}, Amount: {amount}");
+        if (RelicLedger.ContainsKey(powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG")
         {
             AddRelicDamage(powerId, amount);
             return true;
         }
         
         // 0. Instanced Power Precision Routing (Flanking & Knockdown)
-        if (powerInstance != null && InstancedPowerSources.TryGetValue(powerInstance, out var instancedTrackingId))
+        if (powerInstance != null)
         {
-            AddDamageById(instancedTrackingId, amount);
-            GD.Print($"[DeckTracker] Instanced Power Paid {amount} to {instancedTrackingId}");
-            return true;
+            var instId = InstancedTracker.GetIdForInstance(powerInstance);
+            if (instId != null)
+            {
+                AddDamageById(instId, amount);
+                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Instanced). Paid {amount} to {instId}");
+                return true;
+            }
         }
         
         // 1. Is it a Target Debuff? (Vulnerable)
@@ -368,10 +458,14 @@ public static partial class CardRegistry
             decimal remainingToPay = amount;
             foreach (var contribution in enemyLedger)
             {
-                if (remainingToPay <= 0) break;
+                if (remainingToPay <= 0)
+                {
+                    break;
+                }
                 decimal payout = remainingToPay; // 100% to the active turn!
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
+                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Target Duration). Paid {payout} to {contribution.TrackingId}");
             }
             return true;
         }
@@ -383,10 +477,14 @@ public static partial class CardRegistry
             decimal remainingToPay = amount;
             foreach (var contribution in playerDurationLedger)
             {
-                if (remainingToPay <= 0) break;
+                if (remainingToPay <= 0)
+                {
+                    break;
+                }
                 decimal payout = remainingToPay; // 100% to the active turn!
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
+                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Dealer Duration). Paid {payout} to {contribution.TrackingId}");
             }
             return true;
         }
@@ -397,10 +495,14 @@ public static partial class CardRegistry
             decimal remainingToPay = amount;
             foreach (var contribution in consumableLedger)
             {
-                if (remainingToPay <= 0) break;
+                if (remainingToPay <= 0)
+                {
+                    break;
+                }
                 decimal payout = Math.Min(remainingToPay, contribution.Amount);
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
+                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Consumable). Paid {payout} to {contribution.TrackingId}");
             }
             return true;
         }
@@ -408,8 +510,7 @@ public static partial class CardRegistry
         // 4. Is it a Persistent Player Buff? (e.g., A passive Stance or Relic modifier)
         if (PersistentLedgers.TryGetValue(powerId, out var persistentLedger))
         {
-            decimal totalPool = 0;
-            foreach (var c in persistentLedger) totalPool += c.Amount;
+            decimal totalPool = persistentLedger.Sum(c => c.Amount);
         
             if (totalPool > 0)
             {
@@ -418,22 +519,24 @@ public static partial class CardRegistry
                 for (int i = 0; i < persistentLedger.Count; i++)
                 {
                     var contribution = persistentLedger[i];
-                    if (remainingToPay <= 0) break;
-
-                    // If this is the final card in the queue, it skips the math and catches the remainder.
-                    // This guarantees ZERO damage is lost to floating-point truncation!
-                    if (i == persistentLedger.Count - 1)
+                    if (remainingToPay <= 0)
                     {
-                        AddDamageById(contribution.TrackingId, remainingToPay);
                         break;
                     }
 
-                    // Older cards (FIFO) get the rounding priority!
+                    if (i == persistentLedger.Count - 1)
+                    {
+                        AddDamageById(contribution.TrackingId, remainingToPay);
+                        GD.Print($"[DeckTracker] PayoutMultiplierDamage (Persistent Remainder). Paid {remainingToPay} to {contribution.TrackingId}");
+                        break;
+                    }
+
                     decimal share = Math.Min(remainingToPay, Math.Ceiling(amount * (contribution.Amount / totalPool)));
                     if (share > 0)
                     {
                         AddDamageById(contribution.TrackingId, share);
                         remainingToPay -= share;
+                        GD.Print($"[DeckTracker] PayoutMultiplierDamage (Persistent Share). Paid {share} to {contribution.TrackingId}");
                     }
                 }
             }
@@ -446,7 +549,7 @@ public static partial class CardRegistry
     
     private static bool PayoutAdditiveDamage(string powerId, decimal amount)
     {
-        GD.Print($"[DeckTracker] PayoutAdditiveDamage powerId: {powerId}, amount: {amount}");
+        GD.Print($"[DeckTracker] PayoutAdditiveDamage. Power: {powerId}, Amount: {amount}");
         if (RelicLedger.ContainsKey(powerId) || powerId == "STRIKE_DUMMY" || powerId == "FAKE_STRIKE_DUMMY" 
             || powerId == "MYSTIC_LIGHTER" || powerId == "MINIATURE_CANNON")
         {
@@ -457,16 +560,17 @@ public static partial class CardRegistry
         // 1. Is it a Consumable? (Vigor)
         if (ConsumableLedgers.ContainsKey(powerId))
         {
-            // Because Vigor drops naturally, we don't physically remove it from the ledger here.
-            // We just peek at the FIFO queue to see WHO gave the Vigor, and award them!
             decimal remainingToPay = amount;
             foreach (var contribution in ConsumableLedgers[powerId])
             {
-                if (remainingToPay <= 0) break;
+                if (remainingToPay <= 0)
+                {
+                    break;
+                }
                 decimal payout = Math.Min(remainingToPay, contribution.Amount);
                 
                 AddDamageById(contribution.TrackingId, payout);
-                GD.Print($"[DeckTracker] LIFO Peel Paid {payout} Consumable Buff Damage to {contribution.TrackingId}");
+                GD.Print($"[DeckTracker] PayoutAdditiveDamage (Consumable). Paid {payout} to {contribution.TrackingId}");
                 
                 remainingToPay -= payout;
             }
@@ -476,8 +580,7 @@ public static partial class CardRegistry
         // 2. Is it a Persistent Buff? (Strength, Accuracy, PhantomBlades)
         if (PersistentLedgers.TryGetValue(powerId, out var persistentLedger))
         {
-            decimal totalPool = 0;
-            foreach (var c in persistentLedger) totalPool += c.Amount;
+            decimal totalPool = persistentLedger.Sum(c => c.Amount);
         
             if (totalPool > 0)
             {
@@ -486,23 +589,24 @@ public static partial class CardRegistry
                 for (int i = 0; i < persistentLedger.Count; i++)
                 {
                     var contribution = persistentLedger[i];
-                    if (remainingToPay <= 0) break;
-
-                    // If this is the final card/relic in the queue, it catches the remainder!
-                    if (i == persistentLedger.Count - 1)
+                    if (remainingToPay <= 0)
                     {
-                        AddDamageById(contribution.TrackingId, remainingToPay);
-                        GD.Print($"[DeckTracker] LIFO Peel Paid {remainingToPay} Additive Buff Damage to {contribution.TrackingId}");
                         break;
                     }
 
-                    // Older cards/relics (FIFO) get the rounding priority!
+                    if (i == persistentLedger.Count - 1)
+                    {
+                        AddDamageById(contribution.TrackingId, remainingToPay);
+                        GD.Print($"[DeckTracker] PayoutAdditiveDamage (Persistent Remainder). Paid {remainingToPay} to {contribution.TrackingId}");
+                        break;
+                    }
+
                     decimal share = Math.Min(remainingToPay, Math.Ceiling(amount * (contribution.Amount / totalPool)));
                     if (share > 0)
                     {
                         AddDamageById(contribution.TrackingId, share);
-                        GD.Print($"[DeckTracker] LIFO Peel Paid {share} Additive Buff Damage to {contribution.TrackingId}");
                         remainingToPay -= share;
+                        GD.Print($"[DeckTracker] PayoutAdditiveDamage (Persistent Share). Paid {share} to {contribution.TrackingId}");
                     }
                 }
             }
