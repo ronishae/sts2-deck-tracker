@@ -74,16 +74,27 @@ public static class DeckTrackerOverlay
             if (!_isHookedToProcess)
             {
                 tree.ProcessFrame += OnProcessFrame;
+                tree.Root.TreeExiting += OnGameExiting;
                 CardRegistry.Changed += (stats) => UpdateQueue.Enqueue(stats);
                 _isHookedToProcess = true;
             }
 
             _instance = new CanvasLayer { Layer = 100, Name = "DeckTrackerOverlay" };
-            
+
             BuildSmallOverlay(_instance);
             BuildFullScreenOverlay(_instance);
 
             tree.Root.CallDeferred(Node.MethodName.AddChild, _instance);
+        }
+    }
+
+    private static void OnGameExiting()
+    {
+        if (GodotObject.IsInstanceValid(_instance))
+        {
+            GD.Print("[DeckTracker] OnGameExiting. Freeing overlay nodes.");
+            _instance.Free();
+            _instance = null;
         }
     }
 
