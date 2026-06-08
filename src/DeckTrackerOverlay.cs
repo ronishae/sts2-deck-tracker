@@ -501,22 +501,27 @@ public static class DeckTrackerOverlay
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
             .ToList();
 
+        decimal EffectiveValue(CardStats s, ActData a) =>
+            _showRunStats
+                ? (_showRawForge ? a.RawForgeTotal : (a.TotalDamage + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0)))
+                : (_showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0)));
+
         // Sort logic
         var sortedList = _currentSort.Column switch
         {
-            "NAME" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat)) 
+            "NAME" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat))
                 : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
-                
-            "PLAY_RATE" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => x.Agg.PlayRate) 
-                : unsortedList.OrderByDescending(x => x.Agg.PlayRate),
-                
-            "TOTAL_DMG" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)))
-                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))),
 
-            "AVG_DMG" => _currentSort.Ascending 
+            "PLAY_RATE" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => x.Agg.PlayRate)
+                : unsortedList.OrderByDescending(x => x.Agg.PlayRate),
+
+            "TOTAL_DMG" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => EffectiveValue(x.Stat, x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveValue(x.Stat, x.Agg)),
+
+            "AVG_DMG" => _currentSort.Ascending
                 ? unsortedList.OrderBy(x => x.Agg.EncountersSeenTotal > 0 ? (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) / x.Agg.EncountersSeenTotal : 0)
                 : unsortedList.OrderByDescending(x => x.Agg.EncountersSeenTotal > 0 ? (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) / x.Agg.EncountersSeenTotal : 0),
                 
@@ -544,13 +549,13 @@ public static class DeckTrackerOverlay
                 ? unsortedList.OrderBy(x => x.Stat.FloorLeftDeck) // 0 (N/A) will be at the top when ascending
                 : unsortedList.OrderByDescending(x => x.Stat.FloorLeftDeck),
 
-            _ => unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) // Fallback
+            _ => unsortedList.OrderByDescending(x => EffectiveValue(x.Stat, x.Agg)) // Fallback
         };
-        
+
         var finalSort = sortedList;
         if (_currentSort.Column != "TOTAL_DMG")
         {
-            finalSort = finalSort.ThenByDescending(x => _showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0)));
+            finalSort = finalSort.ThenByDescending(x => EffectiveValue(x.Stat, x.Agg));
         }
 
         // Always apply FloorAdded as a secondary sort to keep things deterministic if values are tied
@@ -566,10 +571,11 @@ public static class DeckTrackerOverlay
             Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
             Label playRateLabel = new Label { Text = $"{agg.TimesPlayed}/{agg.TimesDrawn} ({agg.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
             playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
-            
-            decimal valTotal = _showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0));
-            decimal avgTotal = agg.EncountersSeenTotal > 0 ? valTotal / agg.EncountersSeenTotal : 0;
-            
+
+            decimal valTotal = EffectiveValue(stat, agg);
+            decimal valRunTotal = _showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0));
+            decimal avgTotal = agg.EncountersSeenTotal > 0 ? valRunTotal / agg.EncountersSeenTotal : 0;
+
             decimal valHallway = _showRawForge ? agg.RawForgeHallway : (agg.DamageHallway + (_includeConnectedForge ? agg.ConnectedForgeHallway - agg.ReceivedForgeHallway : 0));
             decimal avgHallway = agg.EncountersSeenHallway > 0 ? valHallway / agg.EncountersSeenHallway : 0;
 
