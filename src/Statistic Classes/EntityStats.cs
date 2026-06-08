@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Models;
+using System.Text.Json.Serialization;
 
 namespace DeckTracker;
 
@@ -7,8 +8,8 @@ public abstract class EntityStats
     public string Id { get; set; } = "";
     public string DisplayName { get; set; } = "";
     
-    // NOTE: for cards, the CardModel represents the master deck version, but the cards played
-    // are cloned at the start of combat, so these will not represent the live played cards
+    // Not serialized — live reference restored by RestoreLiveInstances after each load
+    [JsonIgnore]
     public AbstractModel? Model { get; set; }
     
     // Run Lifecycle

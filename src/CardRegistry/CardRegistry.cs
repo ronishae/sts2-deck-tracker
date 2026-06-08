@@ -143,10 +143,13 @@ public static partial class CardRegistry
                 state = new SavedRunState
                 {
                     RunSeed = _currentRunSeed,
+                    PotionCounter = _potionCounter,
                     Totals = EntityLedger.Values.OfType<CardStats>()
                         .ToDictionary(s => s.Id, s => (CardStats)s.Clone()),
                     Potions = EntityLedger.Values.OfType<PotionStats>()
-                        .ToDictionary(s => s.Id, s => (PotionStats)s.Clone())
+                        .ToDictionary(s => s.Id, s => (PotionStats)s.Clone()),
+                    Relics = EntityLedger.Values.OfType<RelicStats>()
+                        .ToDictionary(s => "RELIC_" + s.Id, s => (RelicStats)s.Clone())
                 };
             }
 
@@ -166,24 +169,29 @@ public static partial class CardRegistry
         {
             if (!System.IO.File.Exists(SavePath))
             {
+                GD.Print("[DeckTracker] TryLoadState. No save file found.");
                 return false;
             }
 
             string json = System.IO.File.ReadAllText(SavePath);
             SavedRunState? state = JsonSerializer.Deserialize(json, SavedStateCtx.Default.SavedRunState);
-            
+
             if (state == null || state.RunSeed != targetSeed)
             {
+                GD.Print($"[DeckTracker] TryLoadState. Seed mismatch or null state. Expected: {targetSeed}, Got: {state?.RunSeed}");
                 return false;
             }
 
             EntityLedger.Clear();
             foreach (var kvp in state.Totals) EntityLedger[kvp.Key] = kvp.Value;
             foreach (var kvp in state.Potions ?? new Dictionary<string, PotionStats>()) EntityLedger[kvp.Key] = kvp.Value;
+            foreach (var kvp in state.Relics ?? new Dictionary<string, RelicStats>()) EntityLedger[kvp.Key] = kvp.Value;
+            _potionCounter = state.PotionCounter;
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            GD.PrintErr($"[DeckTracker] TryLoadState Failed: {e.Message}");
             return false;
         }
     }

@@ -26,6 +26,7 @@ internal static partial class HookPatches
         var activeDeckIds = ScanDeckForCards(runState);
         GD.Print($"[DeckTracker] AfterRoomEnteredPostfix. Floor: {currentFloor}, Room: {room.RoomType}");
         CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
+        CardRegistry.SaveState();
     }
 
     public static void BeforeRoomEnteredPrefix(IRunState? runState, AbstractRoom room)
