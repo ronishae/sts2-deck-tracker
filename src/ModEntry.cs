@@ -51,7 +51,7 @@ public static class ModEntry
         _harmony.Patch(AccessTools.Method(typeof(InfusedCore), nameof(InfusedCore.ModifyOrbValue)),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.ModifyOrbValuePostfix))));
         
-        _harmony.Patch(AccessTools.Method(typeof(SneckoSkull), nameof(SneckoSkull.ModifyPowerAmountGiven)),
+        _harmony.Patch(AccessTools.Method(typeof(SneckoSkull), nameof(SneckoSkull.ModifyPowerAmountGivenAdditive)),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(RelicExecutionManager), nameof(RelicExecutionManager.ModifyPowerAmountGivenPostfix))));
         
         // --- Core Lifecycle Hooks ---
