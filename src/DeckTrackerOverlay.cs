@@ -240,10 +240,6 @@ public static class DeckTrackerOverlay
         {
             _mergeVersionsBtnLarge.Text = _mergeCardVersions ? "Merge Versions: ON" : "Merge Versions: OFF";
         }
-        if (_mergeCardVersions && (_currentSort.Column == "REMOVED" || _currentSort.Column == "EVOLVED"))
-        {
-            _currentSort.Column = "TOTAL_DMG";
-        }
         RedrawUI(_latestStats);
     }
 
@@ -505,7 +501,8 @@ public static class DeckTrackerOverlay
     
     private static void RenderFullScreenCards(List<CardStats> stats)
     {
-        var effectiveStats = _mergeCardVersions ? BuildMergedCardList(stats) : stats;
+        var mergedStats = _mergeCardVersions ? BuildMergedCardList(stats) : stats;
+        var effectiveStats = BuildStackedCardList(mergedStats);
 
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("CARD NAME", "NAME", 300));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("% PLAYED", "PLAY_RATE", 150));
@@ -517,11 +514,8 @@ public static class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ELITE (AVG) (#)", "ELITE_DMG", 200));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("BOSS (AVG) (#)", "BOSS_DMG", 200));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ADDED", "ADDED", 80));
-        if (!_mergeCardVersions)
-        {
-            _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
-            _fullScreenHeadersContainer.AddChild(CreateSortableHeader("EVOLVED", "EVOLVED", 80));
-        }
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("EVOLVED", "EVOLVED", 80));
 
         var unsortedList = effectiveStats.Where(s => s.CardType != "Status")
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
@@ -637,22 +631,21 @@ public static class DeckTrackerOverlay
             row.AddChild(hallwayLabel); row.AddChild(eliteLabel); row.AddChild(bossLabel);
             row.AddChild(addedLabel);
 
-            if (!_mergeCardVersions)
-            {
-                string removedText = stat.FloorRemoved <= 0 ? "N/A" : stat.FloorRemoved.ToString();
-                Label removedLabel = new Label { Text = removedText, CustomMinimumSize = new Vector2(90, 0) };
-                removedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+            string removedText = stat.FloorRemoved <= 0 ? "N/A" : stat.FloorRemoved.ToString();
+            Label removedLabel = new Label { Text = removedText, CustomMinimumSize = new Vector2(90, 0) };
+            removedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
-                // Only show EVOLVED when the card left due to upgrade/enchant, not explicit removal
-                string evolvedText = (stat.FloorRemoved == -1 && stat.FloorLeftDeck > 0)
-                    ? stat.FloorLeftDeck.ToString()
-                    : "N/A";
-                Label evolvedLabel = new Label { Text = evolvedText, CustomMinimumSize = new Vector2(80, 0) };
-                evolvedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+            // Show EVOLVED when the card left via upgrade/enchant (FloorLeftDeck set to a different floor than the removal floor).
+            // For non-merged rows this is: FloorRemoved==-1 && FloorLeftDeck>0.
+            // For merged rows FloorRemoved may be set independently, so we check FloorLeftDeck!=FloorRemoved to exclude pure removals.
+            string evolvedText = (stat.FloorLeftDeck > 0 && stat.FloorLeftDeck != stat.FloorRemoved)
+                ? stat.FloorLeftDeck.ToString()
+                : "N/A";
+            Label evolvedLabel = new Label { Text = evolvedText, CustomMinimumSize = new Vector2(80, 0) };
+            evolvedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
-                row.AddChild(removedLabel);
-                row.AddChild(evolvedLabel);
-            }
+            row.AddChild(removedLabel);
+            row.AddChild(evolvedLabel);
             
             _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
         }
@@ -666,7 +659,15 @@ public static class DeckTrackerOverlay
         foreach (var group in groups)
         {
             var versions = group.ToList();
-            var representative = versions.OrderByDescending(s => s.UpgradeLevel).First();
+            // Prefer the active (current) version; among equal upgrade levels, active takes precedence
+            var representative = versions.OrderByDescending(s => s.UpgradeLevel).ThenByDescending(s => s.IsActive ? 1 : 0).First();
+
+            // Evolution floor: most recent upgrade/enchant event across all retired versions in this group
+            var evolvedFloor = versions
+                .Where(s => !s.IsActive && s.FloorRemoved == -1 && s.FloorLeftDeck > 0)
+                .Select(s => s.FloorLeftDeck)
+                .DefaultIfEmpty(-1)
+                .Max();
 
             var merged = new CardStats
             {
@@ -677,8 +678,8 @@ public static class DeckTrackerOverlay
                 UpgradeLevel = representative.UpgradeLevel,
                 BaseCardKey = representative.BaseCardKey,
                 FloorAdded = versions.Min(s => s.FloorAdded),
-                FloorRemoved = -1,
-                FloorLeftDeck = -1,
+                FloorRemoved = representative.FloorRemoved,
+                FloorLeftDeck = evolvedFloor,
                 IsActive = versions.Any(s => s.IsActive),
                 CopiesInDeck = versions.Sum(s => s.CopiesInDeck),
                 CombatDamage = versions.Sum(s => s.CombatDamage),
@@ -702,6 +703,91 @@ public static class DeckTrackerOverlay
         return result;
     }
 
+    // Cards that are always stacked regardless of count (generated in large quantities during combat)
+    // Verify these IDs match the actual STS2 card identifiers
+    private static readonly HashSet<string> AutoStackCardIds = new()
+    {
+        "SHIV", 
+        "SOUL", 
+        "GIANT_ROCK",
+        "SWEEPING_GAZE",
+        "MINION_DIVE_BOMB", 
+        "MINION_STRIKE", 
+        "FUEL", 
+        "MINION_SACRIFICE",
+        "INFECTION",
+        "WITHER",
+        "SOOT",
+        "BURN",
+        "WOUND",
+        "BECKON",
+        "DEBRIS",
+        "TOXIC",
+        "SLIMED",
+        "DAZED",
+    };
+
+    private static string ExtractBaseId(CardStats stat)
+    {
+        var key = string.IsNullOrEmpty(stat.BaseCardKey) ? stat.Id : stat.BaseCardKey;
+        var idx = key.LastIndexOf("_F");
+        return idx >= 0 ? key[..idx] : key;
+    }
+
+    private static List<CardStats> BuildStackedCardList(List<CardStats> stats)
+    {
+        const int StackThreshold = 7;
+        var result = new List<CardStats>();
+
+        var groups = stats.GroupBy(s => (ExtractBaseId(s), s.UpgradeLevel, s.Enchantment));
+
+        foreach (var group in groups)
+        {
+            var versions = group.ToList();
+            var baseId = group.Key.Item1;
+            var shouldStack = AutoStackCardIds.Contains(baseId) || versions.Count > StackThreshold;
+
+            if (!shouldStack || versions.Count == 1)
+            {
+                result.AddRange(versions);
+                continue;
+            }
+
+            var representative = versions.First();
+            var stacked = new CardStats
+            {
+                Id = representative.Id,
+                DisplayName = representative.DisplayName,
+                CardType = representative.CardType,
+                Enchantment = representative.Enchantment,
+                UpgradeLevel = representative.UpgradeLevel,
+                BaseCardKey = representative.BaseCardKey,
+                FloorAdded = versions.Min(s => s.FloorAdded),
+                FloorRemoved = -1,
+                FloorLeftDeck = -1,
+                IsActive = versions.Any(s => s.IsActive),
+                CopiesInDeck = versions.Count,
+                CombatDamage = versions.Sum(s => s.CombatDamage),
+                RunDamage = versions.Sum(s => s.RunDamage),
+                RawForgeCombat = versions.Sum(s => s.RawForgeCombat),
+                ConnectedForgeCombat = versions.Sum(s => s.ConnectedForgeCombat),
+                ReceivedForgeCombat = versions.Sum(s => s.ReceivedForgeCombat),
+            };
+
+            foreach (var v in versions)
+            {
+                AddAct(stacked.Act1, v.Act1);
+                AddAct(stacked.Act2, v.Act2);
+                AddAct(stacked.Act3, v.Act3);
+                AddAct(stacked.Act4, v.Act4);
+            }
+
+            result.Add(stacked);
+        }
+
+        return result;
+    }
+
     private static void RenderFullScreenRelics()
     {
         // 1. Setup Headers
@@ -709,7 +795,7 @@ public static class DeckTrackerOverlay
         
         string totalColText = (_showRunStats ? "RUN" : "COMBAT") + (_showRawForge ? " FORGE" : " DAMAGE");
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 180));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("AVG (#)", "AVG_DMG", 130));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("AVG (#Fights)", "AVG_DMG", 130));
         
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 200));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ELITE (AVG) (#)", "ELITE_DMG", 200));
