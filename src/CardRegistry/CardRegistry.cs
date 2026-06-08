@@ -212,6 +212,18 @@ public static partial class CardRegistry
         return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}";
     }
 
+    public static string GetBaseCardKey(CardModel? card)
+    {
+        if (card == null)
+        {
+            return "";
+        }
+        CardModel sourceCard = card.DeckVersion ?? card;
+        string baseId = sourceCard.Id.Entry ?? "Unknown";
+        int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
+        return $"{baseId}_F{floorAdded}";
+    }
+
     // Resolves the active source ID: card first, then executing relic, then active potion, then fallback.
     public static string GetCurrentSourceId(CardModel? cardSource = null, string fallback = "External_Source")
     {
@@ -524,6 +536,8 @@ public static partial class CardRegistry
                     Model = card,
                     CardType = sourceCard.Type.ToString(),
                     Enchantment = enchantName,
+                    UpgradeLevel = sourceCard.CurrentUpgradeLevel,
+                    BaseCardKey = GetBaseCardKey(card),
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
                     FloorRemoved = isGenerated ? 0 : -1,
                     IsActive = !isGenerated,

@@ -23,6 +23,7 @@ public static class DeckTrackerOverlay
     private static Button? _toggleForgeDmgBtnLarge;
     private static Button? _toggleRawForgeBtnLarge;
     private static Button? _toggleRunCombatBtnLarge;
+    private static Button? _mergeVersionsBtnLarge;
     private static CheckBox? _act1Check;
     private static CheckBox? _act2Check;
     private static CheckBox? _act3Check;
@@ -39,9 +40,10 @@ public static class DeckTrackerOverlay
     private static readonly ConcurrentQueue<List<CardStats>> UpdateQueue = new();
     private static bool _isHookedToProcess;
 
-    private static bool _showRunStats; 
+    private static bool _showRunStats;
     private static bool _includeConnectedForge;
     private static bool _showRawForge;
+    private static bool _mergeCardVersions;
     
     private static bool _act1Enabled = true;
     private static bool _act2Enabled = true;
@@ -168,6 +170,9 @@ public static class DeckTrackerOverlay
         _toggleForgeDmgBtnLarge = new Button { Text = "Include Connected Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnLarge.Pressed += ToggleForgeDamage;
 
+        _mergeVersionsBtnLarge = new Button { Text = "Merge Versions: OFF", FocusMode = Control.FocusModeEnum.None };
+        _mergeVersionsBtnLarge.Pressed += ToggleMergeVersions;
+
         Button closeBtn = new Button { Text = "  X  ", FocusMode = Control.FocusModeEnum.None };
         closeBtn.AddThemeColorOverride("font_color", new Color("F87171"));
         closeBtn.Pressed += OnClosePressed;
@@ -179,6 +184,7 @@ public static class DeckTrackerOverlay
         header.AddChild(_toggleRunCombatBtnLarge);
         header.AddChild(_toggleRawForgeBtnLarge);
         header.AddChild(_toggleForgeDmgBtnLarge);
+        header.AddChild(_mergeVersionsBtnLarge);
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
         
@@ -227,6 +233,20 @@ public static class DeckTrackerOverlay
     }
     
     // --- Toggles ---
+    private static void ToggleMergeVersions()
+    {
+        _mergeCardVersions = !_mergeCardVersions;
+        if (_mergeVersionsBtnLarge != null)
+        {
+            _mergeVersionsBtnLarge.Text = _mergeCardVersions ? "Merge Versions: ON" : "Merge Versions: OFF";
+        }
+        if (_mergeCardVersions && (_currentSort.Column == "REMOVED" || _currentSort.Column == "EVOLVED"))
+        {
+            _currentSort.Column = "TOTAL_DMG";
+        }
+        RedrawUI(_latestStats);
+    }
+
     private static void ToggleRawForge()
     {
         _showRawForge = !_showRawForge;
@@ -313,6 +333,7 @@ public static class DeckTrackerOverlay
         if (stat is CardStats card)
         {
             if (!string.IsNullOrEmpty(card.Enchantment) && card.Enchantment != "None") title += $" [{card.Enchantment}]";
+            if (card.UpgradeLevel > 0 && !title.Contains('+')) title += $"+{card.UpgradeLevel}";
             if (card.CopiesInDeck > 1) title += $" x{card.CopiesInDeck}";
         }
         
@@ -484,20 +505,25 @@ public static class DeckTrackerOverlay
     
     private static void RenderFullScreenCards(List<CardStats> stats)
     {
+        var effectiveStats = _mergeCardVersions ? BuildMergedCardList(stats) : stats;
+
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("CARD NAME", "NAME", 300));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("% PLAYED", "PLAY_RATE", 150));
         string totalColText = (_showRunStats ? "RUN" : "COMBAT") + (_showRawForge ? " FORGE" : " DAMAGE");
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 180));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("AVG (#)", "AVG_DMG", 130));
-        
+
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 200));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ELITE (AVG) (#)", "ELITE_DMG", 200));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("BOSS (AVG) (#)", "BOSS_DMG", 200));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ADDED", "ADDED", 80));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("LEFT", "LEFT", 80));
+        if (!_mergeCardVersions)
+        {
+            _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
+            _fullScreenHeadersContainer.AddChild(CreateSortableHeader("EVOLVED", "EVOLVED", 80));
+        }
 
-        var unsortedList = stats.Where(s => s.CardType != "Status")
+        var unsortedList = effectiveStats.Where(s => s.CardType != "Status")
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
             .ToList();
 
@@ -545,7 +571,7 @@ public static class DeckTrackerOverlay
                 ? unsortedList.OrderBy(x => x.Stat.FloorRemoved) // -1 (N/A) will be at the top when ascending
                 : unsortedList.OrderByDescending(x => x.Stat.FloorRemoved),
                 
-            "LEFT" => _currentSort.Ascending 
+            "EVOLVED" => _currentSort.Ascending
                 ? unsortedList.OrderBy(x => x.Stat.FloorLeftDeck) // 0 (N/A) will be at the top when ascending
                 : unsortedList.OrderByDescending(x => x.Stat.FloorLeftDeck),
 
@@ -604,25 +630,76 @@ public static class DeckTrackerOverlay
             
             string addedText = stat.FloorAdded == 0 ? "GEN" : stat.FloorAdded.ToString();
             Label addedLabel = new Label { Text = addedText, CustomMinimumSize = new Vector2(80, 0) };
-            addedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
+            addedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
-            // Used the generic FloorRemoved property safely here
-            string removedText = stat.FloorRemoved <= 0 ? "N/A" : stat.FloorRemoved.ToString();
-            Label removedLabel = new Label { Text = removedText, CustomMinimumSize = new Vector2(90, 0) };
-            removedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
-
-            // Still specific to cards, pulled directly from CardStats
-            string leftText = stat.FloorLeftDeck <= 0 ? "N/A" : stat.FloorLeftDeck.ToString();
-            Label leftLabel = new Label { Text = leftText, CustomMinimumSize = new Vector2(80, 0) };
-            leftLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
-            
             row.AddChild(nameLabel); row.AddChild(playRateLabel);
-            row.AddChild(totalDataLabel); row.AddChild(avgDataLabel); 
+            row.AddChild(totalDataLabel); row.AddChild(avgDataLabel);
             row.AddChild(hallwayLabel); row.AddChild(eliteLabel); row.AddChild(bossLabel);
-            row.AddChild(addedLabel); row.AddChild(removedLabel); row.AddChild(leftLabel);
+            row.AddChild(addedLabel);
+
+            if (!_mergeCardVersions)
+            {
+                string removedText = stat.FloorRemoved <= 0 ? "N/A" : stat.FloorRemoved.ToString();
+                Label removedLabel = new Label { Text = removedText, CustomMinimumSize = new Vector2(90, 0) };
+                removedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+
+                // Only show EVOLVED when the card left due to upgrade/enchant, not explicit removal
+                string evolvedText = (stat.FloorRemoved == -1 && stat.FloorLeftDeck > 0)
+                    ? stat.FloorLeftDeck.ToString()
+                    : "N/A";
+                Label evolvedLabel = new Label { Text = evolvedText, CustomMinimumSize = new Vector2(80, 0) };
+                evolvedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
+
+                row.AddChild(removedLabel);
+                row.AddChild(evolvedLabel);
+            }
             
             _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
         }
+    }
+
+    private static List<CardStats> BuildMergedCardList(List<CardStats> stats)
+    {
+        var groups = stats.GroupBy(s => string.IsNullOrEmpty(s.BaseCardKey) ? s.Id : s.BaseCardKey);
+        var result = new List<CardStats>();
+
+        foreach (var group in groups)
+        {
+            var versions = group.ToList();
+            var representative = versions.OrderByDescending(s => s.UpgradeLevel).First();
+
+            var merged = new CardStats
+            {
+                Id = representative.Id,
+                DisplayName = representative.DisplayName,
+                CardType = representative.CardType,
+                Enchantment = representative.Enchantment,
+                UpgradeLevel = representative.UpgradeLevel,
+                BaseCardKey = representative.BaseCardKey,
+                FloorAdded = versions.Min(s => s.FloorAdded),
+                FloorRemoved = -1,
+                FloorLeftDeck = -1,
+                IsActive = versions.Any(s => s.IsActive),
+                CopiesInDeck = versions.Sum(s => s.CopiesInDeck),
+                CombatDamage = versions.Sum(s => s.CombatDamage),
+                RunDamage = versions.Sum(s => s.RunDamage),
+                RawForgeCombat = versions.Sum(s => s.RawForgeCombat),
+                ConnectedForgeCombat = versions.Sum(s => s.ConnectedForgeCombat),
+                ReceivedForgeCombat = versions.Sum(s => s.ReceivedForgeCombat),
+            };
+
+            foreach (var v in versions)
+            {
+                AddAct(merged.Act1, v.Act1);
+                AddAct(merged.Act2, v.Act2);
+                AddAct(merged.Act3, v.Act3);
+                AddAct(merged.Act4, v.Act4);
+            }
+
+            result.Add(merged);
+        }
+
+        return result;
     }
 
     private static void RenderFullScreenRelics()
