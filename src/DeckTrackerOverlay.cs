@@ -783,55 +783,75 @@ public static class DeckTrackerOverlay
     {
         // 1. Setup Headers
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("POTION NAME", "NAME", 300));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("TOTAL DMG", "TOTAL_DMG", 180));
+
+        string totalColText = (_showRunStats ? "RUN" : "COMBAT") + (_showRawForge ? " FORGE" : " DAMAGE");
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 180));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("OBTAINED", "ADDED", 100));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("USED", "USED", 100));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("DISCARDED", "REMOVED", 100));
 
+        decimal EffectiveValue(PotionStats s, ActData agg) =>
+            _showRunStats
+                ? (_showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0)))
+                : (_showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0)));
+
         // 2. Fetch and Sort Data
-        var unsortedList = CardRegistry.EntityLedger.Values.OfType<PotionStats>().ToList();
+        var unsortedList = CardRegistry.EntityLedger.Values.OfType<PotionStats>()
+            .Select(s => new { Stat = s, Agg = AggregateActData(s) })
+            .ToList();
 
         var sortedList = _currentSort.Column switch
         {
-            "NAME" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x)) 
-                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x)),
-                
-            "TOTAL_DMG" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => x.RunDamage)
-                : unsortedList.OrderByDescending(x => x.RunDamage),
-                
-            "ADDED" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => x.FloorObtained) 
-                : unsortedList.OrderByDescending(x => x.FloorObtained),
-                
-            "USED" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => x.FloorUsed) 
-                : unsortedList.OrderByDescending(x => x.FloorUsed),
-                
-            "REMOVED" => _currentSort.Ascending 
-                ? unsortedList.OrderBy(x => x.FloorDiscarded) 
-                : unsortedList.OrderByDescending(x => x.FloorDiscarded),
-                
-            _ => unsortedList.OrderByDescending(x => x.RunDamage) // Fallback
+            "NAME" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat))
+                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
+
+            "TOTAL_DMG" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => EffectiveValue(x.Stat, x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveValue(x.Stat, x.Agg)),
+
+            "ADDED" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => x.Stat.FloorObtained)
+                : unsortedList.OrderByDescending(x => x.Stat.FloorObtained),
+
+            "USED" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => x.Stat.FloorUsed)
+                : unsortedList.OrderByDescending(x => x.Stat.FloorUsed),
+
+            "REMOVED" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => x.Stat.FloorDiscarded)
+                : unsortedList.OrderByDescending(x => x.Stat.FloorDiscarded),
+
+            _ => unsortedList.OrderByDescending(x => EffectiveValue(x.Stat, x.Agg)) // Fallback
         };
 
         // Secondary sort to keep multiple instances ordered chronologically
-        var potionList = sortedList.ThenBy(x => x.FloorObtained).ToList();
+        var potionList = sortedList.ThenBy(x => x.Stat.FloorObtained).ToList();
 
         // 3. Render Rows
-        foreach (var stat in potionList)
+        foreach (var item in potionList)
         {
+            var stat = item.Stat;
+            var agg = item.Agg;
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            
+
             Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
-            
-            Label totalDataLabel = new Label { Text = $"{stat.RunDamage:0.##}", CustomMinimumSize = new Vector2(180, 0) };
-            totalDataLabel.AddThemeColorOverride("font_color", new Color("4ADE80")); 
-            
+
+            decimal valToShow = EffectiveValue(stat, agg);
+            Label totalDataLabel = new Label { Text = $"{valToShow:0.##}", CustomMinimumSize = new Vector2(180, 0) };
+            if (!_showRawForge && _includeConnectedForge)
+            {
+                bool hasForge = _showRunStats ? agg.ConnectedForgeTotal > 0 : stat.ConnectedForgeCombat > 0;
+                totalDataLabel.AddThemeColorOverride("font_color", hasForge ? new Color("38BDF8") : new Color("4ADE80"));
+            }
+            else
+            {
+                totalDataLabel.AddThemeColorOverride("font_color", _showRawForge ? new Color("A0A8B4") : new Color("4ADE80"));
+            }
+
             string obtainedText = stat.FloorObtained < 0 ? "N/A" : stat.FloorObtained.ToString();
             Label obtainedLabel = new Label { Text = obtainedText, CustomMinimumSize = new Vector2(100, 0) };
-            obtainedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4")); 
+            obtainedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
             string usedText = stat.FloorUsed < 0 ? "N/A" : stat.FloorUsed.ToString();
             Label usedLabel = new Label { Text = usedText, CustomMinimumSize = new Vector2(100, 0) };
@@ -840,13 +860,13 @@ public static class DeckTrackerOverlay
             string discardedText = stat.FloorDiscarded < 0 ? "N/A" : stat.FloorDiscarded.ToString();
             Label discardedLabel = new Label { Text = discardedText, CustomMinimumSize = new Vector2(100, 0) };
             discardedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
-            
+
             row.AddChild(nameLabel);
-            row.AddChild(totalDataLabel); 
-            row.AddChild(obtainedLabel); 
-            row.AddChild(usedLabel); 
-            row.AddChild(discardedLabel); 
-            
+            row.AddChild(totalDataLabel);
+            row.AddChild(obtainedLabel);
+            row.AddChild(usedLabel);
+            row.AddChild(discardedLabel);
+
             _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
         }
     }

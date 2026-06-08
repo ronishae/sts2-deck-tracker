@@ -159,6 +159,14 @@ internal static partial class HookPatches
             CardRegistry.RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
             CardRegistry.AddForgeById("RELIC_" + relic.Id.Entry, amount);
         }
+        else if (source is PotionModel potion)
+        {
+            CardRegistry.AddPotionForge(potion, amount);
+        }
+        else
+        {
+            GD.Print($"[DeckTracker] Unknown forge source: {source?.Id.Entry}");
+        }
     }
 
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)

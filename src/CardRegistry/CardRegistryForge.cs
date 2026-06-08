@@ -72,6 +72,21 @@ public static partial class CardRegistry
         Publish();
     }
 
+    public static void AddPotionForge(PotionModel potion, decimal amount)
+    {
+        string? potionId;
+        lock (SyncRoot)
+        {
+            if (!PotionInstanceIds.TryGetValue(potion, out potionId))
+            {
+                GD.Print($"[DeckTracker] AddPotionForge. Potion: {potion.Id.Entry} not found in PotionInstanceIds.");
+                return;
+            }
+            GD.Print($"[DeckTracker] AddPotionForge. Potion: {potion.Id.Entry}, Id: {potionId}, Amount: {amount}");
+        }
+        AddForgeById(potionId, amount);
+    }
+
     public static void HandleFurnaceForge(decimal forgeAmount)
     {
         if (forgeAmount <= 0) return;
