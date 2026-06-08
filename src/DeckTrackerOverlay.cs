@@ -24,6 +24,7 @@ public static class DeckTrackerOverlay
     private static Button? _toggleRawForgeBtnLarge;
     private static Button? _toggleRunCombatBtnLarge;
     private static Button? _mergeVersionsBtnLarge;
+    private static Button? _hideZeroDamageBtnLarge;
     private static CheckBox? _act1Check;
     private static CheckBox? _act2Check;
     private static CheckBox? _act3Check;
@@ -44,7 +45,8 @@ public static class DeckTrackerOverlay
     private static bool _includeConnectedForge;
     private static bool _showRawForge;
     private static bool _mergeCardVersions;
-    
+    private static bool _hideZeroDamageCards;
+
     private static bool _act1Enabled = true;
     private static bool _act2Enabled = true;
     private static bool _act3Enabled = true;
@@ -173,6 +175,9 @@ public static class DeckTrackerOverlay
         _mergeVersionsBtnLarge = new Button { Text = "Merge Versions: OFF", FocusMode = Control.FocusModeEnum.None };
         _mergeVersionsBtnLarge.Pressed += ToggleMergeVersions;
 
+        _hideZeroDamageBtnLarge = new Button { Text = "Hide 0 Damage: OFF", FocusMode = Control.FocusModeEnum.None };
+        _hideZeroDamageBtnLarge.Pressed += ToggleHideZeroDamage;
+
         Button closeBtn = new Button { Text = "  X  ", FocusMode = Control.FocusModeEnum.None };
         closeBtn.AddThemeColorOverride("font_color", new Color("F87171"));
         closeBtn.Pressed += OnClosePressed;
@@ -185,6 +190,7 @@ public static class DeckTrackerOverlay
         header.AddChild(_toggleRawForgeBtnLarge);
         header.AddChild(_toggleForgeDmgBtnLarge);
         header.AddChild(_mergeVersionsBtnLarge);
+        header.AddChild(_hideZeroDamageBtnLarge);
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
         
@@ -239,6 +245,16 @@ public static class DeckTrackerOverlay
         if (_mergeVersionsBtnLarge != null)
         {
             _mergeVersionsBtnLarge.Text = _mergeCardVersions ? "Merge Versions: ON" : "Merge Versions: OFF";
+        }
+        RedrawUI(_latestStats);
+    }
+
+    private static void ToggleHideZeroDamage()
+    {
+        _hideZeroDamageCards = !_hideZeroDamageCards;
+        if (_hideZeroDamageBtnLarge != null)
+        {
+            _hideZeroDamageBtnLarge.Text = _hideZeroDamageCards ? "Hide 0 Damage: ON" : "Hide 0 Damage: OFF";
         }
         RedrawUI(_latestStats);
     }
@@ -519,6 +535,7 @@ public static class DeckTrackerOverlay
 
         var unsortedList = effectiveStats.Where(s => s.CardType != "Status")
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
+            .Where(x => !_hideZeroDamageCards || EffectiveValue(x.Stat, x.Agg) > 0)
             .ToList();
 
         decimal EffectiveValue(CardStats s, ActData a) =>
