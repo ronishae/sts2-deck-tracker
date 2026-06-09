@@ -7,8 +7,11 @@ using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Platform;
+using MegaCrit.Sts2.Core.Runs;
 
 namespace DeckTracker;
 
@@ -26,6 +29,9 @@ public static partial class CardRegistry
 
     private static readonly Dictionary<CardModel, int> _cardInstanceIds = new();
     private static readonly Dictionary<string, int> _cardInstanceCounters = new();
+
+    // Maps player index (order in IRunState.Players) to the character's display name
+    public static readonly Dictionary<int, string> PlayerLabels = new();
 
     // Cards that always share one tracking entry regardless of how many instances are generated mid-combat
     private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
@@ -400,6 +406,7 @@ public static partial class CardRegistry
             _potionCounter = 0;
             _cardInstanceIds.Clear();
             _cardInstanceCounters.Clear();
+            PlayerLabels.Clear();
             GD.Print("[DeckTracker] ResetRun. Run state cleared.");
         }
         Publish();
@@ -442,7 +449,32 @@ public static partial class CardRegistry
         var stateProperty = AccessTools.Property(typeof(MegaCrit.Sts2.Core.Runs.RunManager), "State");
         return stateProperty?.GetValue(MegaCrit.Sts2.Core.Runs.RunManager.Instance) as MegaCrit.Sts2.Core.Runs.RunState;
     }
-    
+
+    public static void SetPlayerLabel(int playerIndex, string label)
+    {
+        PlayerLabels[playerIndex] = label;
+        GD.Print($"[DeckTracker] SetPlayerLabel. Player {playerIndex}: {label}");
+    }
+
+    public static string GetPlayerDisplayName(Player player)
+    {
+        var isMultiplayer = player.RunState.Players.Count > 1;
+        return isMultiplayer
+            ? PlatformUtil.GetPlayerNameRaw(RunManager.Instance.NetService.Platform, player.NetId)
+            : player.Character.Title.GetFormattedText();
+    }
+
+    public static void SetCardPlayerIndex(string trackingId, int playerIndex)
+    {
+        lock (SyncRoot)
+        {
+            if (EntityLedger.TryGetValue(trackingId, out var entity) && entity is CardStats stat)
+            {
+                stat.PlayerIndex = playerIndex;
+            }
+        }
+    }
+
     private static void RestoreLiveInstances()
     {
         var run = GetLiveRunState();
@@ -451,19 +483,23 @@ public static partial class CardRegistry
             return;
         }
 
-        foreach (var player in run.Players)
+        for (var playerIdx = 0; playerIdx < run.Players.Count; playerIdx++)
         {
+            var player = run.Players[playerIdx];
+            PlayerLabels[playerIdx] = GetPlayerDisplayName(player);
+
             foreach (var relic in player.Relics)
             {
                 RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
                 var stats = GetOrCreateRelicStats(relic.Id.Entry);
                 stats.Model = relic;
-                stats.IsActive = true; 
+                stats.IsActive = true;
             }
 
             foreach (var card in player.Deck.Cards)
             {
                 RegisterCard(card);
+                SetCardPlayerIndex(GetTrackingId(card), playerIdx);
             }
 
             for (var i = 0; i < player.PotionSlots.Count; i++)

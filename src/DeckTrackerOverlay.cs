@@ -1,5 +1,6 @@
 using Godot;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DeckTracker;
@@ -46,6 +47,11 @@ public static class DeckTrackerOverlay
     private static bool _showRawForge;
     private static bool _mergeCardVersions;
     private static bool _hideZeroDamageCards;
+
+    // --- Player Filter State ---
+    private static HBoxContainer? _playerFiltersContainer;
+    // All player indices enabled by default; the filter only matters when PlayerLabels has >1 entry
+    private static readonly HashSet<int> _enabledPlayers = new() { 0, 1, 2, 3 };
 
     private static bool _act1Enabled = true;
     private static bool _act2Enabled = true;
@@ -220,6 +226,9 @@ public static class DeckTrackerOverlay
         tabsContainer.AddChild(_relicsTabBtn);
         tabsContainer.AddChild(_potionsTabBtn);
         mainCol.AddChild(tabsContainer);
+
+        _playerFiltersContainer = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, Visible = false };
+        mainCol.AddChild(_playerFiltersContainer);
 
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
         
@@ -434,21 +443,40 @@ public static class DeckTrackerOverlay
         return btn;
     }
 
-    private static PanelContainer CreateHoverableRow(Control content)
+    private static Color GetPlayerRowBgColor(int playerIndex) => playerIndex switch
+    {
+        1 => new Color(0.15f, 0.35f, 1f, 0.07f),
+        2 => new Color(0.2f, 0.8f, 0.3f, 0.07f),
+        3 => new Color(1f, 0.5f, 0.1f, 0.07f),
+        _ => new Color(0, 0, 0, 0)
+    };
+
+    private static Color GetPlayerTextColor(int playerIndex) => playerIndex switch
+    {
+        1 => new Color("60A5FA"),
+        2 => new Color("4ADE80"),
+        3 => new Color("FB923C"),
+        _ => new Color("E2E8F0")
+    };
+
+    private static PanelContainer CreateHoverableRow(Control content, Color? bgTint = null)
     {
         PanelContainer panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        panel.MouseFilter = Control.MouseFilterEnum.Pass; 
+        panel.MouseFilter = Control.MouseFilterEnum.Pass;
 
-        StyleBoxFlat style = new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0) };
+        var normalBg = bgTint ?? new Color(0, 0, 0, 0);
+        var hoverBg = new Color(
+            Mathf.Min(1f, normalBg.R + 0.15f),
+            Mathf.Min(1f, normalBg.G + 0.15f),
+            Mathf.Min(1f, normalBg.B + 0.15f),
+            Mathf.Max(0.08f, normalBg.A + 0.05f)
+        );
+
+        StyleBoxFlat style = new StyleBoxFlat { BgColor = normalBg };
         panel.AddThemeStyleboxOverride("panel", style);
 
-        panel.MouseEntered += () => {
-            style.BgColor = new Color(1, 1, 1, 0.05f); // Subtle highlight
-        };
-
-        panel.MouseExited += () => {
-            style.BgColor = new Color(0, 0, 0, 0);
-        };
+        panel.MouseEntered += () => style.BgColor = hoverBg;
+        panel.MouseExited += () => style.BgColor = normalBg;
 
         panel.AddChild(content);
         return panel;
@@ -497,7 +525,37 @@ public static class DeckTrackerOverlay
             Color dmgColor = (_includeConnectedForge && ((_showRunStats ? agg.ConnectedForgeTotal : stat.ConnectedForgeCombat) > 0)) ? new Color("38BDF8") : new Color("4ADE80");
             damageLabel.AddThemeColorOverride("font_color", dmgColor); 
 
-            row.AddChild(nameLabel); row.AddChild(damageLabel); _smallRowsContainer.AddChild(row);
+            row.AddChild(nameLabel);
+            row.AddChild(damageLabel);
+            _smallRowsContainer.AddChild(CreateHoverableRow(row, GetPlayerRowBgColor(stat.PlayerIndex)));
+        }
+    }
+
+    private static void RebuildPlayerFilters()
+    {
+        if (!GodotObject.IsInstanceValid(_playerFiltersContainer)) return;
+
+        foreach (Node child in _playerFiltersContainer.GetChildren()) { _playerFiltersContainer.RemoveChild(child); child.QueueFree(); }
+
+        _playerFiltersContainer.Visible = CardRegistry.PlayerLabels.Count > 1;
+        if (!_playerFiltersContainer.Visible) return;
+
+        var label = new Label { Text = "Players: " };
+        label.AddThemeColorOverride("font_color", new Color("FACC15"));
+        _playerFiltersContainer.AddChild(label);
+
+        foreach (var kvp in CardRegistry.PlayerLabels.OrderBy(x => x.Key))
+        {
+            var idx = kvp.Key;
+            var check = new CheckBox { Text = kvp.Value, ButtonPressed = _enabledPlayers.Contains(idx), FocusMode = Control.FocusModeEnum.None };
+            check.AddThemeColorOverride("font_color", GetPlayerTextColor(idx));
+            check.Toggled += (val) =>
+            {
+                if (val) _enabledPlayers.Add(idx);
+                else _enabledPlayers.Remove(idx);
+                RedrawUI(_latestStats);
+            };
+            _playerFiltersContainer.AddChild(check);
         }
     }
 
@@ -508,6 +566,8 @@ public static class DeckTrackerOverlay
         // Clear Rows and Headers
         foreach (Node child in _fullScreenRowsContainer.GetChildren()) { _fullScreenRowsContainer.RemoveChild(child); child.QueueFree(); }
         foreach (Node child in _fullScreenHeadersContainer.GetChildren()) { _fullScreenHeadersContainer.RemoveChild(child); child.QueueFree(); }
+
+        RebuildPlayerFilters();
 
         // Route to the appropriate rendering logic based on the active tab!
         if (_activeTab == "Cards")
@@ -544,7 +604,9 @@ public static class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("EVOLVED", "EVOLVED", 80));
 
-        var unsortedList = effectiveStats.Where(s => s.CardType != "Status")
+        var unsortedList = effectiveStats
+            .Where(s => s.CardType != "Status")
+            .Where(s => _enabledPlayers.Contains(s.PlayerIndex))
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
             .Where(x => !_hideZeroDamageCards || EffectiveValue(x.Stat, x.Agg) > 0)
             .ToList();
@@ -674,8 +736,8 @@ public static class DeckTrackerOverlay
 
             row.AddChild(removedLabel);
             row.AddChild(evolvedLabel);
-            
-            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
+
+            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row, GetPlayerRowBgColor(stat.PlayerIndex)));
         }
     }
 

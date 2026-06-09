@@ -105,15 +105,18 @@ internal static partial class HookPatches
     private static List<string> ScanDeckForCards(IRunState? runState)
     {
         List<string> ids = new();
-        if (runState != null)
+        if (runState == null) return ids;
+
+        for (var i = 0; i < runState.Players.Count; i++)
         {
-            foreach (var p in runState.Players)
+            var p = runState.Players[i];
+            CardRegistry.SetPlayerLabel(i, CardRegistry.GetPlayerDisplayName(p));
+            foreach (var c in p.Deck.Cards)
             {
-                foreach (var c in p.Deck.Cards)
-                {
-                    CardRegistry.RegisterCard(c);
-                    ids.Add(CardRegistry.GetTrackingId(c));
-                }
+                CardRegistry.RegisterCard(c);
+                var id = CardRegistry.GetTrackingId(c);
+                CardRegistry.SetCardPlayerIndex(id, i);
+                ids.Add(id);
             }
         }
         return ids;

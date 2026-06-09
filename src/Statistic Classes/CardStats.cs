@@ -8,6 +8,8 @@ public sealed class CardStats : EntityStats
     public int UpgradeLevel { get; set; }
     // Shared key across all upgrade/enchant versions of the same physical card: "{baseId}_F{floorAdded}"
     public string BaseCardKey { get; set; } = "";
+    // Index into the ordered player list — used to colour-code and filter cards per player in the overlay
+    public int PlayerIndex { get; set; }
 
     public override EntityStats Clone()
     {
@@ -18,6 +20,7 @@ public sealed class CardStats : EntityStats
             CopiesInDeck = CopiesInDeck,
             UpgradeLevel = UpgradeLevel,
             BaseCardKey = BaseCardKey,
+            PlayerIndex = PlayerIndex,
             RawForgeCombat = RawForgeCombat,
             ConnectedForgeCombat = ConnectedForgeCombat,
             ReceivedForgeCombat = ReceivedForgeCombat
