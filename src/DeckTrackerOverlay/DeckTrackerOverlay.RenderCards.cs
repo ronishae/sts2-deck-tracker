@@ -35,7 +35,7 @@ public static partial class DeckTrackerOverlay
 
         foreach (Node child in _smallRowsContainer.GetChildren()) { _smallRowsContainer.RemoveChild(child); child.QueueFree(); }
 
-        var allCards = stats
+        var allCards = BuildStackedCardList(stats)
             .Where(s => s.CardType != "Status")
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
             .Where(x => {
