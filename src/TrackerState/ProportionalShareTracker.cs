@@ -1,33 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Godot;
-using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
-public class ProportionalShareTracker : ITrackerState
+public class ProportionalShareTracker : PowerTrackerBase
 {
-    public string PowerId { get; }
     private readonly List<Contribution> _ledger = new();
-    private readonly AsyncLocal<bool> _isExecuting = new();
 
-    public bool IsExecuting
-    {
-        get
-        {
-            return _isExecuting.Value;
-        }
-    }
+    public ProportionalShareTracker(string powerId) : base(powerId) { }
 
-    public ProportionalShareTracker(string powerId)
-    {
-        PowerId = powerId;
-    }
-
-    public void Reset()
+    public override void Reset()
     {
         lock (CardRegistry.SyncRoot)
         {
@@ -119,7 +103,7 @@ public class ProportionalShareTracker : ITrackerState
             {
                 var proportion = share.Amount / totalShares;
                 var attributed = totalAmount * proportion;
-                
+
                 if (attributed > 0)
                 {
                     distributionAction(share.TrackingId, attributed);
@@ -132,25 +116,5 @@ public class ProportionalShareTracker : ITrackerState
     public void DistributeDamage(decimal totalDamage)
     {
         DistributeProportional(totalDamage, (id, amt) => CardRegistry.AddDamageById(id, amt), "Damage");
-    }
-
-    public void StartExecution()
-    {
-        _isExecuting.Value = true;
-        GD.Print($"[DeckTracker] StartExecution ({PowerId}).");
-    }
-
-    public async Task AwaitTaskAsync(Task originalTask)
-    {
-        try
-        {
-            StartExecution();
-            await originalTask;
-        }
-        finally
-        {
-            _isExecuting.Value = false;
-            GD.Print($"[DeckTracker] AwaitTaskAsync ({PowerId}) finished.");
-        }
     }
 }

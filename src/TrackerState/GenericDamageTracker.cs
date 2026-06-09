@@ -1,32 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
-public class GenericDamageTracker : ITrackerState
+public class GenericDamageTracker : PowerTrackerBase
 {
-    public string PowerId { get; }
     private readonly List<Contribution> _ledger = new();
-    private readonly AsyncLocal<bool> _isExecuting = new();
 
-    public bool IsExecuting
-    {
-        get
-        {
-            return _isExecuting.Value;
-        }
-    }
+    public GenericDamageTracker(string powerId) : base(powerId) { }
 
-    public GenericDamageTracker(string powerId)
-    {
-        PowerId = powerId;
-    }
-
-    public void Reset()
+    public override void Reset()
     {
         lock (CardRegistry.SyncRoot)
         {
@@ -74,7 +59,7 @@ public class GenericDamageTracker : ITrackerState
             {
                 var contribution = _ledger[i];
                 var share = Math.Min(remainingDamage, contribution.Amount);
-                
+
                 if (share > 0)
                 {
                     CardRegistry.AddDamageById(contribution.TrackingId, share);
@@ -82,31 +67,11 @@ public class GenericDamageTracker : ITrackerState
                     GD.Print($"[DeckTracker]   -> Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
                 }
             }
-            
+
             if (remainingDamage > 0)
             {
                 GD.Print($"[DeckTracker]   -> {remainingDamage} damage unattributed (ledger exhausted).");
             }
-        }
-    }
-
-    public void StartExecution()
-    {
-        _isExecuting.Value = true;
-        GD.Print($"[DeckTracker] StartExecution ({PowerId}).");
-    }
-
-    public async Task AwaitTaskAsync(Task originalTask)
-    {
-        try
-        {
-            StartExecution();
-            await originalTask;
-        }
-        finally
-        {
-            _isExecuting.Value = false;
-            GD.Print($"[DeckTracker] AwaitTaskAsync ({PowerId}) finished.");
         }
     }
 }

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,13 +11,7 @@ public class InstancedPowerTracker : ITrackerState
     private ConditionalWeakTable<PowerModel, string> _instanceMap = new();
     private readonly AsyncLocal<string?> _executingSourceId = new();
 
-    public string? ExecutingSourceId
-    {
-        get
-        {
-            return _executingSourceId.Value;
-        }
-    }
+    public string? ExecutingSourceId => _executingSourceId.Value;
 
     public void Reset()
     {

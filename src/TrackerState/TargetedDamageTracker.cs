@@ -1,33 +1,18 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
-public class TargetedDamageTracker : ITrackerState
+public class TargetedDamageTracker : PowerTrackerBase
 {
-    public string PowerId { get; }
     private readonly Dictionary<Creature, List<Contribution>> _ledgers = new();
-    private readonly AsyncLocal<bool> _isExecuting = new();
 
-    public bool IsExecuting
-    {
-        get
-        {
-            return _isExecuting.Value;
-        }
-    }
+    public TargetedDamageTracker(string powerId) : base(powerId) { }
 
-    public TargetedDamageTracker(string powerId)
-    {
-        PowerId = powerId;
-    }
-
-    public void Reset()
+    public override void Reset()
     {
         lock (CardRegistry.SyncRoot)
         {
@@ -91,7 +76,7 @@ public class TargetedDamageTracker : ITrackerState
             {
                 var contribution = ledger[i];
                 var share = Math.Min(remainingDamage, contribution.Amount);
-                
+
                 if (share > 0)
                 {
                     CardRegistry.AddDamageById(contribution.TrackingId, share);
@@ -99,31 +84,11 @@ public class TargetedDamageTracker : ITrackerState
                     GD.Print($"[DeckTracker]   -> Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
                 }
             }
-            
+
             if (remainingDamage > 0)
             {
                 GD.Print($"[DeckTracker]   -> {remainingDamage} damage unattributed (ledger exhausted).");
             }
-        }
-    }
-
-    public void StartExecution()
-    {
-        _isExecuting.Value = true;
-        GD.Print($"[DeckTracker] StartExecution (Targeted: {PowerId}).");
-    }
-
-    public async Task AwaitTaskAsync(Task originalTask)
-    {
-        try
-        {
-            StartExecution();
-            await originalTask;
-        }
-        finally
-        {
-            _isExecuting.Value = false;
-            GD.Print($"[DeckTracker] AwaitTaskAsync (Targeted: {PowerId}) finished.");
         }
     }
 }

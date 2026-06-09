@@ -1,37 +1,24 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;
 
-public class QueueBuilderTracker : ITrackerState
+public class QueueBuilderTracker : PowerTrackerBase
 {
-    public string PowerId { get; }
     public bool NeedsFlattening { get; }
     private readonly List<Contribution> _ledger = new();
     private readonly Queue<string> _queue = new();
-    private readonly AsyncLocal<bool> _isExecuting = new();
     private int _spinnerIndex = 0;
 
-    public bool IsExecuting
+    public QueueBuilderTracker(string powerId, bool needsFlattening = false) : base(powerId)
     {
-        get
-        {
-            return _isExecuting.Value;
-        }
-    }
-
-    public QueueBuilderTracker(string powerId, bool needsFlattening = false)
-    {
-        PowerId = powerId;
         NeedsFlattening = needsFlattening;
     }
 
-    public void Reset()
+    public override void Reset()
     {
         lock (CardRegistry.SyncRoot)
         {
@@ -93,7 +80,7 @@ public class QueueBuilderTracker : ITrackerState
     {
         lock (CardRegistry.SyncRoot)
         {
-            // Spinner is special: it doesn't consume the queue, it just iterates through it every turn.
+            // Spinner doesn't consume the queue; it iterates through it every turn using an index.
             if (PowerId == "SPINNER_POWER")
             {
                 var list = _queue.ToList();
@@ -106,7 +93,7 @@ public class QueueBuilderTracker : ITrackerState
                 }
                 return null;
             }
-            
+
             if (_queue.TryDequeue(out string? dequeuedId))
             {
                 GD.Print($"[DeckTracker] GetNextIdForOrb. Dequeued: {dequeuedId}");
@@ -124,17 +111,18 @@ public class QueueBuilderTracker : ITrackerState
         }
     }
 
+    // Extends base StartExecution() to include queue flattening and spinner reset before marking execution active.
     public void StartExecution(bool flatten = true)
     {
         if (flatten)
         {
             FlattenLedgerToQueue();
         }
-        
+
         if (PowerId == "SPINNER_POWER")
         {
-             _spinnerIndex = 0;
-             GD.Print($"[DeckTracker] StartExecution ({PowerId}). Spinner index reset.");
+            _spinnerIndex = 0;
+            GD.Print($"[DeckTracker] StartExecution ({PowerId}). Spinner index reset.");
         }
 
         _isExecuting.Value = true;
