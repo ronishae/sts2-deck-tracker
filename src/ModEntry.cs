@@ -134,6 +134,11 @@ public static class ModEntry
             (typeof(BlackHolePower), nameof(BlackHolePower.AfterCardPlayed)),
             (typeof(BlackHolePower), nameof(BlackHolePower.AfterStarsGained)),
             (typeof(SleightOfFleshPower), nameof(SleightOfFleshPower.AfterPowerAmountChanged)),
+            (typeof(InfernoPower), nameof(InfernoPower.AfterPlayerTurnStart)),
+            (typeof(InfernoPower), nameof(InfernoPower.AfterDamageReceived)),
+            (typeof(OutbreakPower), nameof(OutbreakPower.AfterPowerAmountChanged)),
+            (typeof(SmokestackPower), nameof(SmokestackPower.AfterCardGeneratedForCombat)),
+            (typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd)),
         };
         var simplePrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPrefix)));
         var simplePostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPostfix)));
@@ -159,18 +164,13 @@ public static class ModEntry
         var handoffPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandoffPowerPostfix)));
         foreach (var (t, m) in handoffMethods) _harmony.Patch(AccessTools.Method(t, m), prefix: handoffPrefix, postfix: handoffPostfix);
 
-        // 4. Proportional Share Trackers
+        // 4. Proportional Share Trackers (poison-applying and Strength-handoff powers only)
         var propMethods = new (Type, string)[] {
             (typeof(NoxiousFumesPower), nameof(NoxiousFumesPower.AfterSideTurnStart)),
             (typeof(CorrosiveWavePower), nameof(CorrosiveWavePower.AfterCardDrawn)),
             (typeof(EnvenomPower), nameof(EnvenomPower.AfterDamageGiven)),
-            (typeof(InfernoPower), nameof(InfernoPower.AfterPlayerTurnStart)),
-            (typeof(InfernoPower), nameof(InfernoPower.AfterDamageReceived)),
-            (typeof(OutbreakPower), nameof(OutbreakPower.AfterPowerAmountChanged)),
-            (typeof(SmokestackPower), nameof(SmokestackPower.AfterCardGeneratedForCombat)),
             (typeof(RupturePower), nameof(RupturePower.AfterDamageReceived)),
             (typeof(RupturePower), nameof(RupturePower.AfterCardPlayed)),
-            (typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd)),
         };
         var propPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ProportionalPowerPrefix)));
         var propPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ProportionalPowerPostfix)));

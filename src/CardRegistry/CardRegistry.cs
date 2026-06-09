@@ -310,6 +310,10 @@ public static partial class CardRegistry
         { "SERPENT_FORM_POWER", new GenericDamageTracker("SERPENT_FORM_POWER") },
         { "BLACK_HOLE_POWER", new GenericDamageTracker("BLACK_HOLE_POWER") },
         { "SLEIGHT_OF_FLESH_POWER", new GenericDamageTracker("SLEIGHT_OF_FLESH_POWER") },
+        { "INFERNO_POWER", new GenericDamageTracker("INFERNO_POWER") },
+        { "OUTBREAK_POWER", new GenericDamageTracker("OUTBREAK_POWER") },
+        { "SMOKESTACK_POWER", new GenericDamageTracker("SMOKESTACK_POWER") },
+        { "DEMISE_POWER", new GenericDamageTracker("DEMISE_POWER") },
     };
 
     public static readonly Dictionary<string, TargetedDamageTracker> TargetedTrackers = new()
@@ -327,16 +331,14 @@ public static partial class CardRegistry
         { "MONOLOGUE_POWER", new BuffHandoffTracker("MONOLOGUE_POWER", "MONOLOGUE_POWER", HandoffStrategy.ExactFifo) },
     };
 
+    // Powers that apply poison or deal with Strength handoffs — must remain proportional so
+    // RoutePoisonApplication and RouteStrengthApplication can find the executing tracker.
     public static readonly Dictionary<string, ProportionalShareTracker> ProportionalTrackers = new()
     {
-        { "INFERNO_POWER", new ProportionalShareTracker("INFERNO_POWER") },
-        { "OUTBREAK_POWER", new ProportionalShareTracker("OUTBREAK_POWER") },
-        { "SMOKESTACK_POWER", new ProportionalShareTracker("SMOKESTACK_POWER") },
         { "RUPTURE_POWER", new ProportionalShareTracker("RUPTURE_POWER") },
         { "CORROSIVE_WAVE_POWER", new ProportionalShareTracker("CORROSIVE_WAVE_POWER") },
         { "ENVENOM_POWER", new ProportionalShareTracker("ENVENOM_POWER") },
         { "NOXIOUS_FUMES_POWER", new ProportionalShareTracker("NOXIOUS_FUMES_POWER") },
-        { "DEMISE_POWER", new ProportionalShareTracker("DEMISE_POWER") },
     };
 
     public static readonly Dictionary<string, QueueBuilderTracker> QueueTrackers = new()
