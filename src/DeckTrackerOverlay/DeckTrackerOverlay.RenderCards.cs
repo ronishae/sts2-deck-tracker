@@ -38,14 +38,8 @@ public static partial class DeckTrackerOverlay
         var allCards = BuildStackedCardList(stats)
             .Where(s => s.CardType != "Status")
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
-            .Where(x => {
-                decimal effCombat = _showRawForge ? x.Stat.RawForgeCombat : x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0);
-                decimal effRun = _showRawForge ? x.Agg.RawForgeTotal : x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0);
-                return _showRunStats ? effRun > 0 : effCombat > 0;
-            })
-            .OrderByDescending(x => _showRunStats ?
-                (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) :
-                (_showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0))))
+            .Where(x => (_showRawForge ? x.Stat.RawForgeCombat : x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0)) > 0)
+            .OrderByDescending(x => _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0)))
             .ThenBy(x => x.Stat.FloorAdded)
             .ToList();
 
@@ -57,12 +51,9 @@ public static partial class DeckTrackerOverlay
 
             Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-            decimal damageToShow = _showRunStats ?
-                (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0)) :
-                (stat.CombatDamage + (_includeConnectedForge ? stat.ConnectedForgeCombat - stat.ReceivedForgeCombat : 0));
-
-            Label damageLabel = new Label { Text = damageToShow.ToString("0.##") };
-            Color dmgColor = (_includeConnectedForge && ((_showRunStats ? agg.ConnectedForgeTotal : stat.ConnectedForgeCombat) > 0)) ? new Color("38BDF8") : new Color("4ADE80");
+            decimal combatDamage = _showRawForge ? stat.RawForgeCombat : (stat.CombatDamage + (_includeConnectedForge ? stat.ConnectedForgeCombat - stat.ReceivedForgeCombat : 0));
+            Label damageLabel = new Label { Text = combatDamage.ToString("0.##") };
+            Color dmgColor = (_includeConnectedForge && stat.ConnectedForgeCombat > 0) ? new Color("38BDF8") : new Color("4ADE80");
             damageLabel.AddThemeColorOverride("font_color", dmgColor);
 
             row.AddChild(nameLabel);
@@ -105,27 +96,30 @@ public static partial class DeckTrackerOverlay
         var effectiveStats = BuildStackedCardList(mergedStats);
 
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("CARD NAME", "NAME", 300));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("% PLAYED", "PLAY_RATE", 150));
-        string totalColText = (_showRunStats ? "RUN" : "COMBAT") + (_showRawForge ? " FORGE" : " DAMAGE");
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(totalColText, "TOTAL_DMG", 180));
+        string combatColText = "COMBAT" + (_showRawForge ? " FORGE" : " DMG");
+        string runColText = "RUN" + (_showRawForge ? " FORGE" : " DMG");
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(runColText, "RUN_DMG", 150));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader(combatColText, "COMBAT_DMG", 150));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("% PLAYED", "PLAY_RATE", 130));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("AVG (#)", "AVG_DMG", 130));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 200));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ELITE (AVG) (#)", "ELITE_DMG", 200));
-        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("BOSS (AVG) (#)", "BOSS_DMG", 200));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("HALLWAY (AVG) (#)", "HALLWAY_DMG", 185));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ELITE (AVG) (#)", "ELITE_DMG", 185));
+        _fullScreenHeadersContainer.AddChild(CreateSortableHeader("BOSS (AVG) (#)", "BOSS_DMG", 185));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ADDED", "ADDED", 80));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("EVOLVED", "EVOLVED", 80));
 
-        decimal EffectiveValue(CardStats s, ActData a) =>
-            _showRunStats
-                ? (_showRawForge ? a.RawForgeTotal : (a.TotalDamage + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0)))
-                : (_showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0)));
+        decimal EffectiveCombat(CardStats s) =>
+            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
+
+        decimal EffectiveRun(ActData a) =>
+            _showRawForge ? a.RawForgeTotal : (a.TotalDamage + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
 
         var unsortedList = effectiveStats
             .Where(s => s.CardType != "Status")
             .Where(s => _enabledPlayers.Contains(s.PlayerIndex))
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
-            .Where(x => !_hideZeroDamageCards || EffectiveValue(x.Stat, x.Agg) > 0)
+            .Where(x => !_hideZeroDamageCards || EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
             .ToList();
 
         var sortedList = _currentSort.Column switch
@@ -135,12 +129,16 @@ public static partial class DeckTrackerOverlay
                 : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
 
             "PLAY_RATE" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => _showRunStats ? x.Agg.PlayRate : (x.Stat.CombatTimesDrawn > 0 ? (decimal)x.Stat.CombatTimesPlayed / x.Stat.CombatTimesDrawn : 0))
-                : unsortedList.OrderByDescending(x => _showRunStats ? x.Agg.PlayRate : (x.Stat.CombatTimesDrawn > 0 ? (decimal)x.Stat.CombatTimesPlayed / x.Stat.CombatTimesDrawn : 0)),
+                ? unsortedList.OrderBy(x => x.Agg.PlayRate)
+                : unsortedList.OrderByDescending(x => x.Agg.PlayRate),
 
-            "TOTAL_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveValue(x.Stat, x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveValue(x.Stat, x.Agg)),
+            "COMBAT_DMG" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => EffectiveCombat(x.Stat))
+                : unsortedList.OrderByDescending(x => EffectiveCombat(x.Stat)),
+
+            "RUN_DMG" => _currentSort.Ascending
+                ? unsortedList.OrderBy(x => EffectiveRun(x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveRun(x.Agg)),
 
             "AVG_DMG" => _currentSort.Ascending
                 ? unsortedList.OrderBy(x => x.Agg.EncountersSeenTotal > 0 ? (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) / x.Agg.EncountersSeenTotal : 0)
@@ -170,13 +168,13 @@ public static partial class DeckTrackerOverlay
                 ? unsortedList.OrderBy(x => x.Stat.FloorLeftDeck)
                 : unsortedList.OrderByDescending(x => x.Stat.FloorLeftDeck),
 
-            _ => unsortedList.OrderByDescending(x => EffectiveValue(x.Stat, x.Agg))
+            _ => unsortedList.OrderByDescending(x => EffectiveRun(x.Agg))
         };
 
         var finalSort = sortedList;
-        if (_currentSort.Column != "TOTAL_DMG")
+        if (_currentSort.Column != "RUN_DMG")
         {
-            finalSort = finalSort.ThenByDescending(x => EffectiveValue(x.Stat, x.Agg));
+            finalSort = finalSort.ThenByDescending(x => EffectiveRun(x.Agg));
         }
 
         var allCards = finalSort.ThenBy(x => x.Stat.FloorAdded).ToList();
@@ -188,14 +186,11 @@ public static partial class DeckTrackerOverlay
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
             Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
-            var playTimesPlayed = _showRunStats ? agg.TimesPlayed : stat.CombatTimesPlayed;
-            var playTimesDrawn = _showRunStats ? agg.TimesDrawn : stat.CombatTimesDrawn;
-            var playRate = playTimesDrawn > 0 ? (decimal)playTimesPlayed / playTimesDrawn : 0;
-            Label playRateLabel = new Label { Text = $"{playTimesPlayed}/{playTimesDrawn} ({playRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
+            Label playRateLabel = new Label { Text = $"{agg.TimesPlayed}/{agg.TimesDrawn} ({agg.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(130, 0) };
             playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
-            decimal valTotal = EffectiveValue(stat, agg);
-            decimal valRunTotal = _showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0));
+            decimal valCombat = EffectiveCombat(stat);
+            decimal valRunTotal = EffectiveRun(agg);
             decimal avgTotal = agg.EncountersSeenTotal > 0 ? valRunTotal / agg.EncountersSeenTotal : 0;
 
             decimal valHallway = _showRawForge ? agg.RawForgeHallway : (agg.DamageHallway + (_includeConnectedForge ? agg.ConnectedForgeHallway - agg.ReceivedForgeHallway : 0));
@@ -209,27 +204,30 @@ public static partial class DeckTrackerOverlay
 
             Color statColor = new Color("A0A8B4");
 
-            Label totalDataLabel = new Label { Text = $"{valTotal:0.##}", CustomMinimumSize = new Vector2(180, 0) };
-            totalDataLabel.AddThemeColorOverride("font_color", statColor);
+            Label runDataLabel = new Label { Text = $"{valRunTotal:0.##}", CustomMinimumSize = new Vector2(150, 0) };
+            runDataLabel.AddThemeColorOverride("font_color", _includeConnectedForge && agg.ConnectedForgeTotal > 0 ? new Color("38BDF8") : new Color("4ADE80"));
+
+            Label combatDataLabel = new Label { Text = $"{valCombat:0.##}", CustomMinimumSize = new Vector2(150, 0) };
+            combatDataLabel.AddThemeColorOverride("font_color", _includeConnectedForge && stat.ConnectedForgeCombat > 0 ? new Color("38BDF8") : new Color("4ADE80"));
 
             Label avgDataLabel = new Label { Text = $"({avgTotal:0.#}) (#{agg.EncountersSeenTotal})", CustomMinimumSize = new Vector2(130, 0) };
             avgDataLabel.AddThemeColorOverride("font_color", statColor);
 
-            Label hallwayLabel = new Label { Text = $"{valHallway:0.##} ({avgHallway:0.#}) (#{agg.EncountersSeenHallway})", CustomMinimumSize = new Vector2(200, 0) };
+            Label hallwayLabel = new Label { Text = $"{valHallway:0.##} ({avgHallway:0.#}) (#{agg.EncountersSeenHallway})", CustomMinimumSize = new Vector2(185, 0) };
             hallwayLabel.AddThemeColorOverride("font_color", statColor);
 
-            Label eliteLabel = new Label { Text = $"{valElite:0.##} ({avgElite:0.#}) (#{agg.EncountersSeenElite})", CustomMinimumSize = new Vector2(200, 0) };
+            Label eliteLabel = new Label { Text = $"{valElite:0.##} ({avgElite:0.#}) (#{agg.EncountersSeenElite})", CustomMinimumSize = new Vector2(185, 0) };
             eliteLabel.AddThemeColorOverride("font_color", statColor);
 
-            Label bossLabel = new Label { Text = $"{valBoss:0.##} ({avgBoss:0.#}) (#{agg.EncountersSeenBoss})", CustomMinimumSize = new Vector2(200, 0) };
+            Label bossLabel = new Label { Text = $"{valBoss:0.##} ({avgBoss:0.#}) (#{agg.EncountersSeenBoss})", CustomMinimumSize = new Vector2(185, 0) };
             bossLabel.AddThemeColorOverride("font_color", statColor);
 
             string addedText = stat.FloorAdded == 0 ? "GEN" : stat.FloorAdded.ToString();
             Label addedLabel = new Label { Text = addedText, CustomMinimumSize = new Vector2(80, 0) };
             addedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
-            row.AddChild(nameLabel); row.AddChild(playRateLabel);
-            row.AddChild(totalDataLabel); row.AddChild(avgDataLabel);
+            row.AddChild(nameLabel); row.AddChild(runDataLabel); row.AddChild(combatDataLabel); row.AddChild(playRateLabel);
+            row.AddChild(avgDataLabel);
             row.AddChild(hallwayLabel); row.AddChild(eliteLabel); row.AddChild(bossLabel);
             row.AddChild(addedLabel);
 

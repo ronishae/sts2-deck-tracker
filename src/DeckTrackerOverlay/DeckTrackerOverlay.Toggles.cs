@@ -48,15 +48,6 @@ public static partial class DeckTrackerOverlay
         RedrawUI(_latestStats);
     }
 
-    private static void OnTogglePressed()
-    {
-        _showRunStats = !_showRunStats;
-        if (_titleLabel != null) _titleLabel.Text = _showRunStats ? "Tracker (Run)" : "Tracker (Combat)";
-        if (_toggleBtn != null) _toggleBtn.Text = _showRunStats ? "Combat" : "Run";
-        if (_toggleRunCombatBtnLarge != null) _toggleRunCombatBtnLarge.Text = _showRunStats ? "Show Combat Stats" : "Show Run Stats";
-        RedrawUI(_latestStats);
-    }
-
     private static void OnExpandPressed() => SetFullScreenVisible(true);
     private static void OnClosePressed() => SetFullScreenVisible(false);
 }

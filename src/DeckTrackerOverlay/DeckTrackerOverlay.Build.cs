@@ -16,12 +16,8 @@ public static partial class DeckTrackerOverlay
         VBoxContainer mainCol = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-        _titleLabel = new Label { Text = "Tracker (Combat)", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _titleLabel = new Label { Text = "Combat Damage", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _titleLabel.AddThemeColorOverride("font_color", new Color("FACC15"));
-
-        _toggleBtn = new Button { Text = "Run", FocusMode = Control.FocusModeEnum.None };
-        _toggleBtn.AddThemeFontSizeOverride("font_size", 12);
-        _toggleBtn.Pressed += OnTogglePressed;
 
         _toggleForgeDmgBtnSmall = new Button { Text = "+Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnSmall.AddThemeFontSizeOverride("font_size", 12);
@@ -33,7 +29,6 @@ public static partial class DeckTrackerOverlay
 
         header.AddChild(_titleLabel);
         header.AddChild(_toggleForgeDmgBtnSmall);
-        header.AddChild(_toggleBtn);
         header.AddChild(_expandBtn);
 
         mainCol.AddChild(header);
@@ -52,10 +47,12 @@ public static partial class DeckTrackerOverlay
 
     private static void BuildFullScreenOverlay(CanvasLayer layer)
     {
+        // Fixed 1720×900 panel centered on screen — prevents tab content width from changing the overlay size
         _fullScreenPanel = new PanelContainer { Visible = false };
-        _fullScreenPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _fullScreenPanel.OffsetLeft = 100; _fullScreenPanel.OffsetTop = 100;
-        _fullScreenPanel.OffsetRight = -100; _fullScreenPanel.OffsetBottom = -100;
+        _fullScreenPanel.AnchorLeft = 0.5f; _fullScreenPanel.AnchorRight = 0.5f;
+        _fullScreenPanel.AnchorTop = 0.5f; _fullScreenPanel.AnchorBottom = 0.5f;
+        _fullScreenPanel.OffsetLeft = -900f; _fullScreenPanel.OffsetRight = 900f;
+        _fullScreenPanel.OffsetTop = -450f; _fullScreenPanel.OffsetBottom = 450f;
 
         _fullScreenPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0.05f, 0.05f, 0.08f, 0.98f), BorderColor = new Color("3A3A5C"), BorderWidthLeft = 2, BorderWidthTop = 2, BorderWidthRight = 2, BorderWidthBottom = 2, CornerRadiusTopLeft = 8, CornerRadiusTopRight = 8, CornerRadiusBottomLeft = 8, CornerRadiusBottomRight = 8 });
 
@@ -83,9 +80,6 @@ public static partial class DeckTrackerOverlay
         _toggleRawForgeBtnLarge = new Button { Text = "Show Raw Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleRawForgeBtnLarge.Pressed += ToggleRawForge;
 
-        _toggleRunCombatBtnLarge = new Button { Text = "Show Run Stats", FocusMode = Control.FocusModeEnum.None };
-        _toggleRunCombatBtnLarge.Pressed += OnTogglePressed;
-
         _toggleForgeDmgBtnLarge = new Button { Text = "Include Connected Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnLarge.Pressed += ToggleForgeDamage;
 
@@ -103,7 +97,6 @@ public static partial class DeckTrackerOverlay
         header.AddChild(_act1Check);
         header.AddChild(_act2Check);
         header.AddChild(_act3Check);
-        header.AddChild(_toggleRunCombatBtnLarge);
         header.AddChild(_toggleRawForgeBtnLarge);
         header.AddChild(_toggleForgeDmgBtnLarge);
         header.AddChild(_mergeVersionsBtnLarge);

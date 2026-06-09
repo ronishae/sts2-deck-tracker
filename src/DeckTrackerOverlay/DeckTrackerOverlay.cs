@@ -13,7 +13,6 @@ public static partial class DeckTrackerOverlay
     private static PanelContainer? _smallPanel;
     private static VBoxContainer? _smallRowsContainer;
     private static Label? _titleLabel;
-    private static Button? _toggleBtn;
     private static Button? _expandBtn;
     private static Button? _toggleForgeDmgBtnSmall;
 
@@ -23,7 +22,6 @@ public static partial class DeckTrackerOverlay
     private static HBoxContainer? _fullScreenHeadersContainer;
     private static Button? _toggleForgeDmgBtnLarge;
     private static Button? _toggleRawForgeBtnLarge;
-    private static Button? _toggleRunCombatBtnLarge;
     private static Button? _mergeVersionsBtnLarge;
     private static Button? _hideZeroDamageBtnLarge;
     private static CheckBox? _act1Check;
@@ -45,7 +43,6 @@ public static partial class DeckTrackerOverlay
     private static readonly ConcurrentQueue<List<CardStats>> UpdateQueue = new();
     private static bool _isHookedToProcess;
 
-    private static bool _showRunStats;
     private static bool _includeConnectedForge;
     private static bool _showRawForge;
     private static bool _mergeCardVersions;
@@ -64,7 +61,7 @@ public static partial class DeckTrackerOverlay
     // --- Sort State ---
     private class SortState
     {
-        public string Column { get; set; } = "TOTAL_DMG";
+        public string Column { get; set; } = "RUN_DMG";
         public bool Ascending { get; set; } = false;
     }
     private static SortState _currentSort = new SortState();
