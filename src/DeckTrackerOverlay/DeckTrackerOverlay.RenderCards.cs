@@ -135,8 +135,8 @@ public static partial class DeckTrackerOverlay
                 : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
 
             "PLAY_RATE" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Agg.PlayRate)
-                : unsortedList.OrderByDescending(x => x.Agg.PlayRate),
+                ? unsortedList.OrderBy(x => _showRunStats ? x.Agg.PlayRate : (x.Stat.CombatTimesDrawn > 0 ? (decimal)x.Stat.CombatTimesPlayed / x.Stat.CombatTimesDrawn : 0))
+                : unsortedList.OrderByDescending(x => _showRunStats ? x.Agg.PlayRate : (x.Stat.CombatTimesDrawn > 0 ? (decimal)x.Stat.CombatTimesPlayed / x.Stat.CombatTimesDrawn : 0)),
 
             "TOTAL_DMG" => _currentSort.Ascending
                 ? unsortedList.OrderBy(x => EffectiveValue(x.Stat, x.Agg))
@@ -188,7 +188,10 @@ public static partial class DeckTrackerOverlay
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
             Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
-            Label playRateLabel = new Label { Text = $"{agg.TimesPlayed}/{agg.TimesDrawn} ({agg.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
+            var playTimesPlayed = _showRunStats ? agg.TimesPlayed : stat.CombatTimesPlayed;
+            var playTimesDrawn = _showRunStats ? agg.TimesDrawn : stat.CombatTimesDrawn;
+            var playRate = playTimesDrawn > 0 ? (decimal)playTimesPlayed / playTimesDrawn : 0;
+            Label playRateLabel = new Label { Text = $"{playTimesPlayed}/{playTimesDrawn} ({playRate * 100:0.#}%)", CustomMinimumSize = new Vector2(150, 0) };
             playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
             decimal valTotal = EffectiveValue(stat, agg);
@@ -282,6 +285,8 @@ public static partial class DeckTrackerOverlay
                 CopiesInDeck = versions.Sum(s => s.CopiesInDeck),
                 CombatDamage = versions.Sum(s => s.CombatDamage),
                 RunDamage = versions.Sum(s => s.RunDamage),
+                CombatTimesDrawn = versions.Sum(s => s.CombatTimesDrawn),
+                CombatTimesPlayed = versions.Sum(s => s.CombatTimesPlayed),
                 RawForgeCombat = versions.Sum(s => s.RawForgeCombat),
                 ConnectedForgeCombat = versions.Sum(s => s.ConnectedForgeCombat),
                 ReceivedForgeCombat = versions.Sum(s => s.ReceivedForgeCombat),
@@ -343,6 +348,8 @@ public static partial class DeckTrackerOverlay
                 CopiesInDeck = versions.Count,
                 CombatDamage = versions.Sum(s => s.CombatDamage),
                 RunDamage = versions.Sum(s => s.RunDamage),
+                CombatTimesDrawn = versions.Sum(s => s.CombatTimesDrawn),
+                CombatTimesPlayed = versions.Sum(s => s.CombatTimesPlayed),
                 RawForgeCombat = versions.Sum(s => s.RawForgeCombat),
                 ConnectedForgeCombat = versions.Sum(s => s.ConnectedForgeCombat),
                 ReceivedForgeCombat = versions.Sum(s => s.ReceivedForgeCombat),

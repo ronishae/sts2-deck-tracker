@@ -27,6 +27,8 @@ public abstract class EntityStats
     // Shared Metrics
     public decimal CombatDamage { get; set; }
     public decimal RunDamage { get; set; }
+    public int CombatTimesDrawn { get; set; }
+    public int CombatTimesPlayed { get; set; }
 
     // Forge specifics
     public decimal RawForgeCombat { get; set; }
@@ -70,6 +72,8 @@ public abstract class EntityStats
         cloneTarget.Act4 = Act4.Clone();
         cloneTarget.CombatDamage = CombatDamage;
         cloneTarget.RunDamage = RunDamage;
+        cloneTarget.CombatTimesDrawn = CombatTimesDrawn;
+        cloneTarget.CombatTimesPlayed = CombatTimesPlayed;
         cloneTarget.RawForgeCombat = RawForgeCombat;
         cloneTarget.ConnectedForgeCombat = ConnectedForgeCombat;
         cloneTarget.ReceivedForgeCombat = ReceivedForgeCombat;

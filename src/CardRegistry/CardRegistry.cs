@@ -555,6 +555,8 @@ public static partial class CardRegistry
                 entity.RawForgeCombat = 0;
                 entity.ConnectedForgeCombat = 0;
                 entity.ReceivedForgeCombat = 0;
+                entity.CombatTimesDrawn = 0;
+                entity.CombatTimesPlayed = 0;
 
                 if (!entity.IsActive || entity is PotionStats)
                 {
@@ -663,6 +665,7 @@ public static partial class CardRegistry
             {
                 var actData = entity.GetAct(_currentAct);
                 if (actData != null) actData.TimesDrawn++;
+                entity.CombatTimesDrawn++;
                 GD.Print($"[DeckTracker] AddDraw. Card: {uniqueTrackingId}");
             }
         }
@@ -678,6 +681,7 @@ public static partial class CardRegistry
             {
                 var actData = entity.GetAct(_currentAct);
                 if (actData != null) actData.TimesPlayed++;
+                entity.CombatTimesPlayed++;
                 GD.Print($"[DeckTracker] AddPlay. Card: {uniqueTrackingId}");
             }
         }
