@@ -68,22 +68,33 @@ public static class RelicExecutionManager
 
     public static void ModifyPowerAmountGivenPostfix(RelicModel __instance, PowerModel power, Creature giver, decimal amount, Creature? target, CardModel? cardSource, ref decimal __result)
     {
-        if (__result > amount)
+        var relicId = "RELIC_" + __instance.Id.Entry;
+        var powerId = power.Id.Entry ?? "";
+        GD.Print($"[DeckTracker] ModifyPowerAmountGivenPostfix. RelicId: {relicId}, PowerId: {powerId}, Amount: {amount}, Result: {__result}");
+
+        // __result is the additive contribution this relic returns, not the accumulated total.
+        // amount is the base input — comparing __result > amount would fail when the bonus (e.g. 1) is less than the base (e.g. 3).
+        if (__result > 0)
         {
             CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
-            var delta = __result - amount;
-            var relicId = "RELIC_" + __instance.Id.Entry;
-            var powerId = power.Id.Entry ?? "";
+            var delta = __result;
 
-            // Direct Injection! No dictionary needed.
             if (powerId == "POISON_POWER" && target != null)
             {
+                // ModifyPowerAmountGivenAdditive fires during tooltip/targeting preview as well as on real application.
+                // Only track during an active card play to avoid inflating relic poison shares before any power is applied.
+                if (!CardRegistry.IsCardPlayActive())
+                {
+                    GD.Print($"[DeckTracker] ModifyPowerAmountGivenPostfix. Skipping {relicId} — no active card play (preview/tooltip).");
+                    return;
+                }
+
                 CardRegistry.AddPoisonSharesById(target, delta, relicId);
-                GD.Print($"[DeckTracker] {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
+                GD.Print($"[DeckTracker] ModifyPowerAmountGivenPostfix. {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
             }
             else
             {
-                GD.Print($"[DeckTracker] Warning: ModifyPowerAmountReceivedPostfix (the poison one) encountered unsupported power amount modification.");
+                GD.Print($"[DeckTracker] Warning: ModifyPowerAmountGivenPostfix encountered unsupported power amount modification. PowerId: {powerId}");
             }
         }
     }

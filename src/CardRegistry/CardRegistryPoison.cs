@@ -12,7 +12,7 @@ namespace DeckTracker;
 public static partial class CardRegistry
 {
     private static readonly Dictionary<Creature, List<Contribution>> PoisonShares = new();
-    
+
     // AsyncLocal is used to keep the variable consistent across threads when dealing with async tasks
     public static readonly AsyncLocal<Creature?> CurrentPoisonTarget = new();
 
