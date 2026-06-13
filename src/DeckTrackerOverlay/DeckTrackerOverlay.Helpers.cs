@@ -87,21 +87,35 @@ public static partial class DeckTrackerOverlay
         return btn;
     }
 
-    private static Color GetPlayerRowBgColor(int playerIndex) => playerIndex switch
-    {
-        1 => new Color(0.15f, 0.35f, 1f, 0.07f),
-        2 => new Color(0.2f, 0.8f, 0.3f, 0.07f),
-        3 => new Color(1f, 0.5f, 0.1f, 0.07f),
-        _ => new Color(0, 0, 0, 0)
-    };
+    // Filters/colours only matter in co-op; in singleplayer everything is one (transparent) player.
+    private static bool IsMultiplayer() => CardRegistry.PlayerLabels.Count > 1;
 
-    private static Color GetPlayerTextColor(int playerIndex) => playerIndex switch
+    // One base colour per player; both the row tint and the text/checkbox colour derive from it so they match.
+    private static Color GetPlayerBaseColor(int playerIndex) => playerIndex switch
     {
+        0 => new Color("A78BFA"),
         1 => new Color("60A5FA"),
         2 => new Color("4ADE80"),
         3 => new Color("FB923C"),
         _ => new Color("E2E8F0")
     };
+
+    private static Color GetPlayerRowBgColor(int playerIndex)
+    {
+        // Singleplayer: keep rows transparent. Multiplayer: tint every player (including player 0).
+        if (!IsMultiplayer())
+        {
+            return new Color(0, 0, 0, 0);
+        }
+        var c = GetPlayerBaseColor(playerIndex);
+        return new Color(c.R, c.G, c.B, 0.09f);
+    }
+
+    private static Color GetPlayerTextColor(int playerIndex)
+    {
+        // Singleplayer falls back to the default light text; multiplayer uses the player's base colour.
+        return IsMultiplayer() ? GetPlayerBaseColor(playerIndex) : new Color("E2E8F0");
+    }
 
     private static PanelContainer CreateHoverableRow(Control content, Color? bgTint = null)
     {
