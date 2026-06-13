@@ -33,6 +33,10 @@ public static partial class CardRegistry
     // Maps player index (order in IRunState.Players) to the character's display name
     public static readonly Dictionary<int, string> PlayerLabels = new();
 
+    // Caches resolved Steam names by NetId so we don't query the platform on every room/combat.
+    // Only successful resolutions are cached, so a not-yet-available name is retried next time.
+    private static readonly Dictionary<string, string> _steamNameCache = new();
+
     // Cards that always share one tracking entry regardless of how many instances are generated mid-combat
     private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
 
@@ -409,6 +413,7 @@ public static partial class CardRegistry
             _cardInstanceIds.Clear();
             _cardInstanceCounters.Clear();
             PlayerLabels.Clear();
+            _steamNameCache.Clear();
             GD.Print("[DeckTracker] ResetRun. Run state cleared.");
         }
         Publish();
@@ -466,6 +471,12 @@ public static partial class CardRegistry
             return characterTitle;
         }
 
+        var netKey = player.NetId.ToString();
+        if (_steamNameCache.TryGetValue(netKey, out var cachedName))
+        {
+            return cachedName;
+        }
+
         // The Steam name lookup can throw or return null on a client where a remote player's name
         // is not yet cached, or while NetService is still initialising. This runs inside synchronized
         // game hooks during co-op, so any throw here would desync the run — fall back to the character title.
@@ -479,7 +490,13 @@ public static partial class CardRegistry
             }
 
             var steamName = PlatformUtil.GetPlayerNameRaw(netService.Platform, player.NetId);
-            return string.IsNullOrEmpty(steamName) ? characterTitle : steamName;
+            if (string.IsNullOrEmpty(steamName))
+            {
+                return characterTitle;
+            }
+
+            _steamNameCache[netKey] = steamName;
+            return steamName;
         }
         catch (Exception e)
         {
