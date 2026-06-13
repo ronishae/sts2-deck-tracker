@@ -460,10 +460,32 @@ public static partial class CardRegistry
 
     public static string GetPlayerDisplayName(Player player)
     {
-        var isMultiplayer = player.RunState.Players.Count > 1;
-        return isMultiplayer
-            ? PlatformUtil.GetPlayerNameRaw(RunManager.Instance.NetService.Platform, player.NetId)
-            : player.Character.Title.GetFormattedText();
+        var characterTitle = player.Character.Title.GetFormattedText();
+        if (player.RunState.Players.Count <= 1)
+        {
+            return characterTitle;
+        }
+
+        // The Steam name lookup can throw or return null on a client where a remote player's name
+        // is not yet cached, or while NetService is still initialising. This runs inside synchronized
+        // game hooks during co-op, so any throw here would desync the run — fall back to the character title.
+        try
+        {
+            var netService = RunManager.Instance?.NetService;
+            if (netService?.Platform == null)
+            {
+                GD.Print("[DeckTracker] GetPlayerDisplayName. NetService unavailable, using character title.");
+                return characterTitle;
+            }
+
+            var steamName = PlatformUtil.GetPlayerNameRaw(netService.Platform, player.NetId);
+            return string.IsNullOrEmpty(steamName) ? characterTitle : steamName;
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"[DeckTracker] GetPlayerDisplayName failed, using character title: {e.Message}");
+            return characterTitle;
+        }
     }
 
     public static void SetCardPlayerIndex(string trackingId, int playerIndex)

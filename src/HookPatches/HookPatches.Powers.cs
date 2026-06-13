@@ -12,7 +12,7 @@ namespace DeckTracker;
 
 internal static partial class HookPatches
 {
-    public static void BeforePowerAmountChangedPostfix(ICombatState combatState, PowerModel power, Decimal amount, Creature target, Creature? applier, CardModel? cardSource)
+    public static void BeforePowerAmountChangedPostfix(ICombatState combatState, PowerModel power, Decimal amount, Creature target, Creature? applier, CardModel? cardSource) => Guard(nameof(BeforePowerAmountChangedPostfix), () =>
     {
         var powerId = power.Id.Entry ?? "";
         GD.Print($"[DeckTracker] BeforePowerAmountChangedPostfix. Power: {powerId}, Amount: {amount}, Target: {target.Name}");
@@ -206,9 +206,9 @@ internal static partial class HookPatches
                 }
                 break;
         }
-    }
+    });
 
-    public static void BeforePowerRemovedPrefix(PowerModel? power)
+    public static void BeforePowerRemovedPrefix(PowerModel? power) => Guard(nameof(BeforePowerRemovedPrefix), () =>
     {
         if (power == null)
         {
@@ -219,174 +219,251 @@ internal static partial class HookPatches
         {
             tracker.Reset();
         }
-    }
+    });
 
-    public static void GenericPowerPrefix(PowerModel __instance)
+    public static void GenericPowerPrefix(PowerModel __instance) => Guard(nameof(GenericPowerPrefix), () =>
     {
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
             GD.Print($"[DeckTracker] GenericPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
-    }
+    });
 
     public static void GenericPowerPostfix(PowerModel __instance, ref Task __result)
     {
-        if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        try
         {
-            __result = t.AwaitTaskAsync(__result);
+            if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var t))
+            {
+                __result = t.AwaitTaskAsync(__result);
+            }
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(GenericPowerPostfix), e);
         }
     }
 
-    public static void TargetedPowerPrefix(PowerModel __instance)
+    public static void TargetedPowerPrefix(PowerModel __instance) => Guard(nameof(TargetedPowerPrefix), () =>
     {
         if (CardRegistry.TargetedTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
             GD.Print($"[DeckTracker] TargetedPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
-    }
+    });
 
     public static void TargetedPowerPostfix(PowerModel __instance, ref Task __result)
     {
-        if (CardRegistry.TargetedTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        try
         {
-            __result = t.AwaitTaskAsync(__result);
+            if (CardRegistry.TargetedTrackers.TryGetValue(__instance.Id.Entry, out var t))
+            {
+                __result = t.AwaitTaskAsync(__result);
+            }
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(TargetedPowerPostfix), e);
         }
     }
 
-    public static void HandoffPowerPrefix(PowerModel __instance)
+    public static void HandoffPowerPrefix(PowerModel __instance) => Guard(nameof(HandoffPowerPrefix), () =>
     {
         if (CardRegistry.HandoffTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
             GD.Print($"[DeckTracker] HandoffPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
-    }
+    });
 
     public static void HandoffPowerPostfix(PowerModel __instance, ref Task __result)
     {
-        if (CardRegistry.HandoffTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        try
         {
-            __result = t.AwaitTaskAsync(__result);
+            if (CardRegistry.HandoffTrackers.TryGetValue(__instance.Id.Entry, out var t))
+            {
+                __result = t.AwaitTaskAsync(__result);
+            }
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(HandoffPowerPostfix), e);
         }
     }
 
-    public static void ProportionalPowerPrefix(PowerModel __instance)
+    public static void ProportionalPowerPrefix(PowerModel __instance) => Guard(nameof(ProportionalPowerPrefix), () =>
     {
         if (CardRegistry.ProportionalTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
             GD.Print($"[DeckTracker] ProportionalPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
-    }
+    });
 
     public static void ProportionalPowerPostfix(PowerModel __instance, ref Task __result)
     {
-        if (CardRegistry.ProportionalTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        try
         {
-            __result = t.AwaitTaskAsync(__result);
+            if (CardRegistry.ProportionalTrackers.TryGetValue(__instance.Id.Entry, out var t))
+            {
+                __result = t.AwaitTaskAsync(__result);
+            }
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(ProportionalPowerPostfix), e);
         }
     }
 
-    public static void QueuePowerPrefix(PowerModel __instance)
+    public static void QueuePowerPrefix(PowerModel __instance) => Guard(nameof(QueuePowerPrefix), () =>
     {
         if (CardRegistry.QueueTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
             GD.Print($"[DeckTracker] QueuePowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution(flatten: t.NeedsFlattening);
         }
-    }
+    });
 
     public static void QueuePowerPostfix(PowerModel __instance, ref Task __result)
     {
-        if (CardRegistry.QueueTrackers.TryGetValue(__instance.Id.Entry, out var t))
+        try
         {
-            __result = t.AwaitTaskAsync(__result, flatten: t.NeedsFlattening);
+            if (CardRegistry.QueueTrackers.TryGetValue(__instance.Id.Entry, out var t))
+            {
+                __result = t.AwaitTaskAsync(__result, flatten: t.NeedsFlattening);
+            }
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(QueuePowerPostfix), e);
         }
     }
 
-    public static void PoisonAfterSideTurnStartPrefix(PoisonPower __instance)
+    public static void PoisonAfterSideTurnStartPrefix(PoisonPower __instance) => Guard(nameof(PoisonAfterSideTurnStartPrefix), () =>
     {
         if (!__instance.Owner.IsPlayer)
         {
             GD.Print($"[DeckTracker] PoisonAfterSideTurnStartPrefix. Target: {__instance.Owner.Name}");
             CardRegistry.CurrentPoisonTarget.Value = __instance.Owner;
         }
-    }
+    });
 
     public static void PoisonAfterSideTurnStartPostfix(PoisonPower __instance, ref Task __result)
     {
-        if (!__instance.Owner.IsPlayer)
+        try
         {
-            __result = CardRegistry.AwaitPoisonTaskAsync(__result);
+            if (!__instance.Owner.IsPlayer)
+            {
+                __result = CardRegistry.AwaitPoisonTaskAsync(__result);
+            }
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(PoisonAfterSideTurnStartPostfix), e);
         }
     }
 
-    public static void DoomKillPrefix(IReadOnlyList<Creature> creatures)
+    public static void DoomKillPrefix(IReadOnlyList<Creature> creatures) => Guard(nameof(DoomKillPrefix), () =>
     {
         GD.Print($"[DeckTracker] DoomKillPrefix. Count: {creatures.Count}");
         CardRegistry.CapturePendingDoomHp(creatures);
-    }
+    });
 
-    public static void AfterDiedToDoomPostfix(ICombatState combatState, IReadOnlyList<Creature> creatures)
+    public static void AfterDiedToDoomPostfix(ICombatState combatState, IReadOnlyList<Creature> creatures) => Guard(nameof(AfterDiedToDoomPostfix), () =>
     {
         GD.Print($"[DeckTracker] AfterDiedToDoomPostfix. Count: {creatures.Count}");
         CardRegistry.DistributeDoomDamage(creatures);
-    }
+    });
 
-    public static void CountdownAfterSideTurnStartPrefix(CountdownPower __instance)
+    public static void CountdownAfterSideTurnStartPrefix(CountdownPower __instance) => Guard(nameof(CountdownAfterSideTurnStartPrefix), () =>
     {
         GD.Print("[DeckTracker] CountdownAfterSideTurnStartPrefix.");
         CardRegistry.IsCountdownExecuting.Value = true;
-    }
+    });
 
     public static void CountdownAfterSideTurnStartPostfix(CountdownPower __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitCountdownTaskAsync(__result);
+        try
+        {
+            __result = CardRegistry.AwaitCountdownTaskAsync(__result);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(CountdownAfterSideTurnStartPostfix), e);
+        }
     }
 
-    public static void ReaperFormAfterDamageGivenPrefix(ReaperFormPower __instance, DamageResult result)
+    public static void ReaperFormAfterDamageGivenPrefix(ReaperFormPower __instance, DamageResult result) => Guard(nameof(ReaperFormAfterDamageGivenPrefix), () =>
     {
         GD.Print($"[DeckTracker] ReaperFormAfterDamageGivenPrefix. Damage: {result.TotalDamage}");
         CardRegistry.StartReaperFormExecution(result.TotalDamage);
-    }
+    });
 
     public static void ReaperFormAfterDamageGivenPostfix(ReaperFormPower __instance, ref Task __result, DamageResult result)
     {
-        __result = CardRegistry.AwaitReaperFormTaskAsync(__result, result.TotalDamage);
+        try
+        {
+            __result = CardRegistry.AwaitReaperFormTaskAsync(__result, result.TotalDamage);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(ReaperFormAfterDamageGivenPostfix), e);
+        }
     }
 
-    public static void NecroMasteryAfterCurrentHpChangedPrefix(NecroMasteryPower __instance, decimal delta)
+    public static void NecroMasteryAfterCurrentHpChangedPrefix(NecroMasteryPower __instance, decimal delta) => Guard(nameof(NecroMasteryAfterCurrentHpChangedPrefix), () =>
     {
         GD.Print($"[DeckTracker] NecroMasteryAfterCurrentHpChangedPrefix. Delta: {delta}");
         CardRegistry.StartNecroMasteryExecution(delta);
-    }
+    });
 
     public static void NecroMasteryAfterCurrentHpChangedPostfix(NecroMasteryPower __instance, ref Task __result, decimal delta)
     {
-        __result = CardRegistry.AwaitNecroMasteryTaskAsync(__result, delta);
+        try
+        {
+            __result = CardRegistry.AwaitNecroMasteryTaskAsync(__result, delta);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(NecroMasteryAfterCurrentHpChangedPostfix), e);
+        }
     }
 
-    public static void RollingBoulderAfterPlayerTurnStartPrefix(RollingBoulderPower __instance)
+    public static void RollingBoulderAfterPlayerTurnStartPrefix(RollingBoulderPower __instance) => Guard(nameof(RollingBoulderAfterPlayerTurnStartPrefix), () =>
     {
         GD.Print("[DeckTracker] RollingBoulderAfterPlayerTurnStartPrefix.");
         CardRegistry.InstancedTracker.StartExecution(__instance);
-    }
+    });
 
     public static void RollingBoulderAfterPlayerTurnStartPostfix(RollingBoulderPower __instance, ref Task __result)
     {
-        __result = CardRegistry.InstancedTracker.AwaitTaskAsync(__result, __instance);
+        try
+        {
+            __result = CardRegistry.InstancedTracker.AwaitTaskAsync(__result, __instance);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(RollingBoulderAfterPlayerTurnStartPostfix), e);
+        }
     }
 
-    public static void PrepTimePrefix(PrepTimePower __instance)
+    public static void PrepTimePrefix(PrepTimePower __instance) => Guard(nameof(PrepTimePrefix), () =>
     {
         GD.Print("[DeckTracker] PrepTimePrefix.");
         CardRegistry.HandoffTrackers["PREP_TIME_POWER"].StartExecution();
-    }
+    });
 
     public static void PrepTimePostfix(PrepTimePower __instance, ref Task __result)
     {
-        __result = CardRegistry.HandoffTrackers["PREP_TIME_POWER"].AwaitTaskAsync(__result);
+        try
+        {
+            __result = CardRegistry.HandoffTrackers["PREP_TIME_POWER"].AwaitTaskAsync(__result);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(PrepTimePostfix), e);
+        }
     }
 }

@@ -17,108 +17,102 @@ namespace DeckTracker;
 
 internal static partial class HookPatches
 {
-    public static void BeforeCardRemovedPostfix(IRunState runState, CardModel card)
+    public static void BeforeCardRemovedPostfix(IRunState runState, CardModel card) => Guard(nameof(BeforeCardRemovedPostfix), () =>
     {
         var currentFloor = ExtractFloorNum(runState);
         GD.Print($"[DeckTracker] BeforeCardRemovedPostfix. Card: {card.Id.Entry}, Floor: {currentFloor}");
         CardRegistry.HandleRemove(card, currentFloor);
-    }
+    });
 
-    public static void AfterCardChangedPilesPostfix(IRunState runState, ICombatState? combatState, CardModel card, PileType oldPile, AbstractModel? clonedBy)
+    public static void AfterCardChangedPilesPostfix(IRunState runState, ICombatState? combatState, CardModel card, PileType oldPile, AbstractModel? clonedBy) => Guard(nameof(AfterCardChangedPilesPostfix), () =>
     {
         if (combatState == null)
         {
             return;
         }
-        try
+        if (card.Pile != null && card.Pile.Type == PileType.Hand && oldPile != PileType.Draw)
         {
-            if (card.Pile != null && card.Pile.Type == PileType.Hand && oldPile != PileType.Draw)
+            if (CardRegistry.IsCardPlayActive())
             {
-                if (CardRegistry.IsCardPlayActive())
-                {
-                    GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Deferring draw for {card.Id.Entry}");
-                    CardRegistry.DeferDraw(card);
-                }
-                else
-                {
-                    GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Direct draw for {card.Id.Entry}");
-                    CardRegistry.RegisterCard(card);
-                    CardRegistry.AddDraw(card);
-                    CardRegistry.ForcePublish();
-                }
+                GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Deferring draw for {card.Id.Entry}");
+                CardRegistry.DeferDraw(card);
+            }
+            else
+            {
+                GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Direct draw for {card.Id.Entry}");
+                CardRegistry.RegisterCard(card);
+                CardRegistry.AddDraw(card);
+                CardRegistry.ForcePublish();
             }
         }
-        catch (Exception e)
-        {
-            GD.PrintErr($"[DeckTracker] AfterCardChangedPilesPostfix Error: {e.Message}");
-        }
-    }
+    });
 
-    public static void AfterCardDrawnPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardModel card, bool fromHandDraw)
+    public static void AfterCardDrawnPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardModel card, bool fromHandDraw) => Guard(nameof(AfterCardDrawnPostfix), () =>
     {
         GD.Print($"[DeckTracker] AfterCardDrawnPostfix. Card: {card.Id.Entry}, FromHand: {fromHandDraw}");
         CardRegistry.RegisterCard(card);
         CardRegistry.AddDraw(card);
-    }
+    });
 
-    public static void BeforeCardPlayedPostfix(ICombatState combatState, CardPlay cardPlay)
+    public static void BeforeCardPlayedPostfix(ICombatState combatState, CardPlay cardPlay) => Guard(nameof(BeforeCardPlayedPostfix), () =>
+    {
+        var cardProp = cardPlay.GetType().GetProperty("Card");
+        if (cardProp?.GetValue(cardPlay) is CardModel card)
+        {
+            GD.Print($"[DeckTracker] BeforeCardPlayedPostfix. Card: {card.Id.Entry}, PlayIndex: {cardPlay.PlayIndex}");
+            CardRegistry.StartCardPlay(card);
+            CardRegistry.RegisterCard(card);
+            if (cardPlay.PlayIndex == 0)
+            {
+                CardRegistry.AddPlay(card);
+            }
+            CardRegistry.ForcePublish();
+        }
+    });
+
+    // Has ref parameters, which cannot be captured by the Guard lambda, so it is isolated inline instead.
+    public static void ModifyDamagePostfix(Decimal damage, Creature? target, Creature? dealer, ValueProp props, CardModel? cardSource, CardPreviewMode previewMode, ref IEnumerable<AbstractModel> modifiers, ref Decimal __result)
     {
         try
         {
-            var cardProp = cardPlay.GetType().GetProperty("Card");
-            if (cardProp?.GetValue(cardPlay) is CardModel card)
+            if (previewMode != CardPreviewMode.None)
             {
-                GD.Print($"[DeckTracker] BeforeCardPlayedPostfix. Card: {card.Id.Entry}, PlayIndex: {cardPlay.PlayIndex}");
-                CardRegistry.StartCardPlay(card);
-                CardRegistry.RegisterCard(card);
-                if (cardPlay.PlayIndex == 0)
-                {
-                    CardRegistry.AddPlay(card);
-                }
-                CardRegistry.ForcePublish();
+                return;
             }
+
+            var snapshot = new CardRegistry.DamageSnapshot
+            {
+                BaseDamage = damage,
+                CardSource = cardSource,
+                Target = target,
+                Props = props,
+                Dealer = dealer
+            };
+
+            foreach (var mod in modifiers)
+            {
+                var addAmount = mod.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
+                if (addAmount > 0)
+                {
+                    snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = addAmount });
+                }
+
+                var multAmount = mod.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
+                if (multAmount != 1m && multAmount != 0m)
+                {
+                    snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = multAmount });
+                    GD.Print($"[DeckTracker] ModifyDamagePostfix. Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
+                }
+            }
+            CardRegistry.CurrentAttackSnapshot.Value = snapshot;
         }
         catch (Exception e)
         {
-            GD.PrintErr($"[DeckTracker] BeforeCardPlayedPostfix Error: {e.Message}");
+            LogHookError(nameof(ModifyDamagePostfix), e);
         }
     }
 
-    public static void ModifyDamagePostfix(Decimal damage, Creature? target, Creature? dealer, ValueProp props, CardModel? cardSource, CardPreviewMode previewMode, ref IEnumerable<AbstractModel> modifiers, ref Decimal __result)
-    {
-        if (previewMode != CardPreviewMode.None)
-        {
-            return;
-        }
-
-        var snapshot = new CardRegistry.DamageSnapshot
-        {
-            BaseDamage = damage,
-            CardSource = cardSource,
-            Target = target,
-            Props = props,
-            Dealer = dealer
-        };
-
-        foreach (var mod in modifiers)
-        {
-            var addAmount = mod.ModifyDamageAdditive(target, damage, props, dealer, cardSource);
-            if (addAmount > 0)
-            {
-                snapshot.AdditiveModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = addAmount });
-            }
-
-            var multAmount = mod.ModifyDamageMultiplicative(target, damage, props, dealer, cardSource);
-            if (multAmount != 1m && multAmount != 0m)
-            {
-                snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = multAmount });
-                GD.Print($"[DeckTracker] ModifyDamagePostfix. Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
-            }
-        }
-        CardRegistry.CurrentAttackSnapshot.Value = snapshot;
-    }
-
-    public static void AfterCardPlayedPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardPlay cardPlay)
+    public static void AfterCardPlayedPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardPlay cardPlay) => Guard(nameof(AfterCardPlayedPostfix), () =>
     {
         CardRegistry.EndCardPlay();
         CardRegistry.ForcePublish();
@@ -141,9 +135,9 @@ internal static partial class HookPatches
             CardRegistry.ProcessShivHistory(cardPlay);
             CardRegistry.CurrentAttackSnapshot.Value = null;
         }
-    }
+    });
 
-    public static void AfterForgePostfix(ICombatState combatState, decimal amount, Player forger, AbstractModel? source)
+    public static void AfterForgePostfix(ICombatState combatState, decimal amount, Player forger, AbstractModel? source) => Guard(nameof(AfterForgePostfix), () =>
     {
         GD.Print($"[DeckTracker] AfterForgePostfix. Source: {source?.Id.Entry}, Amount: {amount}");
         if (source is CardModel card)
@@ -167,9 +161,9 @@ internal static partial class HookPatches
         {
             GD.Print($"[DeckTracker] Unknown forge source: {source?.Id.Entry}");
         }
-    }
+    });
 
-    public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
+    public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource) => Guard(nameof(AfterDamageGivenPostfix), () =>
     {
         if (target.IsPlayer)
         {
@@ -266,5 +260,5 @@ internal static partial class HookPatches
         {
             CardRegistry.AddDamage(cardSource, baseDmg);
         }
-    }
+    });
 }

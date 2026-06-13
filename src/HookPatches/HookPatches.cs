@@ -20,23 +20,44 @@ internal static partial class HookPatches
 {
     private static bool _overlayScheduled;
 
-    public static void AfterRoomEnteredPostfix(IRunState runState, AbstractRoom room)
+    // Runs a hook body in a guarded context. This is a read-only tracking mod, but its hooks fire
+    // inside the game's synchronized simulation during co-op — an exception escaping a hook would
+    // abort the synchronized work on this client only and desync the run from the host. Guarding
+    // every hook means the mod can fail to record an event, but can never crash or desync the game.
+    private static void Guard(string hookName, Action body)
+    {
+        try
+        {
+            body();
+        }
+        catch (Exception e)
+        {
+            LogHookError(hookName, e);
+        }
+    }
+
+    private static void LogHookError(string hookName, Exception e)
+    {
+        GD.PrintErr($"[DeckTracker] {hookName} failed: {e}");
+    }
+
+    public static void AfterRoomEnteredPostfix(IRunState runState, AbstractRoom room) => Guard(nameof(AfterRoomEnteredPostfix), () =>
     {
         var currentFloor = ExtractFloorNum(runState);
         var activeDeckIds = ScanDeckForCards(runState);
         GD.Print($"[DeckTracker] AfterRoomEnteredPostfix. Floor: {currentFloor}, Room: {room.RoomType}");
         CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
         CardRegistry.SaveState();
-    }
+    });
 
-    public static void BeforeRoomEnteredPrefix(IRunState? runState, AbstractRoom room)
+    public static void BeforeRoomEnteredPrefix(IRunState? runState, AbstractRoom room) => Guard(nameof(BeforeRoomEnteredPrefix), () =>
     {
         var seed = ExtractRunSeed(runState);
         GD.Print($"[DeckTracker] BeforeRoomEnteredPrefix. Seed: {seed}, Room: {room.RoomType}");
         CardRegistry.SyncRun(seed);
-    }
+    });
 
-    public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
+    public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState) => Guard(nameof(BeforeCombatStartPostfix), () =>
     {
         var currentFloor = ExtractFloorNum(runState);
         var currentAct = ExtractActNum(runState);
@@ -53,21 +74,21 @@ internal static partial class HookPatches
             _overlayScheduled = true;
             DeckTrackerOverlay.EnsureCreated();
         }
-    }
+    });
 
-    public static void AfterSideTurnStartPostfix(ICombatState combatState, CombatSide side, IReadOnlyList<Creature> participants)
+    public static void AfterSideTurnStartPostfix(ICombatState combatState, CombatSide side, IReadOnlyList<Creature> participants) => Guard(nameof(AfterSideTurnStartPostfix), () =>
     {
         GD.Print($"[DeckTracker] AfterSideTurnStartPostfix. Side: {side}");
         CardRegistry.ResetOrbTurnState();
-    }
+    });
 
-    public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
+    public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState) => Guard(nameof(AfterCombatEndPostfix), () =>
     {
         GD.Print("[DeckTracker] AfterCombatEndPostfix.");
         CardRegistry.ProcessCombatEnd();
-    }
+    });
 
-    public static void RunManagerCleanUpPrefix() => CardRegistry.ClearSession();
+    public static void RunManagerCleanUpPrefix() => Guard(nameof(RunManagerCleanUpPrefix), CardRegistry.ClearSession);
 
     private static int ExtractFloorNum(IRunState? runState) => runState?.TotalFloor ?? 1;
     private static int ExtractActNum(IRunState? runState) => (runState?.CurrentActIndex ?? 0) + 1;

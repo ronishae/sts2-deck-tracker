@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Godot;
@@ -11,13 +12,13 @@ namespace DeckTracker;
 
 internal static partial class HookPatches
 {
-    public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, Player player)
+    public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, Player player) => Guard(nameof(OrbChannelPostfix), () =>
     {
         GD.Print($"[DeckTracker] OrbChannelPostfix. Orb: {orb.Id.Entry}");
         CardRegistry.RegisterChanneledOrb(orb, CardRegistry.CurrentPlayingCard);
-    }
+    });
 
-    public static void OrbPassivePrefix(OrbModel __instance)
+    public static void OrbPassivePrefix(OrbModel __instance) => Guard(nameof(OrbPassivePrefix), () =>
     {
         string? forcingActor = null;
         if (CardRegistry.IsLoopExecuting.Value && CardRegistry.CurrentTurnLoopQueue.Count > 0)
@@ -47,49 +48,77 @@ internal static partial class HookPatches
         }
         GD.Print($"[DeckTracker] OrbPassivePrefix. Orb: {__instance.Id.Entry}, ForcingActor: {forcingActor}");
         CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
-    }
+    });
 
     public static void OrbPassivePostfix(OrbModel __instance, ref Task __result)
     {
-        GD.Print($"[DeckTracker] OrbPassivePostfix. Orb: {__instance.Id.Entry}");
-        __result = CardRegistry.AwaitOrbExecutionTaskAsync(__result, __instance, isEvoke: false);
+        try
+        {
+            GD.Print($"[DeckTracker] OrbPassivePostfix. Orb: {__instance.Id.Entry}");
+            __result = CardRegistry.AwaitOrbExecutionTaskAsync(__result, __instance, isEvoke: false);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(OrbPassivePostfix), e);
+        }
     }
 
-    public static void OrbEvokePrefix(OrbModel __instance)
+    public static void OrbEvokePrefix(OrbModel __instance) => Guard(nameof(OrbEvokePrefix), () =>
     {
         GD.Print($"[DeckTracker] OrbEvokePrefix. Orb: {__instance.Id.Entry}");
         CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, true, __instance.EvokeVal);
-    }
+    });
 
     public static void OrbEvokePostfix(OrbModel __instance, ref Task<IEnumerable<Creature>> __result)
     {
-        GD.Print($"[DeckTracker] OrbEvokePostfix. Orb: {__instance.Id.Entry}");
-        __result = CardRegistry.AwaitOrbEvokeTaskAsync(__result, __instance);
+        try
+        {
+            GD.Print($"[DeckTracker] OrbEvokePostfix. Orb: {__instance.Id.Entry}");
+            __result = CardRegistry.AwaitOrbEvokeTaskAsync(__result, __instance);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(OrbEvokePostfix), e);
+        }
     }
 
-    public static void TempFocusApplyPrefix(TemporaryFocusPower __instance)
+    public static void TempFocusApplyPrefix(TemporaryFocusPower __instance) => Guard(nameof(TempFocusApplyPrefix), () =>
     {
         GD.Print("[DeckTracker] TempFocusApplyPrefix.");
         CardRegistry.IsApplyingTemporaryFocus.Value = true;
-    }
+    });
 
     public static void TempFocusApplyPostfix(TemporaryFocusPower __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitTempFocusApplyAsync(__result);
+        try
+        {
+            __result = CardRegistry.AwaitTempFocusApplyAsync(__result);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(TempFocusApplyPostfix), e);
+        }
     }
 
-    public static void TempFocusExpirePrefix(TemporaryFocusPower __instance)
+    public static void TempFocusExpirePrefix(TemporaryFocusPower __instance) => Guard(nameof(TempFocusExpirePrefix), () =>
     {
         GD.Print("[DeckTracker] TempFocusExpirePrefix.");
         CardRegistry.IsExpiringTemporaryFocus.Value = true;
-    }
+    });
 
     public static void TempFocusExpirePostfix(TemporaryFocusPower __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitTempFocusExpireAsync(__result);
+        try
+        {
+            __result = CardRegistry.AwaitTempFocusExpireAsync(__result);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(TempFocusExpirePostfix), e);
+        }
     }
 
-    public static void LoopPrefix(LoopPower __instance)
+    public static void LoopPrefix(LoopPower __instance) => Guard(nameof(LoopPrefix), () =>
     {
         GD.Print("[DeckTracker] LoopPrefix.");
         CardRegistry.IsLoopExecuting.Value = true;
@@ -104,10 +133,17 @@ internal static partial class HookPatches
                 }
             }
         }
-    }
+    });
 
     public static void LoopPostfix(LoopPower __instance, ref Task __result)
     {
-        __result = CardRegistry.AwaitLoopTaskAsync(__result);
+        try
+        {
+            __result = CardRegistry.AwaitLoopTaskAsync(__result);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(LoopPostfix), e);
+        }
     }
 }
