@@ -253,7 +253,8 @@ public static partial class DeckTrackerOverlay
 
     private static List<CardStats> BuildMergedCardList(List<CardStats> stats)
     {
-        var groups = stats.GroupBy(s => string.IsNullOrEmpty(s.BaseCardKey) ? s.Id : s.BaseCardKey);
+        // BaseCardKey already encodes the owner, but include PlayerIndex explicitly so versions never merge across players.
+        var groups = stats.GroupBy(s => (string.IsNullOrEmpty(s.BaseCardKey) ? s.Id : s.BaseCardKey, s.PlayerIndex));
         var result = new List<CardStats>();
 
         foreach (var group in groups)
@@ -276,6 +277,7 @@ public static partial class DeckTrackerOverlay
                 Enchantment = representative.Enchantment,
                 UpgradeLevel = representative.UpgradeLevel,
                 BaseCardKey = representative.BaseCardKey,
+                PlayerIndex = representative.PlayerIndex,
                 FloorAdded = versions.Min(s => s.FloorAdded),
                 FloorRemoved = representative.FloorRemoved,
                 FloorLeftDeck = evolvedFloor,
@@ -316,7 +318,8 @@ public static partial class DeckTrackerOverlay
         const int StackThreshold = 7;
         var result = new List<CardStats>();
 
-        var groups = stats.GroupBy(s => (ExtractBaseId(s), s.UpgradeLevel, s.Enchantment));
+        // Include PlayerIndex so identical cards from different players never stack into one row.
+        var groups = stats.GroupBy(s => (ExtractBaseId(s), s.UpgradeLevel, s.Enchantment, s.PlayerIndex));
 
         foreach (var group in groups)
         {
@@ -339,6 +342,7 @@ public static partial class DeckTrackerOverlay
                 Enchantment = representative.Enchantment,
                 UpgradeLevel = representative.UpgradeLevel,
                 BaseCardKey = representative.BaseCardKey,
+                PlayerIndex = representative.PlayerIndex,
                 FloorAdded = versions.Min(s => s.FloorAdded),
                 FloorRemoved = -1,
                 FloorLeftDeck = -1,
