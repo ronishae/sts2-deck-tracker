@@ -131,12 +131,13 @@ internal static partial class HookPatches
         for (var i = 0; i < runState.Players.Count; i++)
         {
             var p = runState.Players[i];
+            var netId = p.NetId.ToString();
+            CardRegistry.SetPlayerIndexForNetId(netId, i);
             CardRegistry.SetPlayerLabel(i, CardRegistry.GetPlayerDisplayName(p));
             foreach (var c in p.Deck.Cards)
             {
-                CardRegistry.RegisterCard(c);
-                var id = CardRegistry.GetTrackingId(c);
-                CardRegistry.SetCardPlayerIndex(id, i);
+                CardRegistry.RegisterCard(c, netId);
+                var id = CardRegistry.GetTrackingId(c, netId);
                 ids.Add(id);
             }
         }

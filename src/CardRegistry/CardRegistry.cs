@@ -27,18 +27,19 @@ public static partial class CardRegistry
     
     private static HashSet<string> _incrementedThisCombat = new();
 
-    private static readonly Dictionary<CardModel, int> _cardInstanceIds = new();
-    private static readonly Dictionary<string, int> _cardInstanceCounters = new();
-
     // Maps player index (order in IRunState.Players) to the character's display name
     public static readonly Dictionary<int, string> PlayerLabels = new();
+
+    // Maps a player's stable NetId (string) to their current ordered index. Rebuilt every deck scan.
+    // Used only to colour/order rows (CardStats.PlayerIndex) — never baked into a tracking ID.
+    private static readonly Dictionary<string, int> _playerIndexByNetId = new();
+
+    // Sentinel owner key for cards with no resolvable owning player (e.g. enemy-owned cards).
+    private const string UnknownOwnerKey = "NONE";
 
     // Caches resolved Steam names by NetId so we don't query the platform on every room/combat.
     // Only successful resolutions are cached, so a not-yet-available name is retried next time.
     private static readonly Dictionary<string, string> _steamNameCache = new();
-
-    // Cards that always share one tracking entry regardless of how many instances are generated mid-combat
-    private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
 
     // Tracks the card currently being played
     private static readonly AsyncLocal<CardModel?> _currentPlayingCard = new();
@@ -212,56 +213,37 @@ public static partial class CardRegistry
         }
     }
 
-    // Assigns a per-run copy index to each distinct physical CardModel object.
-    // On post-load re-association, scans EntityLedger for a matching saved entry not yet claimed by a live card.
-    private static int GetOrAssignCopyIndex(CardModel sourceCard)
+    // Resolves the stable per-player owner key for a card: the owning player's NetId (Steam id) as a string.
+    // NetId is globally unique and permanent, so a card's identity survives save/load and rejoins regardless
+    // of join order. Must be deterministic and never throw — resolved from the same sourceCard used to build
+    // the rest of the ID so deck scans and combat always agree. Returns UnknownOwnerKey for unowned cards.
+    private static string ResolveOwnerNetId(CardModel? sourceCard)
     {
-        if (_cardInstanceIds.TryGetValue(sourceCard, out var existing))
+        try
         {
-            return existing;
+            var player = sourceCard?.Owner;
+            if (player != null)
+            {
+                return player.NetId.ToString();
+            }
         }
-
-        var baseId = sourceCard.Id.Entry ?? "Unknown";
-
-        // Singleton cards always share copy index 0 — all instances map to the same tracking entry
-        if (SingletonCardIds.Contains(baseId))
+        catch (Exception e)
         {
-            _cardInstanceIds[sourceCard] = 0;
-            GD.Print($"[DeckTracker] GetOrAssignCopyIndex. Singleton card {baseId}, assigning CopyIndex: 0");
-            return 0;
+            GD.PrintErr($"[DeckTracker] ResolveOwnerNetId failed: {e.Message}");
         }
-        var floor = sourceCard.FloorAddedToDeck ?? 0;
-        var upgrade = sourceCard.CurrentUpgradeLevel;
-        var enchant = sourceCard.Enchantment?.Id.Entry ?? "None";
-        var prefix = $"{baseId}_F{floor}_C";
-        var suffix = $"_U{upgrade}_{enchant}";
-
-        foreach (var kvp in EntityLedger)
-        {
-            if (!kvp.Key.StartsWith(prefix) || !kvp.Key.EndsWith(suffix)) continue;
-            if (!kvp.Value.IsActive || kvp.Value.Model != null) continue;
-
-            var middle = kvp.Key[prefix.Length..^suffix.Length];
-            if (!int.TryParse(middle, out var savedIdx)) continue;
-
-            kvp.Value.Model = sourceCard;
-            _cardInstanceIds[sourceCard] = savedIdx;
-            var basePrefix = $"{baseId}_F{floor}";
-            _cardInstanceCounters.TryGetValue(basePrefix, out var cur);
-            if (savedIdx >= cur) _cardInstanceCounters[basePrefix] = savedIdx + 1;
-            GD.Print($"[DeckTracker] GetOrAssignCopyIndex. Re-associated: {kvp.Key}, CopyIndex: {savedIdx}");
-            return savedIdx;
-        }
-
-        var pref = $"{baseId}_F{floor}";
-        _cardInstanceCounters.TryGetValue(pref, out var counter);
-        _cardInstanceIds[sourceCard] = counter;
-        _cardInstanceCounters[pref] = counter + 1;
-        GD.Print($"[DeckTracker] GetOrAssignCopyIndex. Assigned new CopyIndex: {counter} for {baseId}_F{floor}");
-        return counter;
+        return UnknownOwnerKey;
     }
 
-    public static string GetTrackingId(CardModel? card)
+    // Cosmetic only: maps a resolved owner NetId to its current ordered player index for row colour/ordering.
+    private static int ResolvePlayerIndex(string ownerNetId)
+    {
+        return _playerIndexByNetId.TryGetValue(ownerNetId, out var idx) ? idx : 0;
+    }
+
+    // Identity is keyed by owning player's NetId instead of a per-physical-copy index, so it is a pure
+    // function of deck composition + owner and stays stable across multiplayer client re-syncs.
+    // ownerNetId may be passed by the deck scan (which knows the player); otherwise it is resolved from the card.
+    public static string GetTrackingId(CardModel? card, string? ownerNetId = null)
     {
         if (card == null)
         {
@@ -273,12 +255,12 @@ public static partial class CardRegistry
         int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
         int upgradeLevel = sourceCard.CurrentUpgradeLevel;
         string enchant = sourceCard.Enchantment?.Id.Entry ?? "None";
-        int copyIndex = _cardInstanceIds.TryGetValue(sourceCard, out var idx) ? idx : 0;
+        string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
 
-        return $"{baseId}_F{floorAdded}_C{copyIndex}_U{upgradeLevel}_{enchant}";
+        return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}_P{owner}";
     }
 
-    public static string GetBaseCardKey(CardModel? card)
+    public static string GetBaseCardKey(CardModel? card, string? ownerNetId = null)
     {
         if (card == null)
         {
@@ -287,8 +269,8 @@ public static partial class CardRegistry
         CardModel sourceCard = card.DeckVersion ?? card;
         string baseId = sourceCard.Id.Entry ?? "Unknown";
         int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
-        int copyIndex = _cardInstanceIds.TryGetValue(sourceCard, out var idx) ? idx : 0;
-        return $"{baseId}_F{floorAdded}_C{copyIndex}";
+        string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
+        return $"{baseId}_F{floorAdded}_P{owner}";
     }
 
     // Resolves the active source ID: card first, then executing relic, then active potion, then fallback.
@@ -410,8 +392,7 @@ public static partial class CardRegistry
             RelicNameCache.Clear();
             PotionInstanceIds.Clear();
             _potionCounter = 0;
-            _cardInstanceIds.Clear();
-            _cardInstanceCounters.Clear();
+            _playerIndexByNetId.Clear();
             PlayerLabels.Clear();
             _steamNameCache.Clear();
             GD.Print("[DeckTracker] ResetRun. Run state cleared.");
@@ -463,6 +444,12 @@ public static partial class CardRegistry
         GD.Print($"[DeckTracker] SetPlayerLabel. Player {playerIndex}: {label}");
     }
 
+    // Records a player's stable NetId -> ordered index mapping (used only for row colour/ordering).
+    public static void SetPlayerIndexForNetId(string netId, int playerIndex)
+    {
+        _playerIndexByNetId[netId] = playerIndex;
+    }
+
     public static string GetPlayerDisplayName(Player player)
     {
         var characterTitle = player.Character.Title.GetFormattedText();
@@ -505,17 +492,6 @@ public static partial class CardRegistry
         }
     }
 
-    public static void SetCardPlayerIndex(string trackingId, int playerIndex)
-    {
-        lock (SyncRoot)
-        {
-            if (EntityLedger.TryGetValue(trackingId, out var entity) && entity is CardStats stat)
-            {
-                stat.PlayerIndex = playerIndex;
-            }
-        }
-    }
-
     private static void RestoreLiveInstances()
     {
         var run = GetLiveRunState();
@@ -527,6 +503,8 @@ public static partial class CardRegistry
         for (var playerIdx = 0; playerIdx < run.Players.Count; playerIdx++)
         {
             var player = run.Players[playerIdx];
+            var netId = player.NetId.ToString();
+            _playerIndexByNetId[netId] = playerIdx;
             PlayerLabels[playerIdx] = GetPlayerDisplayName(player);
 
             foreach (var relic in player.Relics)
@@ -539,8 +517,7 @@ public static partial class CardRegistry
 
             foreach (var card in player.Deck.Cards)
             {
-                RegisterCard(card);
-                SetCardPlayerIndex(GetTrackingId(card), playerIdx);
+                RegisterCard(card, netId);
             }
 
             for (var i = 0; i < player.PotionSlots.Count; i++)
@@ -650,17 +627,11 @@ public static partial class CardRegistry
         Publish();
     }
     
-    public static void RegisterCard(CardModel card)
+    public static void RegisterCard(CardModel card, string? ownerNetId = null)
     {
         CardModel sourceCard = card.DeckVersion ?? card;
-
-        lock (SyncRoot)
-        {
-            // Must assign copy index before GetTrackingId so the ID includes the correct _C{n} segment
-            GetOrAssignCopyIndex(sourceCard);
-        }
-
-        string uniqueTrackingId = GetTrackingId(card);
+        string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
+        string uniqueTrackingId = GetTrackingId(card, owner);
 
         lock (SyncRoot)
         {
@@ -677,7 +648,7 @@ public static partial class CardRegistry
                     CardType = sourceCard.Type.ToString(),
                     Enchantment = enchantName,
                     UpgradeLevel = sourceCard.CurrentUpgradeLevel,
-                    BaseCardKey = GetBaseCardKey(card),
+                    BaseCardKey = GetBaseCardKey(card, owner),
                     FloorAdded = sourceCard.FloorAddedToDeck ?? 0,
                     FloorRemoved = isGenerated ? 0 : -1,
                     IsActive = !isGenerated,
@@ -688,6 +659,7 @@ public static partial class CardRegistry
                 EntityLedger[uniqueTrackingId] = stat;
             }
 
+            stat.PlayerIndex = ResolvePlayerIndex(owner);
             stat.Model = card;
 
             if (_currentCombatType != "Unknown" && isGenerated && _incrementedThisCombat.Add(uniqueTrackingId))

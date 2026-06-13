@@ -6,7 +6,7 @@ public sealed class CardStats : EntityStats
     public string Enchantment { get; set; } = "";
     public int CopiesInDeck { get; set; }
     public int UpgradeLevel { get; set; }
-    // Shared key across all upgrade/enchant versions of the same physical card: "{baseId}_F{floorAdded}"
+    // Shared key across all upgrade/enchant versions of the same card for one owner: "{baseId}_F{floorAdded}_P{ownerNetId}"
     public string BaseCardKey { get; set; } = "";
     // Index into the ordered player list — used to colour-code and filter cards per player in the overlay
     public int PlayerIndex { get; set; }
