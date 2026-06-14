@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;

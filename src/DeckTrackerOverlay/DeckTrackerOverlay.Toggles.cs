@@ -1,5 +1,3 @@
-using Godot;
-
 namespace DeckTracker;
 
 public static partial class DeckTrackerOverlay

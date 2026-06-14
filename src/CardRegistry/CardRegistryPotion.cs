@@ -1,7 +1,4 @@
-using System.Text.RegularExpressions;
 using Godot;
-using HarmonyLib;
-using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Models;
 
 namespace DeckTracker;

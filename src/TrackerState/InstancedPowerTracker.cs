@@ -1,6 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
 using Godot;
 using MegaCrit.Sts2.Core.Models;
 
