@@ -128,6 +128,7 @@ internal static partial class HookPatches
         List<string> ids = new();
         if (runState == null) return ids;
 
+        CardRegistry.BeginDeckScan();
         for (var i = 0; i < runState.Players.Count; i++)
         {
             var p = runState.Players[i];
@@ -136,7 +137,7 @@ internal static partial class HookPatches
             CardRegistry.SetPlayerLabel(i, CardRegistry.GetPlayerDisplayName(p));
             foreach (var c in p.Deck.Cards)
             {
-                CardRegistry.RegisterCard(c, netId);
+                CardRegistry.RegisterCard(c, netId, isDeckScan: true);
                 var id = CardRegistry.GetTrackingId(c, netId);
                 ids.Add(id);
             }

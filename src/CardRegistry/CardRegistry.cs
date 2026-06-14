@@ -37,6 +37,18 @@ public static partial class CardRegistry
     // Sentinel owner key for cards with no resolvable owning player (e.g. enemy-owned cards).
     private const string UnknownOwnerKey = "NONE";
 
+    // Per-physical-copy index, so identical copies are distinct rows in the overlay (which then stacks them).
+    // _cardInstanceIds maps a live CardModel -> its copy index. For deck cards it is rebuilt deterministically
+    // every scan (count-capped ordinal) so it stays stable across multiplayer client re-syncs; generated/combat
+    // cards fall back to a persistent per-{baseId}_F{floor} counter.
+    private static readonly Dictionary<CardModel, int> _cardInstanceIds = new();
+    private static readonly Dictionary<string, int> _cardInstanceCounters = new();
+    // Transient per-scan ordinal counters, keyed by "{netId}|{baseId}_F{floor}_U{upgrade}_{enchant}".
+    private static readonly Dictionary<string, int> _deckScanOrdinals = new();
+
+    // Cards that always share one tracking entry regardless of how many instances are generated mid-combat.
+    private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
+
     // Caches resolved Steam names by NetId so we don't query the platform on every room/combat.
     // Only successful resolutions are cached, so a not-yet-available name is retried next time.
     private static readonly Dictionary<string, string> _steamNameCache = new();
@@ -240,6 +252,67 @@ public static partial class CardRegistry
         return _playerIndexByNetId.TryGetValue(ownerNetId, out var idx) ? idx : 0;
     }
 
+    // Clears the per-scan copy-index state. Called once at the start of a full deck scan so deck copy indices
+    // are recomputed deterministically (and stale CardModel references from a prior room are dropped).
+    public static void BeginDeckScan()
+    {
+        lock (SyncRoot)
+        {
+            _cardInstanceIds.Clear();
+            _deckScanOrdinals.Clear();
+        }
+    }
+
+    private static int GetCopyIndex(CardModel sourceCard)
+    {
+        if (SingletonCardIds.Contains(sourceCard.Id.Entry ?? "Unknown"))
+        {
+            return 0;
+        }
+        return _cardInstanceIds.TryGetValue(sourceCard, out var idx) ? idx : 0;
+    }
+
+    // Deck cards: deterministic ordinal per (owner, identity), recomputed each scan so the id set is always
+    // C0..C(N-1) for N copies — stable across client re-syncs (no churn-induced duplicate/EVOLVED rows).
+    private static void AssignDeckCopyIndex(CardModel sourceCard, string ownerNetId)
+    {
+        var baseId = sourceCard.Id.Entry ?? "Unknown";
+        if (SingletonCardIds.Contains(baseId))
+        {
+            _cardInstanceIds[sourceCard] = 0;
+            return;
+        }
+        var floor = sourceCard.FloorAddedToDeck ?? 0;
+        var upgrade = sourceCard.CurrentUpgradeLevel;
+        var enchant = sourceCard.Enchantment?.Id.Entry ?? "None";
+        var key = $"{ownerNetId}|{baseId}_F{floor}_U{upgrade}_{enchant}";
+        _deckScanOrdinals.TryGetValue(key, out var ordinal);
+        _cardInstanceIds[sourceCard] = ordinal;
+        _deckScanOrdinals[key] = ordinal + 1;
+    }
+
+    // Generated/combat cards (not part of a deck scan): assign the next copy index from a persistent
+    // per-{baseId}_F{floor} counter so each generated copy is a distinct entry (auto-stacked in the UI).
+    private static int GetOrAssignCopyIndex(CardModel sourceCard)
+    {
+        if (_cardInstanceIds.TryGetValue(sourceCard, out var existing))
+        {
+            return existing;
+        }
+        var baseId = sourceCard.Id.Entry ?? "Unknown";
+        if (SingletonCardIds.Contains(baseId))
+        {
+            _cardInstanceIds[sourceCard] = 0;
+            return 0;
+        }
+        var floor = sourceCard.FloorAddedToDeck ?? 0;
+        var key = $"{baseId}_F{floor}";
+        _cardInstanceCounters.TryGetValue(key, out var counter);
+        _cardInstanceIds[sourceCard] = counter;
+        _cardInstanceCounters[key] = counter + 1;
+        return counter;
+    }
+
     // Identity is keyed by owning player's NetId instead of a per-physical-copy index, so it is a pure
     // function of deck composition + owner and stays stable across multiplayer client re-syncs.
     // ownerNetId may be passed by the deck scan (which knows the player); otherwise it is resolved from the card.
@@ -255,9 +328,10 @@ public static partial class CardRegistry
         int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
         int upgradeLevel = sourceCard.CurrentUpgradeLevel;
         string enchant = sourceCard.Enchantment?.Id.Entry ?? "None";
+        int copyIndex = GetCopyIndex(sourceCard);
         string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
 
-        return $"{baseId}_F{floorAdded}_U{upgradeLevel}_{enchant}_P{owner}";
+        return $"{baseId}_F{floorAdded}_C{copyIndex}_U{upgradeLevel}_{enchant}_P{owner}";
     }
 
     public static string GetBaseCardKey(CardModel? card, string? ownerNetId = null)
@@ -392,6 +466,9 @@ public static partial class CardRegistry
             RelicNameCache.Clear();
             PotionInstanceIds.Clear();
             _potionCounter = 0;
+            _cardInstanceIds.Clear();
+            _cardInstanceCounters.Clear();
+            _deckScanOrdinals.Clear();
             _playerIndexByNetId.Clear();
             PlayerLabels.Clear();
             _steamNameCache.Clear();
@@ -500,6 +577,7 @@ public static partial class CardRegistry
             return;
         }
 
+        BeginDeckScan();
         for (var playerIdx = 0; playerIdx < run.Players.Count; playerIdx++)
         {
             var player = run.Players[playerIdx];
@@ -517,7 +595,7 @@ public static partial class CardRegistry
 
             foreach (var card in player.Deck.Cards)
             {
-                RegisterCard(card, netId);
+                RegisterCard(card, netId, isDeckScan: true);
             }
 
             for (var i = 0; i < player.PotionSlots.Count; i++)
@@ -627,10 +705,25 @@ public static partial class CardRegistry
         Publish();
     }
     
-    public static void RegisterCard(CardModel card, string? ownerNetId = null)
+    public static void RegisterCard(CardModel card, string? ownerNetId = null, bool isDeckScan = false)
     {
         CardModel sourceCard = card.DeckVersion ?? card;
         string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
+
+        lock (SyncRoot)
+        {
+            // Assign the copy index before building the id: deterministic ordinal for deck scans,
+            // persistent counter for generated/combat cards not seen in the current scan.
+            if (isDeckScan)
+            {
+                AssignDeckCopyIndex(sourceCard, owner);
+            }
+            else if (!_cardInstanceIds.ContainsKey(sourceCard))
+            {
+                GetOrAssignCopyIndex(sourceCard);
+            }
+        }
+
         string uniqueTrackingId = GetTrackingId(card, owner);
 
         lock (SyncRoot)
