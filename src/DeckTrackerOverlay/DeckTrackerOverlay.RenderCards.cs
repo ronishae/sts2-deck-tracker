@@ -77,7 +77,7 @@ public static partial class DeckTrackerOverlay
         {
             var idx = kvp.Key;
             var check = new CheckBox { Text = kvp.Value, ButtonPressed = _enabledPlayers.Contains(idx), FocusMode = Control.FocusModeEnum.None };
-            check.AddThemeColorOverride("font_color", GetPlayerTextColor(idx));
+            ApplyPlayerFilterTextColor(check, idx);
             check.Toggled += (val) =>
             {
                 if (val) _enabledPlayers.Add(idx);

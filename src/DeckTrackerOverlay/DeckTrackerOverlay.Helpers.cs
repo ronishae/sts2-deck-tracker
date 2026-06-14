@@ -116,6 +116,18 @@ public static partial class DeckTrackerOverlay
         return IsMultiplayer() ? GetPlayerBaseColor(playerIndex) : new Color("E2E8F0");
     }
 
+    // A CheckBox swaps font colour by state (pressed/hover/focus); override every state so the player
+    // name keeps its colour while the box is checked instead of reverting to the default theme colour.
+    private static void ApplyPlayerFilterTextColor(CheckBox check, int playerIndex)
+    {
+        var color = GetPlayerTextColor(playerIndex);
+        check.AddThemeColorOverride("font_color", color);
+        check.AddThemeColorOverride("font_pressed_color", color);
+        check.AddThemeColorOverride("font_hover_color", color);
+        check.AddThemeColorOverride("font_hover_pressed_color", color);
+        check.AddThemeColorOverride("font_focus_color", color);
+    }
+
     private static PanelContainer CreateHoverableRow(Control content, Color? bgTint = null)
     {
         PanelContainer panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
