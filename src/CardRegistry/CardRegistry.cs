@@ -39,6 +39,14 @@ public static partial class CardRegistry
     private static readonly Dictionary<string, int> _cardInstanceCounters = new();
     // Transient per-scan ordinal counters, keyed by "{netId}|{baseId}_F{floor}_U{upgrade}_{enchant}".
     private static readonly Dictionary<string, int> _deckScanOrdinals = new();
+    // Shared "created by" map: the model that created a transient combat card. Auto-filled from the
+    // game's CloneOf for clones (Anger); generated cards like Shiv will populate this manually from the
+    // playing card/potion/power context (planned follow-up). Cleared each combat (transient cards only).
+    private static readonly Dictionary<CardModel, AbstractModel> _cardCreatedBy = new();
+    // Memoized origin: maps a card to the persistent deck card its damage should roll up to, so we never
+    // re-walk the chain. A clone inherits its creator's cached origin in O(1); a non-created card maps to
+    // itself (or its DeckVersion). Cleared each combat.
+    private static readonly Dictionary<CardModel, CardModel> _cardOrigin = new();
 
     // Cards that always share one tracking entry regardless of how many instances are generated mid-combat.
     private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
@@ -266,6 +274,40 @@ public static partial class CardRegistry
         return _cardInstanceIds.TryGetValue(sourceCard, out var idx) ? idx : 0;
     }
 
+    // Resolves the deck card a transient copy should be attributed to, caching the result so we never
+    // re-walk. CreateClone() nulls a clone's DeckVersion but records CloneOf, so we auto-fill the shared
+    // _cardCreatedBy map from it; a card-typed creator resolves to ITS origin (one cached lookup). A card
+    // with no creator maps to itself, so purely generated cards (SHIV, etc.) keep their current behaviour
+    // until the Shiv follow-up sets _cardCreatedBy to a non-card source. Locks internally (SyncRoot is
+    // reentrant) since callers like AddDamage invoke this outside their ledger lock.
+    private static CardModel ResolveSourceCard(CardModel card)
+    {
+        lock (SyncRoot)
+        {
+            if (_cardOrigin.TryGetValue(card, out var cached))
+            {
+                return cached;
+            }
+            // Auto-fill the shared creator seam from the game's clone link (Anger).
+            if (!_cardCreatedBy.ContainsKey(card) && card.CloneOf != null)
+            {
+                _cardCreatedBy[card] = card.CloneOf;
+            }
+            CardModel origin;
+            if (_cardCreatedBy.TryGetValue(card, out var creator) && creator is CardModel creatorCard)
+            {
+                origin = ResolveSourceCard(creatorCard); // creator is virtually always already cached
+                Log.VeryDebug($"ResolveSourceCard. Card: {card.Id.Entry} rolled up to origin: {origin.Id.Entry}");
+            }
+            else
+            {
+                origin = card.DeckVersion ?? card;
+            }
+            _cardOrigin[card] = origin;
+            return origin;
+        }
+    }
+
     // Deck cards: deterministic ordinal per (owner, identity), recomputed each scan so the id set is always
     // C0..C(N-1) for N copies — stable across client re-syncs (no churn-induced duplicate/EVOLVED rows).
     private static void AssignDeckCopyIndex(CardModel sourceCard, string ownerNetId)
@@ -316,7 +358,7 @@ public static partial class CardRegistry
         {
             return "";
         }
-        CardModel sourceCard = card.DeckVersion ?? card;
+        CardModel sourceCard = ResolveSourceCard(card);
 
         string baseId = sourceCard.Id.Entry ?? "Unknown";
         int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
@@ -334,7 +376,7 @@ public static partial class CardRegistry
         {
             return "";
         }
-        CardModel sourceCard = card.DeckVersion ?? card;
+        CardModel sourceCard = ResolveSourceCard(card);
         string baseId = sourceCard.Id.Entry ?? "Unknown";
         int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
         string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
@@ -411,6 +453,8 @@ public static partial class CardRegistry
         {
             _currentCombatType = "Unknown";
             _incrementedThisCombat.Clear();
+            _cardCreatedBy.Clear();
+            _cardOrigin.Clear();
             ResetForgeState();
             ResetSovereignBladeState();
             ResetNecroMasteryState();
@@ -707,7 +751,7 @@ public static partial class CardRegistry
     
     public static void RegisterCard(CardModel card, string? ownerNetId = null, bool isDeckScan = false)
     {
-        CardModel sourceCard = card.DeckVersion ?? card;
+        CardModel sourceCard = ResolveSourceCard(card);
         string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
 
         lock (SyncRoot)
