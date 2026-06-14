@@ -73,16 +73,15 @@ public static partial class CardRegistry
 
     public static void AddPotionForge(PotionModel potion, decimal amount)
     {
-        string? potionId;
-        lock (SyncRoot)
+        // Forge fires during a potion's use, so prefer the id locked in at use-time; otherwise resolve
+        // from the model (owner + type), which works for remote players whose model is a network clone.
+        var potionId = CurrentPlayingPotionId;
+        if (string.IsNullOrEmpty(potionId) && !TryResolvePotionId(potion, out potionId))
         {
-            if (!PotionInstanceIds.TryGetValue(potion, out potionId))
-            {
-                Log.Warn($"AddPotionForge. Potion: {potion.Id.Entry} not found in PotionInstanceIds.");
-                return;
-            }
-            Log.Debug($"AddPotionForge. Potion: {potion.Id.Entry}, Id: {potionId}, Amount: {amount}");
+            Log.Warn($"AddPotionForge. Potion: {potion.Id.Entry} could not be resolved.");
+            return;
         }
+        Log.Debug($"AddPotionForge. Potion: {potion.Id.Entry}, Id: {potionId}, Amount: {amount}");
         AddForgeById(potionId, amount);
     }
 

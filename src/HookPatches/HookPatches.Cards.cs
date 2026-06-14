@@ -246,10 +246,10 @@ internal static partial class HookPatches
                 CardRegistry.AddDamageById(CardRegistry.InstancedTracker.ExecutingSourceId, damageAmount);
                 return;
             }
-            var activePot = CardRegistry.CurrentPlayingPotion;
-            if (activePot != null && target != null && !target.IsPlayer && CardRegistry.PotionInstanceIds.TryGetValue(activePot, out var pid))
+            var activePotId = CardRegistry.CurrentPlayingPotionId;
+            if (!string.IsNullOrEmpty(activePotId) && target != null && !target.IsPlayer)
             {
-                CardRegistry.AddDamageById(pid, damageAmount);
+                CardRegistry.AddDamageById(activePotId, damageAmount);
                 return;
             }
             return;

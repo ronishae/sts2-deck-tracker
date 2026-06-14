@@ -346,7 +346,7 @@ public static partial class CardRegistry
     {
         if (cardSource != null) return GetTrackingId(cardSource);
         if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value)) return "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
-        if (CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potId)) return potId;
+        if (!string.IsNullOrEmpty(CurrentPlayingPotionId)) return CurrentPlayingPotionId;
         return fallback;
     }
 
@@ -604,8 +604,10 @@ public static partial class CardRegistry
 
                 if (string.IsNullOrEmpty(existingId))
                 {
+                    var idPrefix = $"POTION_{potion.Id.Entry}_";
                     existingId = EntityLedger.Values.OfType<PotionStats>()
-                        .FirstOrDefault(p => p.Model == null && p.Id.Contains(potion.Id.Entry))?.Id;
+                        .FirstOrDefault(p => p.Model == null && MatchesPotionType(p.Id, idPrefix)
+                            && (p.OwnerNetId == netId || p.OwnerNetId == null))?.Id;
 
                     if (string.IsNullOrEmpty(existingId))
                     {
@@ -618,12 +620,16 @@ public static partial class CardRegistry
                             Id = existingId,
                             DisplayName = displayName,
                             FloorObtained = 1,
+                            OwnerNetId = netId,
                             IsActive = true
                         };
                     }
                     PotionInstanceIds[potion] = existingId;
                 }
-                ((PotionStats)EntityLedger[existingId]).Model = potion;
+
+                var potionStat = (PotionStats)EntityLedger[existingId];
+                potionStat.OwnerNetId ??= netId; // Backfill owner for saves made before owner tracking.
+                potionStat.Model = potion;
             }
         }
         Log.Debug("RestoreLiveInstances. Live object references restored.");

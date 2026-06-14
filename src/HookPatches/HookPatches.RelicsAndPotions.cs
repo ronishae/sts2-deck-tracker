@@ -42,8 +42,8 @@ internal static partial class HookPatches
     {
         var floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
         Log.Debug($"BeforePotionUsedPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
-        CardRegistry.MarkPotionUsed(potion, floor);
-        CardRegistry.SetPlayingPotion(potion);
+        var resolvedId = CardRegistry.MarkPotionUsed(potion, floor);
+        CardRegistry.SetPlayingPotion(potion, resolvedId);
     });
 
     public static void AfterPotionUsedPrefix(PotionModel potion) => Guard(nameof(AfterPotionUsedPrefix), () =>

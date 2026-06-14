@@ -77,9 +77,9 @@ public static partial class CardRegistry
                 }
             }
             
-            if (sourceCard == null && CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potionId))
+            if (sourceCard == null && !string.IsNullOrEmpty(CurrentPlayingPotionId))
             {
-                trackingId = potionId;
+                trackingId = CurrentPlayingPotionId;
                 Log.Debug($"RegisterChanneledOrb. Tagging channeled Orb to Potion: {trackingId}");
             }
             
