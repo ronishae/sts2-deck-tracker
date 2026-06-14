@@ -47,7 +47,7 @@ public static partial class CardRegistry
             UnattributedOrbLogs.Clear();
             DarkOrbLedgers.Clear();
             LoopHistory.Clear();
-            GD.Print("[DeckTracker] ResetOrbState. State cleared.");
+            Log.Debug("ResetOrbState. State cleared.");
         }
     }
 
@@ -71,7 +71,7 @@ public static partial class CardRegistry
                     if (nextId != null)
                     {
                         trackingId = nextId;
-                        GD.Print($"[DeckTracker] RegisterChanneledOrb. Routed {orb.Id.Entry} to QueueTracker {queueTracker.PowerId}: {trackingId}");
+                        Log.Debug($"RegisterChanneledOrb. Routed {orb.Id.Entry} to QueueTracker {queueTracker.PowerId}: {trackingId}");
                     }
                     break; 
                 }
@@ -80,17 +80,17 @@ public static partial class CardRegistry
             if (sourceCard == null && CurrentPlayingPotion != null && PotionInstanceIds.TryGetValue(CurrentPlayingPotion, out var potionId))
             {
                 trackingId = potionId;
-                GD.Print($"[DeckTracker] RegisterChanneledOrb. Tagging channeled Orb to Potion: {trackingId}");
+                Log.Debug($"RegisterChanneledOrb. Tagging channeled Orb to Potion: {trackingId}");
             }
             
             OrbChannelers[orb] = trackingId;
-            GD.Print($"[DeckTracker] RegisterChanneledOrb. Orb: {orb.Id.Entry}, Attributed To: {trackingId}");
+            Log.Debug($"RegisterChanneledOrb. Orb: {orb.Id.Entry}, Attributed To: {trackingId}");
             
             if (orb is DarkOrb)
             {
                 DarkOrbLedgers[orb] = new List<Contribution>();
                 DarkOrbLedgers[orb].Add(new Contribution { TrackingId = trackingId, Amount = orb.EvokeVal });
-                GD.Print($"[DeckTracker] RegisterChanneledOrb (Dark Orb). Initial Base: {orb.EvokeVal:F2}, To: {trackingId}");
+                Log.Debug($"RegisterChanneledOrb (Dark Orb). Initial Base: {orb.EvokeVal:F2}, To: {trackingId}");
             }
         }
     }
@@ -106,7 +106,7 @@ public static partial class CardRegistry
                 {
                     DarkOrbLedgers.Remove(orb);
                 }
-                GD.Print($"[DeckTracker] DeregisterOrb. Removed {orb.Id.Entry}.");
+                Log.Debug($"DeregisterOrb. Removed {orb.Id.Entry}.");
             }
         }
     }
@@ -121,7 +121,7 @@ public static partial class CardRegistry
         {
             var id = GetTrackingId(cardSource);
             LoopHistory.Add(new Contribution { TrackingId = id, Amount = amount });
-            GD.Print($"[DeckTracker] AddLoop. Amount: {amount}, Source: {id}");
+            Log.Debug($"AddLoop. Amount: {amount}, Source: {id}");
         }
     }
     
@@ -160,7 +160,7 @@ public static partial class CardRegistry
                 }
 
                 ledger.Add(new Contribution { TrackingId = baseId, Amount = pureBase });
-                GD.Print($"[DeckTracker] RecordDarkOrbWave. Base: {pureBase:F2}, To: {baseId}");
+                Log.Debug($"RecordDarkOrbWave. Base: {pureBase:F2}, To: {baseId}");
             }
             if (totalFocus > 0)
             {
@@ -169,7 +169,7 @@ public static partial class CardRegistry
                     if (focus.Amount > 0)
                     {
                         ledger.Add(new Contribution { TrackingId = focus.TrackingId, Amount = focus.Amount });
-                        GD.Print($"[DeckTracker] RecordDarkOrbWave. Focus: {focus.Amount:F2}, To: {focus.TrackingId}");
+                        Log.Debug($"RecordDarkOrbWave. Focus: {focus.Amount:F2}, To: {focus.TrackingId}");
                     }
                 }
             }
@@ -183,7 +183,7 @@ public static partial class CardRegistry
                 "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
                 (amount > 0 ? "External_Buff" : "External_Debuff"));
         
-        GD.Print($"[DeckTracker] LogFocusChange (Forwarder). TrackingId: {trackingId}, Amount: {amount}");
+        Log.Debug($"LogFocusChange (Forwarder). TrackingId: {trackingId}, Amount: {amount}");
         LogFocusChangeById(trackingId, amount);
     }
 
@@ -199,7 +199,7 @@ public static partial class CardRegistry
             if (IsExpiringTemporaryFocus.Value)
             {
                 decimal rem = Math.Abs(amount);
-                GD.Print($"[DeckTracker] LogFocusChangeById (Erasing). Amount: {rem}");
+                Log.Debug($"LogFocusChangeById (Erasing). Amount: {rem}");
                 for (int i = 0; i < FocusHistory.Count; i++)
                 {
                     if (rem <= 0)
@@ -212,7 +212,7 @@ public static partial class CardRegistry
                         decimal e = Math.Min(rem, c.Amount);
                         c.Amount -= e;
                         rem -= e;
-                        GD.Print($"[DeckTracker]   -> Erased {e} from {c.TrackingId}");
+                        Log.VeryDebug($"  -> Erased {e} from {c.TrackingId}");
                     }
                 }
                 FocusHistory.RemoveAll(c => c.Amount == 0);
@@ -224,7 +224,7 @@ public static partial class CardRegistry
                 Amount = amount, 
                 IsTemporary = IsApplyingTemporaryFocus.Value 
             });
-            GD.Print($"[DeckTracker] LogFocusChangeById. Amount: {amount}, Source: {trackingId}, Temp: {IsApplyingTemporaryFocus.Value}");
+            Log.Debug($"LogFocusChangeById. Amount: {amount}, Source: {trackingId}, Temp: {IsApplyingTemporaryFocus.Value}");
         }
     }
     
@@ -239,7 +239,7 @@ public static partial class CardRegistry
         var executingSimple = SimpleDamageTrackers.Values.FirstOrDefault(t => t.IsExecuting);
         if (executingSimple != null)
         {
-            GD.Print($"[DeckTracker] DistributeOrbDamage. Redirecting {totalDamage} to SimpleTracker {executingSimple.PowerId}");
+            Log.Debug($"DistributeOrbDamage. Redirecting {totalDamage} to SimpleTracker {executingSimple.PowerId}");
             executingSimple.DistributeDamage(totalDamage);
             return;
         }
@@ -248,7 +248,7 @@ public static partial class CardRegistry
         {
             var remaining = totalDamage;
             var totalRelicMods = 0m;
-            GD.Print($"[DeckTracker] DistributeOrbDamage (Waterfall). Total: {totalDamage}, Orb: {context.Orb.Id.Entry}");
+            Log.Debug($"DistributeOrbDamage (Waterfall). Total: {totalDamage}, Orb: {context.Orb.Id.Entry}");
 
             if (RelicExecutionManager.PendingOrbModifiers.Value != null)
             {
@@ -258,7 +258,7 @@ public static partial class CardRegistry
                     AddRelicDamage(mod.relicId, payout);
                     remaining -= payout;
                     totalRelicMods += mod.delta;
-                    GD.Print($"[DeckTracker]   -> Peeled {payout} to Relic {mod.relicId}");
+                    Log.VeryDebug($"  -> Peeled {payout} to Relic {mod.relicId}");
                 }
                 RelicExecutionManager.PendingOrbModifiers.Value.Clear();
             }
@@ -270,11 +270,11 @@ public static partial class CardRegistry
                 {
                     var multiId = GetTrackingId(CurrentPlayingCard);
                     AddDamageById(multiId, remaining);
-                    GD.Print($"[DeckTracker] DistributeOrbDamage (Phantom Evoke). Attributed {remaining} to {multiId}");
+                    Log.Debug($"DistributeOrbDamage (Phantom Evoke). Attributed {remaining} to {multiId}");
                     return;
                 }
                 UnattributedOrbLogs.Add($"Unattributed {orb.Id.Entry} Orb Damage ({remaining}). Cause: No channeling card found.");
-                GD.Print($"[DeckTracker] DistributeOrbDamage (UNATTRIBUTED). Amount: {remaining}");
+                Log.Warn($"DistributeOrbDamage (UNATTRIBUTED). Amount: {remaining}");
                 return;
             }
             
@@ -282,7 +282,7 @@ public static partial class CardRegistry
             {
                 if (DarkOrbLedgers.TryGetValue(orb, out var ledger))
                 {
-                    GD.Print($"[DeckTracker] DistributeOrbDamage (Dark FIFO). Remaining: {remaining}");
+                    Log.Debug($"DistributeOrbDamage (Dark FIFO). Remaining: {remaining}");
                     foreach (var c in ledger)
                     {
                         if (remaining <= 0)
@@ -292,7 +292,7 @@ public static partial class CardRegistry
                         decimal p = Math.Min(remaining, c.Amount);
                         AddDamageById(c.TrackingId, p);
                         remaining -= p;
-                        GD.Print($"[DeckTracker]   -> Attributed {p} to {c.TrackingId}");
+                        Log.VeryDebug($"  -> Attributed {p} to {c.TrackingId}");
                     }
                 }
                 return;
@@ -318,7 +318,7 @@ public static partial class CardRegistry
             {
                 var baseTarget =(!context.IsEvoke && context.ForcedActorId != null) ? context.ForcedActorId : channelerId;
                 AddDamageById(baseTarget, cPayout);
-                GD.Print($"[DeckTracker]   -> Base Payout: {cPayout}, To: {baseTarget}");
+                Log.VeryDebug($"  -> Base Payout: {cPayout}, To: {baseTarget}");
             }
 
             if (fPayoutTotal != 0)
@@ -334,21 +334,21 @@ public static partial class CardRegistry
                         decimal p = Math.Min(fPayoutTotal, c.Amount);
                         AddDamageById(c.TrackingId, p);
                         fPayoutTotal -= p;
-                        GD.Print($"[DeckTracker]   -> Focus Payout: {p}, To: {c.TrackingId}");
+                        Log.VeryDebug($"  -> Focus Payout: {p}, To: {c.TrackingId}");
                     }
                     else if (fPayoutTotal < 0 && c.Amount < 0)
                     {
                         decimal p = Math.Max(fPayoutTotal, c.Amount);
                         AddDamageById(c.TrackingId, p);
                         fPayoutTotal -= p;
-                        GD.Print($"[DeckTracker]   -> Focus Debt: {p}, To: {c.TrackingId}");
+                        Log.VeryDebug($"  -> Focus Debt: {p}, To: {c.TrackingId}");
                     }
                 }
             }
             
             if (fPayoutTotal > 0)
             {
-                GD.Print($"[DeckTracker] DistributeOrbDamage (Leak). {fPayoutTotal} damage unattributed.");
+                Log.Warn($"DistributeOrbDamage (Leak). {fPayoutTotal} damage unattributed.");
             }
         }
         Publish();
@@ -362,7 +362,7 @@ public static partial class CardRegistry
             await originalTask;
             if (!isEvoke && orb is DarkOrb && context != null)
             {
-                GD.Print($"[DeckTracker] AwaitOrbExecutionTaskAsync. Recording Dark Orb Wave for {orb.Id.Entry}");
+                Log.Debug($"AwaitOrbExecutionTaskAsync. Recording Dark Orb Wave for {orb.Id.Entry}");
                 RecordDarkOrbWave(orb, context.ExpectedValue, context.ForcedActorId);
             }
         }
@@ -398,7 +398,7 @@ public static partial class CardRegistry
         finally
         {
             IsApplyingTemporaryFocus.Value = false;
-            GD.Print("[DeckTracker] AwaitTempFocusApplyAsync finished.");
+            Log.VeryDebug("AwaitTempFocusApplyAsync finished.");
         }
     }
 
@@ -411,7 +411,7 @@ public static partial class CardRegistry
         finally
         {
             IsExpiringTemporaryFocus.Value = false;
-            GD.Print("[DeckTracker] AwaitTempFocusExpireAsync finished.");
+            Log.VeryDebug("AwaitTempFocusExpireAsync finished.");
         }
     }
     
@@ -425,7 +425,7 @@ public static partial class CardRegistry
         {
             IsLoopExecuting.Value = false;
             CurrentTurnLoopQueue.Clear();
-            GD.Print("[DeckTracker] AwaitLoopTaskAsync finished.");
+            Log.VeryDebug("AwaitLoopTaskAsync finished.");
         }
     }
 }

@@ -59,7 +59,7 @@ public static partial class CardRegistry
         {
             if (ReflectQueue.Count > 0)
             {
-                GD.Print($"[DeckTracker] Distributing {amount} Reflect damage to {ReflectQueue[0]}");
+                Log.Debug($"Distributing {amount} Reflect damage to {ReflectQueue[0]}");
                 AddDamageById(ReflectQueue[0], amount);
             }
         }

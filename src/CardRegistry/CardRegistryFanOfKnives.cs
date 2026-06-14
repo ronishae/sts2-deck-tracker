@@ -31,7 +31,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             _activeFanOfKnivesCard ??= fanOfKnivesCard;
-            GD.Print($"[DeckTracker] Updated active Fan of Knives card: {GetTrackingId(_activeFanOfKnivesCard)}.");
+            Log.Debug($"Updated active Fan of Knives card: {GetTrackingId(_activeFanOfKnivesCard)}.");
         }
     }
 
@@ -50,7 +50,7 @@ public static partial class CardRegistry
         {
             if (ShivDamageHistory.Count == 0) return;
 
-            GD.Print($"[DeckTracker] Processing Shiv history with count: {ShivDamageHistory.Count}");
+            Log.Debug($"Processing Shiv history with count: {ShivDamageHistory.Count}");
 
             // Find the primary target (the one that took the most base damage)
             var maxDamageRecord = ShivDamageHistory[0];
@@ -76,7 +76,7 @@ public static partial class CardRegistry
                     // Spillover belongs to Fan of Knives
                     if (_activeFanOfKnivesCard != null)
                     {
-                        GD.Print($"[DeckTracker] Attributing spillover Shiv damage to Fan of Knives.");
+                        Log.Debug($"Attributing spillover Shiv damage to Fan of Knives.");
                         AddDamage(_activeFanOfKnivesCard, record.PeeledDamage);
                     }
                     else

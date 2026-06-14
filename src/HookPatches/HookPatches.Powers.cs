@@ -11,7 +11,7 @@ internal static partial class HookPatches
     public static void BeforePowerAmountChangedPostfix(ICombatState combatState, PowerModel power, Decimal amount, Creature target, Creature? applier, CardModel? cardSource) => Guard(nameof(BeforePowerAmountChangedPostfix), () =>
     {
         var powerId = power.Id.Entry ?? "";
-        GD.Print($"[DeckTracker] BeforePowerAmountChangedPostfix. Power: {powerId}, Amount: {amount}, Target: {target.Name}");
+        Log.Debug($"BeforePowerAmountChangedPostfix. Power: {powerId}, Amount: {amount}, Target: {target.Name}");
 
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(powerId, out var simple))
         {
@@ -148,7 +148,7 @@ internal static partial class HookPatches
                             CardRegistry.RitualSources[sid] = 0;
                         }
                         CardRegistry.RitualSources[sid] += amount;
-                        GD.Print($"[DeckTracker] BeforePowerAmountChangedPostfix. Ritual Log: {amount} from {sid}");
+                        Log.Debug($"BeforePowerAmountChangedPostfix. Ritual Log: {amount} from {sid}");
                     }
                 }
                 break;
@@ -210,7 +210,7 @@ internal static partial class HookPatches
         {
             return;
         }
-        GD.Print($"[DeckTracker] BeforePowerRemovedPrefix. Power: {power.Id.Entry}");
+        Log.VeryDebug($"BeforePowerRemovedPrefix. Power: {power.Id.Entry}");
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(power.Id.Entry, out var tracker))
         {
             tracker.Reset();
@@ -221,7 +221,7 @@ internal static partial class HookPatches
     {
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
-            GD.Print($"[DeckTracker] GenericPowerPrefix. Power: {__instance.Id.Entry}");
+            Log.VeryDebug($"GenericPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
     });
@@ -245,7 +245,7 @@ internal static partial class HookPatches
     {
         if (CardRegistry.TargetedTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
-            GD.Print($"[DeckTracker] TargetedPowerPrefix. Power: {__instance.Id.Entry}");
+            Log.VeryDebug($"TargetedPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
     });
@@ -269,7 +269,7 @@ internal static partial class HookPatches
     {
         if (CardRegistry.HandoffTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
-            GD.Print($"[DeckTracker] HandoffPowerPrefix. Power: {__instance.Id.Entry}");
+            Log.VeryDebug($"HandoffPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
     });
@@ -293,7 +293,7 @@ internal static partial class HookPatches
     {
         if (CardRegistry.ProportionalTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
-            GD.Print($"[DeckTracker] ProportionalPowerPrefix. Power: {__instance.Id.Entry}");
+            Log.VeryDebug($"ProportionalPowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution();
         }
     });
@@ -317,7 +317,7 @@ internal static partial class HookPatches
     {
         if (CardRegistry.QueueTrackers.TryGetValue(__instance.Id.Entry, out var t))
         {
-            GD.Print($"[DeckTracker] QueuePowerPrefix. Power: {__instance.Id.Entry}");
+            Log.VeryDebug($"QueuePowerPrefix. Power: {__instance.Id.Entry}");
             t.StartExecution(flatten: t.NeedsFlattening);
         }
     });
@@ -341,7 +341,7 @@ internal static partial class HookPatches
     {
         if (!__instance.Owner.IsPlayer)
         {
-            GD.Print($"[DeckTracker] PoisonAfterSideTurnStartPrefix. Target: {__instance.Owner.Name}");
+            Log.VeryDebug($"PoisonAfterSideTurnStartPrefix. Target: {__instance.Owner.Name}");
             CardRegistry.CurrentPoisonTarget.Value = __instance.Owner;
         }
     });
@@ -363,19 +363,19 @@ internal static partial class HookPatches
 
     public static void DoomKillPrefix(IReadOnlyList<Creature> creatures) => Guard(nameof(DoomKillPrefix), () =>
     {
-        GD.Print($"[DeckTracker] DoomKillPrefix. Count: {creatures.Count}");
+        Log.Debug($"DoomKillPrefix. Count: {creatures.Count}");
         CardRegistry.CapturePendingDoomHp(creatures);
     });
 
     public static void AfterDiedToDoomPostfix(ICombatState combatState, IReadOnlyList<Creature> creatures) => Guard(nameof(AfterDiedToDoomPostfix), () =>
     {
-        GD.Print($"[DeckTracker] AfterDiedToDoomPostfix. Count: {creatures.Count}");
+        Log.Debug($"AfterDiedToDoomPostfix. Count: {creatures.Count}");
         CardRegistry.DistributeDoomDamage(creatures);
     });
 
     public static void CountdownAfterSideTurnStartPrefix(CountdownPower __instance) => Guard(nameof(CountdownAfterSideTurnStartPrefix), () =>
     {
-        GD.Print("[DeckTracker] CountdownAfterSideTurnStartPrefix.");
+        Log.VeryDebug("CountdownAfterSideTurnStartPrefix.");
         CardRegistry.IsCountdownExecuting.Value = true;
     });
 
@@ -393,7 +393,7 @@ internal static partial class HookPatches
 
     public static void ReaperFormAfterDamageGivenPrefix(ReaperFormPower __instance, DamageResult result) => Guard(nameof(ReaperFormAfterDamageGivenPrefix), () =>
     {
-        GD.Print($"[DeckTracker] ReaperFormAfterDamageGivenPrefix. Damage: {result.TotalDamage}");
+        Log.VeryDebug($"ReaperFormAfterDamageGivenPrefix. Damage: {result.TotalDamage}");
         CardRegistry.StartReaperFormExecution(result.TotalDamage);
     });
 
@@ -411,7 +411,7 @@ internal static partial class HookPatches
 
     public static void NecroMasteryAfterCurrentHpChangedPrefix(NecroMasteryPower __instance, decimal delta) => Guard(nameof(NecroMasteryAfterCurrentHpChangedPrefix), () =>
     {
-        GD.Print($"[DeckTracker] NecroMasteryAfterCurrentHpChangedPrefix. Delta: {delta}");
+        Log.VeryDebug($"NecroMasteryAfterCurrentHpChangedPrefix. Delta: {delta}");
         CardRegistry.StartNecroMasteryExecution(delta);
     });
 
@@ -429,7 +429,7 @@ internal static partial class HookPatches
 
     public static void RollingBoulderAfterPlayerTurnStartPrefix(RollingBoulderPower __instance) => Guard(nameof(RollingBoulderAfterPlayerTurnStartPrefix), () =>
     {
-        GD.Print("[DeckTracker] RollingBoulderAfterPlayerTurnStartPrefix.");
+        Log.VeryDebug("RollingBoulderAfterPlayerTurnStartPrefix.");
         CardRegistry.InstancedTracker.StartExecution(__instance);
     });
 
@@ -447,7 +447,7 @@ internal static partial class HookPatches
 
     public static void PrepTimePrefix(PrepTimePower __instance) => Guard(nameof(PrepTimePrefix), () =>
     {
-        GD.Print("[DeckTracker] PrepTimePrefix.");
+        Log.VeryDebug("PrepTimePrefix.");
         CardRegistry.HandoffTrackers["PREP_TIME_POWER"].StartExecution();
     });
 

@@ -46,7 +46,7 @@ public static partial class CardRegistry
             {
                 ReaperFormShares.Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             }
-            GD.Print($"[DeckTracker] Added {amount} Reaper Form shares to {uniqueId}.");
+            Log.Debug($"Added {amount} Reaper Form shares to {uniqueId}.");
         }
         Publish();
     }

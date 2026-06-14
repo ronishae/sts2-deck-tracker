@@ -27,7 +27,7 @@ public static partial class CardRegistry
         {
             var uniqueId = GetTrackingId(cardSource);
             CountdownHistory.Add(new Contribution { TrackingId = uniqueId, Amount = amount });
-            GD.Print($"[DeckTracker] Added {amount} Countdown to history for {uniqueId}.");
+            Log.Debug($"Added {amount} Countdown to history for {uniqueId}.");
         }
         Publish();
     }

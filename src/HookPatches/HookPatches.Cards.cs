@@ -16,7 +16,7 @@ internal static partial class HookPatches
     public static void BeforeCardRemovedPostfix(IRunState runState, CardModel card) => Guard(nameof(BeforeCardRemovedPostfix), () =>
     {
         var currentFloor = ExtractFloorNum(runState);
-        GD.Print($"[DeckTracker] BeforeCardRemovedPostfix. Card: {card.Id.Entry}, Floor: {currentFloor}");
+        Log.Debug($"BeforeCardRemovedPostfix. Card: {card.Id.Entry}, Floor: {currentFloor}");
         CardRegistry.HandleRemove(card, currentFloor);
     });
 
@@ -30,12 +30,12 @@ internal static partial class HookPatches
         {
             if (CardRegistry.IsCardPlayActive())
             {
-                GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Deferring draw for {card.Id.Entry}");
+                Log.Debug($"AfterCardChangedPilesPostfix. Deferring draw for {card.Id.Entry}");
                 CardRegistry.DeferDraw(card);
             }
             else
             {
-                GD.Print($"[DeckTracker] AfterCardChangedPilesPostfix. Direct draw for {card.Id.Entry}");
+                Log.Debug($"AfterCardChangedPilesPostfix. Direct draw for {card.Id.Entry}");
                 CardRegistry.RegisterCard(card);
                 CardRegistry.AddDraw(card);
                 CardRegistry.ForcePublish();
@@ -45,7 +45,7 @@ internal static partial class HookPatches
 
     public static void AfterCardDrawnPostfix(ICombatState combatState, PlayerChoiceContext choiceContext, CardModel card, bool fromHandDraw) => Guard(nameof(AfterCardDrawnPostfix), () =>
     {
-        GD.Print($"[DeckTracker] AfterCardDrawnPostfix. Card: {card.Id.Entry}, FromHand: {fromHandDraw}");
+        Log.Debug($"AfterCardDrawnPostfix. Card: {card.Id.Entry}, FromHand: {fromHandDraw}");
         CardRegistry.RegisterCard(card);
         CardRegistry.AddDraw(card);
     });
@@ -55,7 +55,7 @@ internal static partial class HookPatches
         var cardProp = cardPlay.GetType().GetProperty("Card");
         if (cardProp?.GetValue(cardPlay) is CardModel card)
         {
-            GD.Print($"[DeckTracker] BeforeCardPlayedPostfix. Card: {card.Id.Entry}, PlayIndex: {cardPlay.PlayIndex}");
+            Log.Debug($"BeforeCardPlayedPostfix. Card: {card.Id.Entry}, PlayIndex: {cardPlay.PlayIndex}");
             CardRegistry.StartCardPlay(card);
             CardRegistry.RegisterCard(card);
             if (cardPlay.PlayIndex == 0)
@@ -106,7 +106,7 @@ internal static partial class HookPatches
                 if (multAmount != 1m && multAmount != 0m)
                 {
                     snapshot.MultiplicativeModifiers.Add(new CardRegistry.DamageModifierSnapshot { PowerId = mod.Id.Entry, Amount = multAmount });
-                    GD.Print($"[DeckTracker] ModifyDamagePostfix. Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
+                    Log.Debug($"ModifyDamagePostfix. Logged Multiplier: {mod.Id.Entry} with {multAmount}x");
                 }
             }
             CardRegistry.CurrentAttackSnapshot.Value = snapshot;
@@ -122,7 +122,7 @@ internal static partial class HookPatches
         CardRegistry.EndCardPlay();
         CardRegistry.ForcePublish();
         var id = cardPlay.Card.Id.Entry ?? "";
-        GD.Print($"[DeckTracker] AfterCardPlayedPostfix. Card: {id}");
+        Log.Debug($"AfterCardPlayedPostfix. Card: {id}");
         if (id.Equals("SEEKING_EDGE"))
         {
             CardRegistry.UpdateSeekingEdge(cardPlay.Card);
@@ -144,7 +144,7 @@ internal static partial class HookPatches
 
     public static void AfterForgePostfix(ICombatState combatState, decimal amount, Player forger, AbstractModel? source) => Guard(nameof(AfterForgePostfix), () =>
     {
-        GD.Print($"[DeckTracker] AfterForgePostfix. Source: {source?.Id.Entry}, Amount: {amount}");
+        Log.Debug($"AfterForgePostfix. Source: {source?.Id.Entry}, Amount: {amount}");
         if (source is CardModel card)
         {
             CardRegistry.AddForge(card, amount);
@@ -164,7 +164,7 @@ internal static partial class HookPatches
         }
         else
         {
-            GD.Print($"[DeckTracker] Unknown forge source: {source?.Id.Entry}");
+            Log.Warn($"Unknown forge source: {source?.Id.Entry}");
         }
     });
 
@@ -175,13 +175,13 @@ internal static partial class HookPatches
             return;
         }
         var damageAmount = results.TotalDamage;
-        GD.Print($"[DeckTracker] AfterDamageGivenPostfix. Damage: {damageAmount}, Target: {target.Name}, Source: {cardSource?.Id.Entry}");
+        Log.Debug($"AfterDamageGivenPostfix. Damage: {damageAmount}, Target: {target.Name}, Source: {cardSource?.Id.Entry}");
 
         if (CardRegistry.PendingBootDamage.Value > 0)
         {
             damageAmount -= CardRegistry.PendingBootDamage.Value;
             CardRegistry.PendingBootDamage.Value = 0;
-            GD.Print($"[DeckTracker]   -> Reduced by Boot: {damageAmount}");
+            Log.VeryDebug($"  -> Reduced by Boot: {damageAmount}");
         }
 
         if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))

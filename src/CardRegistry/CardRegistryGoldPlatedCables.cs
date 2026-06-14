@@ -15,7 +15,7 @@ public static partial class CardRegistry
         {
             EotPassiveCounts.Clear();
             CurrentTurnLoopQueue.Clear(); // (If you still use this for Loop)
-            GD.Print("[DeckTracker] ResetOrbTurnState");
+            Log.Debug("ResetOrbTurnState. Orb turn state cleared.");
         }
     }
 }

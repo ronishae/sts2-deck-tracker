@@ -11,7 +11,7 @@ internal static partial class HookPatches
 {
     public static void OrbChannelPostfix(PlayerChoiceContext choiceContext, OrbModel orb, Player player) => Guard(nameof(OrbChannelPostfix), () =>
     {
-        GD.Print($"[DeckTracker] OrbChannelPostfix. Orb: {orb.Id.Entry}");
+        Log.VeryDebug($"OrbChannelPostfix. Orb: {orb.Id.Entry}");
         CardRegistry.RegisterChanneledOrb(orb, CardRegistry.CurrentPlayingCard);
     });
 
@@ -43,7 +43,7 @@ internal static partial class HookPatches
                 }
             }
         }
-        GD.Print($"[DeckTracker] OrbPassivePrefix. Orb: {__instance.Id.Entry}, ForcingActor: {forcingActor}");
+        Log.VeryDebug($"OrbPassivePrefix. Orb: {__instance.Id.Entry}, ForcingActor: {forcingActor}");
         CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, false, __instance.PassiveVal, forcingActor);
     });
 
@@ -51,7 +51,7 @@ internal static partial class HookPatches
     {
         try
         {
-            GD.Print($"[DeckTracker] OrbPassivePostfix. Orb: {__instance.Id.Entry}");
+            Log.VeryDebug($"OrbPassivePostfix. Orb: {__instance.Id.Entry}");
             __result = CardRegistry.AwaitOrbExecutionTaskAsync(__result, __instance, isEvoke: false);
         }
         catch (Exception e)
@@ -62,7 +62,7 @@ internal static partial class HookPatches
 
     public static void OrbEvokePrefix(OrbModel __instance) => Guard(nameof(OrbEvokePrefix), () =>
     {
-        GD.Print($"[DeckTracker] OrbEvokePrefix. Orb: {__instance.Id.Entry}");
+        Log.VeryDebug($"OrbEvokePrefix. Orb: {__instance.Id.Entry}");
         CardRegistry.ExecutingOrb = new OrbExecutionContext(__instance, true, __instance.EvokeVal);
     });
 
@@ -70,7 +70,7 @@ internal static partial class HookPatches
     {
         try
         {
-            GD.Print($"[DeckTracker] OrbEvokePostfix. Orb: {__instance.Id.Entry}");
+            Log.VeryDebug($"OrbEvokePostfix. Orb: {__instance.Id.Entry}");
             __result = CardRegistry.AwaitOrbEvokeTaskAsync(__result, __instance);
         }
         catch (Exception e)
@@ -81,7 +81,7 @@ internal static partial class HookPatches
 
     public static void TempFocusApplyPrefix(TemporaryFocusPower __instance) => Guard(nameof(TempFocusApplyPrefix), () =>
     {
-        GD.Print("[DeckTracker] TempFocusApplyPrefix.");
+        Log.VeryDebug("TempFocusApplyPrefix.");
         CardRegistry.IsApplyingTemporaryFocus.Value = true;
     });
 
@@ -99,7 +99,7 @@ internal static partial class HookPatches
 
     public static void TempFocusExpirePrefix(TemporaryFocusPower __instance) => Guard(nameof(TempFocusExpirePrefix), () =>
     {
-        GD.Print("[DeckTracker] TempFocusExpirePrefix.");
+        Log.VeryDebug("TempFocusExpirePrefix.");
         CardRegistry.IsExpiringTemporaryFocus.Value = true;
     });
 
@@ -117,7 +117,7 @@ internal static partial class HookPatches
 
     public static void LoopPrefix(LoopPower __instance) => Guard(nameof(LoopPrefix), () =>
     {
-        GD.Print("[DeckTracker] LoopPrefix.");
+        Log.VeryDebug("LoopPrefix.");
         CardRegistry.IsLoopExecuting.Value = true;
         CardRegistry.CurrentTurnLoopQueue.Clear();
         lock (CardRegistry.SyncRoot)

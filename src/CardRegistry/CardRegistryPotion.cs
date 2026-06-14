@@ -33,7 +33,7 @@ public static partial class CardRegistry
                 FloorObtained = floor,
                 IsActive = true
             };
-            GD.Print($"[DeckTracker] Procured Potion: {displayName} ({id})");
+            Log.Debug($"Procured Potion: {displayName} ({id})");
         }
 
         ForcePublish();

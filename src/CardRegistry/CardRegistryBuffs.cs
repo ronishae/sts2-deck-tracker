@@ -102,7 +102,7 @@ public static partial class CardRegistry
             PersistentLedgers.Clear();
             ConsumableLedgers.Clear();
             EnemyDebuffLedgers.Clear();
-            GD.Print("[DeckTracker] ResetBuffState. All buff ledgers cleared.");
+            Log.Debug("ResetBuffState. All buff ledgers cleared.");
         }
     }
 
@@ -119,7 +119,7 @@ public static partial class CardRegistry
                 ConsumableLedgers[buffType] = new List<Contribution>();
             }
             ConsumableLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] AddConsumableBuffById. Added {amount} {buffType} to Consumable FIFO ledger for {trackingId}");
+            Log.Debug($"AddConsumableBuffById. Added {amount} {buffType} to Consumable FIFO ledger for {trackingId}");
         }
     }
 
@@ -147,7 +147,7 @@ public static partial class CardRegistry
             }
             
             DurationLedgers[target][buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] AddDurationBuff. Added {amount} {buffType} to Duration FIFO ledger for {trackingId} on {target.Name}");
+            Log.Debug($"AddDurationBuff. Added {amount} {buffType} to Duration FIFO ledger for {trackingId} on {target.Name}");
         }
     }
 
@@ -169,7 +169,7 @@ public static partial class CardRegistry
             }
 
             var remainingToRemove = amount;
-            GD.Print($"[DeckTracker] RemoveDurationBuff. Removing {amount} {buffType} from {target.Name}");
+            Log.Debug($"RemoveDurationBuff. Removing {amount} {buffType} from {target.Name}");
             
             // FIFO removal because older durations tick down first!
             for (int i = 0; i < ledger.Count; i++)
@@ -182,7 +182,7 @@ public static partial class CardRegistry
                 decimal erased = Math.Min(remainingToRemove, contribution.Amount);
                 contribution.Amount -= erased;
                 remainingToRemove -= erased;
-                GD.Print($"[DeckTracker]   -> Erased {erased} from {contribution.TrackingId}");
+                Log.VeryDebug($"  -> Erased {erased} from {contribution.TrackingId}");
             }
             ledger.RemoveAll(c => c.Amount <= 0);
         }
@@ -206,7 +206,7 @@ public static partial class CardRegistry
             
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
             PersistentLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] AddPersistentBuff. Added {amount} {buffType} to persistent ledger for {trackingId}");
+            Log.Debug($"AddPersistentBuff. Added {amount} {buffType} to persistent ledger for {trackingId}");
         }
     }
     
@@ -224,7 +224,7 @@ public static partial class CardRegistry
                 PersistentLedgers[buffType] = new List<Contribution>();
             }
             PersistentLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] AddPersistentBuffById. Added {amount} {buffType} to Persistent ledger for {trackingId}");
+            Log.Debug($"AddPersistentBuffById. Added {amount} {buffType} to Persistent ledger for {trackingId}");
         }
     }
     
@@ -242,7 +242,7 @@ public static partial class CardRegistry
             }
             
             var remainingToRemove = amount;
-            GD.Print($"[DeckTracker] RemovePersistentBuff. Removing {amount} {buffType}");
+            Log.Debug($"RemovePersistentBuff. Removing {amount} {buffType}");
             
             // Remove LIFO (Last-In-First-Out) for things like Temporary Strength expiring or Debuffs
             for (int i = ledger.Count - 1; i >= 0; i--)
@@ -256,7 +256,7 @@ public static partial class CardRegistry
                 decimal erased = Math.Min(remainingToRemove, contribution.Amount);
                 contribution.Amount -= erased;
                 remainingToRemove -= erased;
-                GD.Print($"[DeckTracker]   -> Erased {erased} from {contribution.TrackingId}");
+                Log.VeryDebug($"  -> Erased {erased} from {contribution.TrackingId}");
             }
             ledger.RemoveAll(c => c.Amount <= 0);
         }
@@ -278,7 +278,7 @@ public static partial class CardRegistry
             
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Buff";
             ConsumableLedgers[buffType].Add(new Contribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] AddConsumableBuff. Added {amount} {buffType} to consumable FIFO ledger for {trackingId}");
+            Log.Debug($"AddConsumableBuff. Added {amount} {buffType} to consumable FIFO ledger for {trackingId}");
         }
     }
 
@@ -296,7 +296,7 @@ public static partial class CardRegistry
             }
 
             var remainingToRemove = amount;
-            GD.Print($"[DeckTracker] RemoveConsumableBuff. Consuming {amount} {buffType}");
+            Log.Debug($"RemoveConsumableBuff. Consuming {amount} {buffType}");
             
             // Remove FIFO (First-In-First-Out) because older Vigor gets consumed first!
             for (int i = 0; i < ledger.Count; i++)
@@ -310,7 +310,7 @@ public static partial class CardRegistry
                 decimal erased = Math.Min(remainingToRemove, contribution.Amount);
                 contribution.Amount -= erased;
                 remainingToRemove -= erased;
-                GD.Print($"[DeckTracker]   -> Erased {erased} from {contribution.TrackingId}");
+                Log.VeryDebug($"  -> Erased {erased} from {contribution.TrackingId}");
             }
             ledger.RemoveAll(c => c.Amount <= 0);
         }

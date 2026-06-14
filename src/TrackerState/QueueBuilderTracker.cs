@@ -23,7 +23,7 @@ public class QueueBuilderTracker : PowerTrackerBase
             _queue.Clear();
             _isExecuting.Value = false;
             _spinnerIndex = 0;
-            GD.Print($"[DeckTracker] Reset ({PowerId}). State cleared.");
+            Log.Debug($"Reset ({PowerId}). State cleared.");
         }
     }
 
@@ -37,7 +37,7 @@ public class QueueBuilderTracker : PowerTrackerBase
         {
             var id = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : "External_Source";
             _ledger.Add(new Contribution { TrackingId = id, Amount = amount });
-            GD.Print($"[DeckTracker] LogApply ({PowerId}). Source: {id}, Amount: {amount}");
+            Log.Debug($"LogApply ({PowerId}). Source: {id}, Amount: {amount}");
         }
     }
 
@@ -53,7 +53,7 @@ public class QueueBuilderTracker : PowerTrackerBase
             {
                 _queue.Enqueue(trackingId);
             }
-            GD.Print($"[DeckTracker] AddDirectCharges ({PowerId}). Source: {trackingId}, Count: {amount}");
+            Log.Debug($"AddDirectCharges ({PowerId}). Source: {trackingId}, Count: {amount}");
         }
     }
 
@@ -69,7 +69,7 @@ public class QueueBuilderTracker : PowerTrackerBase
                     _queue.Enqueue(contribution.TrackingId);
                 }
             }
-            GD.Print($"[DeckTracker] FlattenLedgerToQueue ({PowerId}). Queue size: {_queue.Count}");
+            Log.VeryDebug($"FlattenLedgerToQueue ({PowerId}). Queue size: {_queue.Count}");
         }
     }
 
@@ -85,7 +85,7 @@ public class QueueBuilderTracker : PowerTrackerBase
                 {
                     var id = list[_spinnerIndex];
                     _spinnerIndex++;
-                    GD.Print($"[DeckTracker] GetNextIdForOrb (Spinner). Index: {_spinnerIndex - 1}, ID: {id}");
+                    Log.VeryDebug($"GetNextIdForOrb (Spinner). Index: {_spinnerIndex - 1}, ID: {id}");
                     return id;
                 }
                 return null;
@@ -93,7 +93,7 @@ public class QueueBuilderTracker : PowerTrackerBase
 
             if (_queue.TryDequeue(out string? dequeuedId))
             {
-                GD.Print($"[DeckTracker] GetNextIdForOrb. Dequeued: {dequeuedId}");
+                Log.VeryDebug($"GetNextIdForOrb. Dequeued: {dequeuedId}");
                 return dequeuedId;
             }
         }
@@ -119,7 +119,7 @@ public class QueueBuilderTracker : PowerTrackerBase
         if (PowerId == "SPINNER_POWER")
         {
             _spinnerIndex = 0;
-            GD.Print($"[DeckTracker] StartExecution ({PowerId}). Spinner index reset.");
+            Log.VeryDebug($"StartExecution ({PowerId}). Spinner index reset.");
         }
 
         _isExecuting.Value = true;
@@ -141,7 +141,7 @@ public class QueueBuilderTracker : PowerTrackerBase
                 if (flatten)
                 {
                     _queue.Clear();
-                    GD.Print($"[DeckTracker] AwaitTaskAsync ({PowerId}). Queue cleared.");
+                    Log.Debug($"AwaitTaskAsync ({PowerId}). Queue cleared.");
                 }
             }
         }

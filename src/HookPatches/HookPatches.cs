@@ -28,14 +28,14 @@ internal static partial class HookPatches
 
     private static void LogHookError(string hookName, Exception e)
     {
-        GD.PrintErr($"[DeckTracker] {hookName} failed: {e}");
+        Log.Error($"{hookName} failed: {e}");
     }
 
     public static void AfterRoomEnteredPostfix(IRunState runState, AbstractRoom room) => Guard(nameof(AfterRoomEnteredPostfix), () =>
     {
         var currentFloor = ExtractFloorNum(runState);
         var activeDeckIds = ScanDeckForCards(runState);
-        GD.Print($"[DeckTracker] AfterRoomEnteredPostfix. Floor: {currentFloor}, Room: {room.RoomType}");
+        Log.Info($"AfterRoomEnteredPostfix. Floor: {currentFloor}, Room: {room.RoomType}");
         CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
         CardRegistry.SaveState();
     });
@@ -43,7 +43,7 @@ internal static partial class HookPatches
     public static void BeforeRoomEnteredPrefix(IRunState? runState, AbstractRoom room) => Guard(nameof(BeforeRoomEnteredPrefix), () =>
     {
         var seed = ExtractRunSeed(runState);
-        GD.Print($"[DeckTracker] BeforeRoomEnteredPrefix. Seed: {seed}, Room: {room.RoomType}");
+        Log.Info($"BeforeRoomEnteredPrefix. Seed: {seed}, Room: {room.RoomType}");
         CardRegistry.SyncRun(seed);
     });
 
@@ -54,7 +54,7 @@ internal static partial class HookPatches
         var combatType = GetCombatType(runState);
         var activeDeckIds = ScanDeckForCards(runState);
 
-        GD.Print($"[DeckTracker] BeforeCombatStartPostfix. Floor: {currentFloor}, Act: {currentAct}, Type: {combatType}");
+        Log.Info($"BeforeCombatStartPostfix. Floor: {currentFloor}, Act: {currentAct}, Type: {combatType}");
 
         CardRegistry.StartCombat(combatType, currentFloor, currentAct, activeDeckIds);
         CardRegistry.ForcePublish();
@@ -68,13 +68,13 @@ internal static partial class HookPatches
 
     public static void AfterSideTurnStartPostfix(ICombatState combatState, CombatSide side, IReadOnlyList<Creature> participants) => Guard(nameof(AfterSideTurnStartPostfix), () =>
     {
-        GD.Print($"[DeckTracker] AfterSideTurnStartPostfix. Side: {side}");
+        Log.Debug($"AfterSideTurnStartPostfix. Side: {side}");
         CardRegistry.ResetOrbTurnState();
     });
 
     public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState) => Guard(nameof(AfterCombatEndPostfix), () =>
     {
-        GD.Print("[DeckTracker] AfterCombatEndPostfix.");
+        Log.Info("AfterCombatEndPostfix.");
         CardRegistry.ProcessCombatEnd();
     });
 

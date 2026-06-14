@@ -14,7 +14,7 @@ public static partial class CardRegistry
         {
             ForgeHistory.Clear();
             FurnaceContributions.Clear();
-            GD.Print("[DeckTracker] ResetForgeState. Forge state cleared.");
+            Log.Debug("ResetForgeState. Forge state cleared.");
         }
     }
 
@@ -26,7 +26,7 @@ public static partial class CardRegistry
             stats.RawForgeCombat += rawForge;
             stats.ConnectedForgeCombat += connectedForge;
             stats.ReceivedForgeCombat += receivedForge;
-            GD.Print($"[DeckTracker] Added {rawForge} Raw / {connectedForge} Connected Forge to Relic: {relicId}");
+            Log.Debug($"Added {rawForge} Raw / {connectedForge} Connected Forge to Relic: {relicId}");
         }
         Publish();
     }
@@ -65,7 +65,7 @@ public static partial class CardRegistry
             if (amount > 0)
             {
                 FurnaceContributions.Add(new FurnaceContribution { CardSource = cardSource, PowerAmount = amount });
-                GD.Print($"[DeckTracker] Furnace contribution added: {GetTrackingId(cardSource)} for {amount} power.");
+                Log.Debug($"Furnace contribution added: {GetTrackingId(cardSource)} for {amount} power.");
             }
         }
         Publish();
@@ -78,10 +78,10 @@ public static partial class CardRegistry
         {
             if (!PotionInstanceIds.TryGetValue(potion, out potionId))
             {
-                GD.Print($"[DeckTracker] AddPotionForge. Potion: {potion.Id.Entry} not found in PotionInstanceIds.");
+                Log.Warn($"AddPotionForge. Potion: {potion.Id.Entry} not found in PotionInstanceIds.");
                 return;
             }
-            GD.Print($"[DeckTracker] AddPotionForge. Potion: {potion.Id.Entry}, Id: {potionId}, Amount: {amount}");
+            Log.Debug($"AddPotionForge. Potion: {potion.Id.Entry}, Id: {potionId}, Amount: {amount}");
         }
         AddForgeById(potionId, amount);
     }
@@ -105,13 +105,13 @@ public static partial class CardRegistry
 
             if (remainingForge > 0)
             {
-                GD.Print($"[DeckTracker] Warning: Furnace forge triggered with {remainingForge} unaccounted for by card history.");
+                Log.Warn($"HandleFurnaceForge. Furnace forge triggered with {remainingForge} unaccounted for by card history.");
             }
         }
 
         foreach (var attr in attributions)
         {
-            GD.Print($"[DeckTracker] Attributing {attr.amount} forge to Furnace source {GetTrackingId(attr.card)}.");
+            Log.Debug($"Attributing {attr.amount} forge to Furnace source {GetTrackingId(attr.card)}.");
             AddForge(attr.card, attr.amount);
         }
     }

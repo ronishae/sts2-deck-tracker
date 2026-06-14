@@ -65,12 +65,12 @@ public static partial class CardRegistry
     {
         _currentPlayingCard.Value = card;
         _deferredDraws.Value = new List<CardModel>();
-        GD.Print($"[DeckTracker] StartCardPlay. Card: {card.Id.Entry}");
+        Log.Debug($"StartCardPlay. Card: {card.Id.Entry}");
     }
 
     public static void EndCardPlay()
     {
-        GD.Print("[DeckTracker] EndCardPlay.");
+        Log.Debug("EndCardPlay.");
         ProcessDeferredDraws();
         _deferredDraws.Value = null;
         _currentPlayingCard.Value = null;
@@ -85,7 +85,7 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            GD.Print($"[DeckTracker] ClearStateForTarget. Target: {target.Name}");
+            Log.Debug($"ClearStateForTarget. Target: {target.Name}");
             PoisonShares.Remove(target);
             foreach (var tracker in TargetedTrackers.Values)
             {
@@ -108,7 +108,7 @@ public static partial class CardRegistry
         
         foreach (var card in _deferredDraws.Value)
         {
-            GD.Print($"[DeckTracker] ProcessDeferredDraws. Registering deferred draw: {card.Id.Entry}");
+            Log.Debug($"ProcessDeferredDraws. Registering deferred draw: {card.Id.Entry}");
             RegisterCard(card);
             AddDraw(card);
         }
@@ -139,11 +139,11 @@ public static partial class CardRegistry
 
             if (TryLoadState(runSeed))
             {
-                GD.Print($"[DeckTracker] SyncRun. Resumed run data for seed: {runSeed}");
+                Log.Info($"SyncRun. Resumed run data for seed: {runSeed}");
             }
             else
             {
-                GD.Print($"[DeckTracker] SyncRun. Starting fresh tracker for seed: {runSeed}");
+                Log.Info($"SyncRun. Starting fresh tracker for seed: {runSeed}");
                 ResetRun();
             }
             RestoreLiveInstances();
@@ -178,11 +178,11 @@ public static partial class CardRegistry
 
             string json = JsonSerializer.Serialize(state, SavedStateCtx.Default.SavedRunState);
             System.IO.File.WriteAllText(SavePath, json);
-            GD.Print("[DeckTracker] SaveState. State saved successfully.");
+            Log.Info("SaveState. State saved successfully.");
         }
         catch (Exception e)
         {
-            GD.PrintErr($"[DeckTracker] SaveState Failed: {e.Message}");
+            Log.Error($"SaveState Failed: {e.Message}");
         }
     }
 
@@ -192,7 +192,7 @@ public static partial class CardRegistry
         {
             if (!System.IO.File.Exists(SavePath))
             {
-                GD.Print("[DeckTracker] TryLoadState. No save file found.");
+                Log.Debug("TryLoadState. No save file found.");
                 return false;
             }
 
@@ -201,7 +201,7 @@ public static partial class CardRegistry
 
             if (state == null || state.RunSeed != targetSeed)
             {
-                GD.Print($"[DeckTracker] TryLoadState. Seed mismatch or null state. Expected: {targetSeed}, Got: {state?.RunSeed}");
+                Log.Debug($"TryLoadState. Seed mismatch or null state. Expected: {targetSeed}, Got: {state?.RunSeed}");
                 return false;
             }
 
@@ -214,7 +214,7 @@ public static partial class CardRegistry
         }
         catch (Exception e)
         {
-            GD.PrintErr($"[DeckTracker] TryLoadState Failed: {e.Message}");
+            Log.Error($"TryLoadState Failed: {e.Message}");
             return false;
         }
     }
@@ -235,7 +235,7 @@ public static partial class CardRegistry
         }
         catch (Exception e)
         {
-            GD.PrintErr($"[DeckTracker] ResolveOwnerNetId failed: {e.Message}");
+            Log.Error($"ResolveOwnerNetId failed: {e.Message}");
         }
         return UnknownOwnerKey;
     }
@@ -436,7 +436,7 @@ public static partial class CardRegistry
             {
                 tracker.Reset();
             }
-            GD.Print("[DeckTracker] ResetInternalsCombat. All state reset.");
+            Log.Info("ResetInternalsCombat. All state reset.");
         }
     }
     
@@ -445,7 +445,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             _currentRunSeed = "";
-            GD.Print("[DeckTracker] ClearSession. Session cleared.");
+            Log.Info("ClearSession. Session cleared.");
         }
     }
     
@@ -466,7 +466,7 @@ public static partial class CardRegistry
             _playerIndexByNetId.Clear();
             PlayerLabels.Clear();
             _steamNameCache.Clear();
-            GD.Print("[DeckTracker] ResetRun. Run state cleared.");
+            Log.Info("ResetRun. Run state cleared.");
         }
         Publish();
     }
@@ -478,12 +478,12 @@ public static partial class CardRegistry
             var copyCounts = activeDeckIds.GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());
             var uniqueActiveIds = new HashSet<string>(activeDeckIds);
             
-            GD.Print($"[DeckTracker] SyncDeckState. Floor: {currentFloor}, Active Count: {activeDeckIds.Count}");
+            Log.Debug($"SyncDeckState. Floor: {currentFloor}, Active Count: {activeDeckIds.Count}");
             foreach (var stat in EntityLedger.Values.OfType<CardStats>())
             {
                 if (stat.IsActive && !uniqueActiveIds.Contains(stat.Id))
                 {
-                    GD.Print($"[DeckTracker]   -> {stat.Id} removed from deck");
+                    Log.VeryDebug($"  -> {stat.Id} removed from deck");
                     stat.IsActive = false;
                     stat.CopiesInDeck = 0;
                         
@@ -512,7 +512,7 @@ public static partial class CardRegistry
     public static void SetPlayerLabel(int playerIndex, string label)
     {
         PlayerLabels[playerIndex] = label;
-        GD.Print($"[DeckTracker] SetPlayerLabel. Player {playerIndex}: {label}");
+        Log.Debug($"SetPlayerLabel. Player {playerIndex}: {label}");
     }
 
     // Records a player's stable NetId -> ordered index mapping (used only for row colour/ordering).
@@ -543,7 +543,7 @@ public static partial class CardRegistry
             var netService = RunManager.Instance?.NetService;
             if (netService?.Platform == null)
             {
-                GD.Print("[DeckTracker] GetPlayerDisplayName. NetService unavailable, using character title.");
+                Log.Warn("GetPlayerDisplayName. NetService unavailable, using character title.");
                 return characterTitle;
             }
 
@@ -558,7 +558,7 @@ public static partial class CardRegistry
         }
         catch (Exception e)
         {
-            GD.PrintErr($"[DeckTracker] GetPlayerDisplayName failed, using character title: {e.Message}");
+            Log.Error($"GetPlayerDisplayName failed, using character title: {e.Message}");
             return characterTitle;
         }
     }
@@ -626,7 +626,7 @@ public static partial class CardRegistry
                 ((PotionStats)EntityLedger[existingId]).Model = potion;
             }
         }
-        GD.Print("[DeckTracker] RestoreLiveInstances. Live object references restored.");
+        Log.Debug("RestoreLiveInstances. Live object references restored.");
     }
     
     public static void StartCombat(string combatType, int currentFloor, int currentAct, List<string> activeDeckIds)
@@ -637,7 +637,7 @@ public static partial class CardRegistry
         {
             _currentAct = currentAct;
             _currentCombatType = combatType;
-            GD.Print($"[DeckTracker] StartCombat. Type: {_currentCombatType}, Act: {_currentAct}");
+            Log.Info($"StartCombat. Type: {_currentCombatType}, Act: {_currentAct}");
             
             foreach (var entity in EntityLedger.Values)
             {
@@ -666,7 +666,7 @@ public static partial class CardRegistry
     
     public static void ProcessCombatEnd()
     {
-        GD.Print("[DeckTracker] ProcessCombatEnd.");
+        Log.Info("ProcessCombatEnd.");
         lock (SyncRoot)
         {
             ResetInternalsCombat();
@@ -682,7 +682,7 @@ public static partial class CardRegistry
         {
             if (EntityLedger.TryGetValue(uniqueTrackingId, out var entity) && entity is CardStats stat)
             {
-                GD.Print($"[DeckTracker] HandleRemove. Card: {uniqueTrackingId}");
+                Log.Debug($"HandleRemove. Card: {uniqueTrackingId}");
                 if (stat.CopiesInDeck > 1)
                 {
                     stat.CopiesInDeck--;
@@ -727,7 +727,7 @@ public static partial class CardRegistry
             {
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
                 string enchantName = sourceCard.Enchantment?.Id.Entry ?? "";
-                GD.Print($"[DeckTracker] RegisterCard. NEW Card: {uniqueTrackingId}, Generated: {isGenerated}");
+                Log.Debug($"RegisterCard. NEW Card: {uniqueTrackingId}, Generated: {isGenerated}");
                 stat = new CardStats
                 {
                     Id = uniqueTrackingId,
@@ -766,7 +766,7 @@ public static partial class CardRegistry
                 var actData = entity.GetAct(_currentAct);
                 if (actData != null) actData.TimesDrawn++;
                 entity.CombatTimesDrawn++;
-                GD.Print($"[DeckTracker] AddDraw. Card: {uniqueTrackingId}");
+                Log.Debug($"AddDraw. Card: {uniqueTrackingId}");
             }
         }
         Publish();
@@ -782,7 +782,7 @@ public static partial class CardRegistry
                 var actData = entity.GetAct(_currentAct);
                 if (actData != null) actData.TimesPlayed++;
                 entity.CombatTimesPlayed++;
-                GD.Print($"[DeckTracker] AddPlay. Card: {uniqueTrackingId}");
+                Log.Debug($"AddPlay. Card: {uniqueTrackingId}");
             }
         }
         Publish();
@@ -806,7 +806,7 @@ public static partial class CardRegistry
             if (EntityLedger.TryGetValue(trackingId, out var entity))
             {
                 entity.AddCombatDamage(amount, _currentAct, _currentCombatType);
-                GD.Print($"[DeckTracker] AddDamageById. Amount: {amount}, ID: {trackingId}");
+                Log.Debug($"AddDamageById. Amount: {amount}, ID: {trackingId}");
             }
         }
         Publish();

@@ -17,7 +17,7 @@ public class InstancedPowerTracker : ITrackerState
         {
             _instanceMap = new ConditionalWeakTable<PowerModel, string>();
             _executingSourceId.Value = null;
-            GD.Print("[DeckTracker] Reset (InstancedTracker). Memory map cleared.");
+            Log.Debug("Reset (InstancedTracker). Memory map cleared.");
         }
     }
 
@@ -33,7 +33,7 @@ public class InstancedPowerTracker : ITrackerState
             {
                 string id = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : fallback;
                 _instanceMap.Add(power, id);
-                GD.Print($"[DeckTracker] LogInstance. Power: {power.Id.Entry} ({power.GetHashCode()}) mapped to {id}");
+                Log.Debug($"LogInstance. Power: {power.Id.Entry} ({power.GetHashCode()}) mapped to {id}");
             }
         }
     }
@@ -51,7 +51,7 @@ public class InstancedPowerTracker : ITrackerState
     public void StartExecution(PowerModel power)
     {
         _executingSourceId.Value = GetIdForInstance(power);
-        GD.Print($"[DeckTracker] StartExecution (Instanced). Power: {power.Id.Entry}, Mapped Source: {_executingSourceId.Value}");
+        Log.VeryDebug($"StartExecution (Instanced). Power: {power.Id.Entry}, Mapped Source: {_executingSourceId.Value}");
     }
 
     public async Task AwaitTaskAsync(Task originalTask, PowerModel power)
@@ -64,7 +64,7 @@ public class InstancedPowerTracker : ITrackerState
         finally
         {
             _executingSourceId.Value = null;
-            GD.Print($"[DeckTracker] AwaitTaskAsync (Instanced) finished. Power: {power.Id.Entry}");
+            Log.VeryDebug($"AwaitTaskAsync (Instanced) finished. Power: {power.Id.Entry}");
         }
     }
 }

@@ -29,7 +29,7 @@ public static partial class CardRegistry
         // A rolling multiplier pool. Debuffs will permanently stay in this pool.
         var activeMultipliers = totalMultipliers;
 
-        GD.Print($"[DeckTracker] ProcessDamageSnapshot. Total Calculated: {currentCalculatedDamage}, Actual: {actualDealtDamage}, Overkill: {overkill}, Extra: {extraDamage}");
+        Log.Debug($"ProcessDamageSnapshot. Total Calculated: {currentCalculatedDamage}, Actual: {actualDealtDamage}, Overkill: {overkill}, Extra: {extraDamage}");
 
         // --- MULTIPLIER PEEL (First) ---
         for (int i = snapshot.MultiplicativeModifiers.Count - 1; i >= 0; i--)
@@ -71,7 +71,7 @@ public static partial class CardRegistry
                             if (!paid)
                             {
                                 extraDamage += awarded;
-                                GD.Print($"[DeckTracker] ProcessDamageSnapshot. Unattributed {awarded} damage from {id} routed to Base Card.");
+                                Log.Warn($"ProcessDamageSnapshot. Unattributed {awarded} damage from {id} routed to Base Card.");
                             }
                         }
                     }
@@ -105,7 +105,7 @@ public static partial class CardRegistry
                     if (!paid)
                     {
                         extraDamage += awardedDamage;
-                        GD.Print($"[DeckTracker] ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
+                        Log.Warn($"ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
                     }
                 }
 
@@ -139,7 +139,7 @@ public static partial class CardRegistry
                 if (!paid)
                 {
                     extraDamage += awardedDamage;
-                    GD.Print($"[DeckTracker] ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {addMod.PowerId} routed to Base Card.");
+                    Log.Warn($"ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {addMod.PowerId} routed to Base Card.");
                 }
             }
 
@@ -152,7 +152,7 @@ public static partial class CardRegistry
     // Returns true if it found a card to payout to, false if not (un-attributed environmental damage — e.g. Slow).
     private static bool PayoutMultiplierDamage(string powerId, decimal amount, Creature? target, Creature? dealer, PowerModel? powerInstance = null)
     {
-        GD.Print($"[DeckTracker] PayoutMultiplierDamage. Power: {powerId}, Amount: {amount}");
+        Log.VeryDebug($"PayoutMultiplierDamage. Power: {powerId}, Amount: {amount}");
 
         if (EntityLedger.ContainsKey("RELIC_" + powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG")
         {
@@ -167,7 +167,7 @@ public static partial class CardRegistry
             if (instId != null)
             {
                 AddDamageById(instId, amount);
-                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Instanced). Paid {amount} to {instId}");
+                Log.VeryDebug($"PayoutMultiplierDamage (Instanced). Paid {amount} to {instId}");
                 return true;
             }
         }
@@ -183,7 +183,7 @@ public static partial class CardRegistry
                 decimal payout = remainingToPay;
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
-                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Target Duration). Paid {payout} to {contribution.TrackingId}");
+                Log.VeryDebug($"PayoutMultiplierDamage (Target Duration). Paid {payout} to {contribution.TrackingId}");
             }
             return true;
         }
@@ -199,7 +199,7 @@ public static partial class CardRegistry
                 decimal payout = remainingToPay;
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
-                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Dealer Duration). Paid {payout} to {contribution.TrackingId}");
+                Log.VeryDebug($"PayoutMultiplierDamage (Dealer Duration). Paid {payout} to {contribution.TrackingId}");
             }
             return true;
         }
@@ -214,7 +214,7 @@ public static partial class CardRegistry
                 decimal payout = Math.Min(remainingToPay, contribution.Amount);
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
-                GD.Print($"[DeckTracker] PayoutMultiplierDamage (Consumable). Paid {payout} to {contribution.TrackingId}");
+                Log.VeryDebug($"PayoutMultiplierDamage (Consumable). Paid {payout} to {contribution.TrackingId}");
             }
             return true;
         }
@@ -234,7 +234,7 @@ public static partial class CardRegistry
                     if (i == persistentLedger.Count - 1)
                     {
                         AddDamageById(contribution.TrackingId, remainingToPay);
-                        GD.Print($"[DeckTracker] PayoutMultiplierDamage (Persistent Remainder). Paid {remainingToPay} to {contribution.TrackingId}");
+                        Log.VeryDebug($"PayoutMultiplierDamage (Persistent Remainder). Paid {remainingToPay} to {contribution.TrackingId}");
                         break;
                     }
 
@@ -243,7 +243,7 @@ public static partial class CardRegistry
                     {
                         AddDamageById(contribution.TrackingId, share);
                         remainingToPay -= share;
-                        GD.Print($"[DeckTracker] PayoutMultiplierDamage (Persistent Share). Paid {share} to {contribution.TrackingId}");
+                        Log.VeryDebug($"PayoutMultiplierDamage (Persistent Share). Paid {share} to {contribution.TrackingId}");
                     }
                 }
             }
@@ -255,7 +255,7 @@ public static partial class CardRegistry
 
     private static bool PayoutAdditiveDamage(string powerId, decimal amount)
     {
-        GD.Print($"[DeckTracker] PayoutAdditiveDamage. Power: {powerId}, Amount: {amount}");
+        Log.VeryDebug($"PayoutAdditiveDamage. Power: {powerId}, Amount: {amount}");
 
         if (EntityLedger.ContainsKey("RELIC_" + powerId) || powerId == "STRIKE_DUMMY" || powerId == "FAKE_STRIKE_DUMMY"
             || powerId == "MYSTIC_LIGHTER" || powerId == "MINIATURE_CANNON")
@@ -274,7 +274,7 @@ public static partial class CardRegistry
                 decimal payout = Math.Min(remainingToPay, contribution.Amount);
                 AddDamageById(contribution.TrackingId, payout);
                 remainingToPay -= payout;
-                GD.Print($"[DeckTracker] PayoutAdditiveDamage (Consumable). Paid {payout} to {contribution.TrackingId}");
+                Log.VeryDebug($"PayoutAdditiveDamage (Consumable). Paid {payout} to {contribution.TrackingId}");
             }
             return true;
         }
@@ -294,7 +294,7 @@ public static partial class CardRegistry
                     if (i == persistentLedger.Count - 1)
                     {
                         AddDamageById(contribution.TrackingId, remainingToPay);
-                        GD.Print($"[DeckTracker] PayoutAdditiveDamage (Persistent Remainder). Paid {remainingToPay} to {contribution.TrackingId}");
+                        Log.VeryDebug($"PayoutAdditiveDamage (Persistent Remainder). Paid {remainingToPay} to {contribution.TrackingId}");
                         break;
                     }
 
@@ -303,7 +303,7 @@ public static partial class CardRegistry
                     {
                         AddDamageById(contribution.TrackingId, share);
                         remainingToPay -= share;
-                        GD.Print($"[DeckTracker] PayoutAdditiveDamage (Persistent Share). Paid {share} to {contribution.TrackingId}");
+                        Log.VeryDebug($"PayoutAdditiveDamage (Persistent Share). Paid {share} to {contribution.TrackingId}");
                     }
                 }
             }

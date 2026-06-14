@@ -36,7 +36,7 @@ public static partial class CardRegistry
             ConquerorTracker.Clear();
             BladeReplayModifierTracker.Clear();
             _activeSeekingEdgeCard = null;
-            GD.Print("[DeckTracker] ResetSovereignBladeState. All sovereign blade state cleared.");
+            Log.Debug("ResetSovereignBladeState. All sovereign blade state cleared.");
         }
     }
 
@@ -48,7 +48,7 @@ public static partial class CardRegistry
     public static void UpdateSeekingEdge(CardModel seekingEdgeCard)
     {
         _activeSeekingEdgeCard ??= seekingEdgeCard;
-        GD.Print($"[DeckTracker] Updated active seeking edge: {GetTrackingId(_activeSeekingEdgeCard)}.");
+        Log.Debug($"Updated active seeking edge: {GetTrackingId(_activeSeekingEdgeCard)}.");
     }
     
     public static void UpdateConquerorTracker(Creature target, decimal powerChangeAmount, CardModel? cardSource)
@@ -62,12 +62,12 @@ public static partial class CardRegistry
                 {
                     var uniqueTrackingId = GetTrackingId(cardSource);
                     conquerorQueue.Enqueue(uniqueTrackingId);
-                    GD.Print($"[DeckTracker] Conqueror card queued with id {uniqueTrackingId}");
+                    Log.Debug($"UpdateConquerorTracker. Conqueror card queued. ID: {uniqueTrackingId}");
                 }
                 break;
             case < 0:
                 var dequeued = conquerorQueue.Dequeue();
-                GD.Print($"[DeckTracker] Conqueror card dequeued with id {dequeued}");
+                Log.Debug($"UpdateConquerorTracker. Conqueror card dequeued. ID: {dequeued}");
                 break;
         }
         
@@ -91,7 +91,7 @@ public static partial class CardRegistry
         var uniqueTrackingId = GetTrackingId(cardSource);
         for (var i = 0; i < (int)replayCountAdded; i++)
         {
-            GD.Print($"[DeckTracker] Adding replay modifier to history with ID {uniqueTrackingId}.");
+            Log.Debug($"Adding replay modifier to history with ID {uniqueTrackingId}.");
             BladeReplayModifierTracker.Add(cardSource);
         }
         Publish();
@@ -102,9 +102,9 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var conquerorId = GetEarliestActiveConqueror(target);
-            GD.Print($"[DeckTracker] ConquerorID requested: {conquerorId}.");
+            Log.VeryDebug($"ConquerorID requested: {conquerorId}.");
             var damageToAttribute = results.TotalDamage;
-            GD.Print($"[DeckTracker] Damage to attribute: {damageToAttribute}.");
+            Log.Debug($"SplitForgeDamage. Damage to attribute: {damageToAttribute}.");
 
             if (conquerorId != null)
             {
@@ -114,7 +114,7 @@ public static partial class CardRegistry
 
                 if (EntityLedger.TryGetValue(conquerorId, out var conquerorEntity))
                 {
-                    GD.Print($"[DeckTracker] Attributing damage to {conquerorId}");
+                    Log.Debug($"Attributing damage to {conquerorId}");
                     conquerorEntity.AddCombatDamage(damageToAttributeToConqueror, _currentAct, _currentCombatType);
                 }
 
@@ -126,7 +126,7 @@ public static partial class CardRegistry
             if (replayModifyingCard != null)
             {
                 // REPLAY HIT: the modifier card caused this new swing — it gets all the credit.
-                GD.Print($"[DeckTracker] Replay Hit: Attributing {damageToAttribute} to {GetTrackingId(replayModifyingCard)}");
+                Log.Debug($"Replay Hit: Attributing {damageToAttribute} to {GetTrackingId(replayModifyingCard)}");
                 AddDamage(replayModifyingCard, damageToAttribute);
             }
             else if (seekingEdge != null)
@@ -158,11 +158,11 @@ public static partial class CardRegistry
         if (remaining > 0)
         {
             AddDamage(bladeCard, remaining);
-            GD.Print($"[DeckTracker] Warning: Went through all forgers and had remaining damage: {remaining}.");
+            Log.Warn($"AttributeMaxHitDamage. Went through all forgers with remaining damage: {remaining}.");
         }
 
         AddDamage(bladeCard, totalDistributed);
-        GD.Print($"[DeckTracker] Adding total distributed forge damage amount {totalDistributed} to Blade.");
+        Log.Debug($"Adding total distributed forge damage amount {totalDistributed} to Blade.");
 
         if (totalDistributed <= 0) return;
 
@@ -186,7 +186,7 @@ public static partial class CardRegistry
 
             if (!EntityLedger.TryGetValue(forgeInstance.TrackingId, out var entity)) continue;
 
-            GD.Print($"[DeckTracker] Adding connected forge to {forgeInstance.TrackingId} with amount {amount}");
+            Log.Debug($"Adding connected forge to {forgeInstance.TrackingId} with amount {amount}");
             entity.ConnectedForgeCombat += amount;
 
             // Relics don't track act-level forge breakdowns.
@@ -205,15 +205,15 @@ public static partial class CardRegistry
         var bladeCardModel = SovereignBladeDamageHistory[0].CardModel;
         if (bladeCardModel == null)
         {
-            GD.Print("[DeckTracker] Warning: bladeCardModel is null in ProcessSovereignBladeHistory");
+            Log.Warn("ProcessSovereignBladeHistory. bladeCardModel is null.");
             return;
         }
         var expectedReplayCount = bladeCardModel.BaseReplayCount;
         
-        GD.Print($"[DeckTracker] Processing sovereign blade history with count: {SovereignBladeDamageHistory.Count}");
+        Log.Debug($"Processing sovereign blade history with count: {SovereignBladeDamageHistory.Count}");
         // 0 is primary play, 1+ means replayed
         var isReplay = cardPlay.PlayIndex > 0;
-        GD.Print($"[DeckTracker] isReplay: {isReplay} (PlayIndex: {cardPlay.PlayIndex})");
+        Log.Debug($"ProcessSovereignBladeHistory. IsReplay: {isReplay}, PlayIndex: {cardPlay.PlayIndex}");
         
         var maxTotalDamageInstance = SovereignBladeDamageHistory[0];
         foreach (var damageHistoryItem in SovereignBladeDamageHistory)
@@ -228,7 +228,7 @@ public static partial class CardRegistry
         {
             if (damageHistoryItem.CardModel == null)
             {
-                GD.Print("[DeckTracker] Warning: damageHistoryItem.CardModel is null in ProcessSovereignBladeHistory");
+                Log.Warn("ProcessSovereignBladeHistory. damageHistoryItem.CardModel is null.");
                 continue;
             }
 
@@ -246,18 +246,18 @@ public static partial class CardRegistry
                 }
                 else
                 {
-                    GD.Print("[DeckTracker] Warning: trackerIndex was out of bounds. A replay modifier was likely not tracked");
+                    Log.Warn("ProcessSovereignBladeHistory. trackerIndex out of bounds; a replay modifier was likely not tracked.");
                 }
             }
             // Biggest damage goes to the blade and its forgers, all other hits if AOE are attributed to Seeking Edge
             if (damageHistoryItem == maxTotalDamageInstance)
             {
-                GD.Print($"[DeckTracker] Max damage item. Sending with seeking edge null");
+                Log.Debug($"ProcessSovereignBladeHistory. Max-damage hit; attributing to blade and forgers (no seeking edge).");
                 SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, null, replayModifyingCard);
             }
             else
             {
-                GD.Print($"[DeckTracker] Attributing to seeking, with {_activeSeekingEdgeCard} as seeking edge ID");
+                Log.Debug($"ProcessSovereignBladeHistory. Attributing to Seeking Edge: {GetTrackingId(_activeSeekingEdgeCard)}.");
                 SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, _activeSeekingEdgeCard, replayModifyingCard);
             }
         }

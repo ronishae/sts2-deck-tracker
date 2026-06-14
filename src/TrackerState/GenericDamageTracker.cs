@@ -15,7 +15,7 @@ public class GenericDamageTracker : PowerTrackerBase
         {
             _ledger.Clear();
             _isExecuting.Value = false;
-            GD.Print($"[DeckTracker] Reset ({PowerId}). Ledger and execution flag cleared.");
+            Log.Debug($"Reset ({PowerId}). Ledger and execution flag cleared.");
         }
     }
 
@@ -38,7 +38,7 @@ public class GenericDamageTracker : PowerTrackerBase
             }
 
             _ledger.Add(new Contribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] LogApply ({PowerId}). Source: {trackingId}, Amount: {amount}");
+            Log.Debug($"LogApply ({PowerId}). Source: {trackingId}, Amount: {amount}");
         }
     }
 
@@ -51,7 +51,7 @@ public class GenericDamageTracker : PowerTrackerBase
         lock (CardRegistry.SyncRoot)
         {
             var remainingDamage = totalDamage;
-            GD.Print($"[DeckTracker] DistributeDamage ({PowerId}). Total Damage: {totalDamage}");
+            Log.Debug($"DistributeDamage ({PowerId}). Total Damage: {totalDamage}");
 
             for (var i = 0; i < _ledger.Count && remainingDamage > 0; i++)
             {
@@ -62,13 +62,13 @@ public class GenericDamageTracker : PowerTrackerBase
                 {
                     CardRegistry.AddDamageById(contribution.TrackingId, share);
                     remainingDamage -= share;
-                    GD.Print($"[DeckTracker]   -> Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
+                    Log.VeryDebug($"  -> Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
                 }
             }
 
             if (remainingDamage > 0)
             {
-                GD.Print($"[DeckTracker]   -> {remainingDamage} damage unattributed (ledger exhausted).");
+                Log.Warn($"  -> {remainingDamage} damage unattributed (ledger exhausted).");
             }
         }
     }

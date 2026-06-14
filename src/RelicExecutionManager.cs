@@ -20,7 +20,7 @@ public static class RelicExecutionManager
         // Clear and nullify the pending orb modifiers
         PendingOrbModifiers.Value?.Clear();
 
-        Godot.GD.Print("[DeckTracker] RelicExecutionManager state fully reset.");
+        Log.Debug("RelicExecutionManager state fully reset.");
     }
     
     // A generic Prefix that grabs the Relic's class name right before it fires
@@ -54,7 +54,7 @@ public static class RelicExecutionManager
             var relicId = "RELIC_" + __instance.Id.Entry;
             var powerId = canonicalPower.Id.Entry ?? "";
 
-            GD.Print($"[DeckTracker] {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
+            Log.Debug($"TryModifyPowerAmountReceivedPostfix. {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
 
             // Directly inject the relic's contribution into the correct ledger!
             if (powerId == "STRENGTH_POWER")
@@ -62,7 +62,7 @@ public static class RelicExecutionManager
                 CardRegistry.AddPersistentBuffById(powerId, delta, relicId);
                 return;
             }
-            GD.Print($"[DeckTracker] Warning: TryModifyPowerAmountReceivedPostfix encountered unsupported power amount modification.");
+            Log.Warn("TryModifyPowerAmountReceivedPostfix. Unsupported power amount modification.");
         }
     }
 
@@ -70,7 +70,7 @@ public static class RelicExecutionManager
     {
         var relicId = "RELIC_" + __instance.Id.Entry;
         var powerId = power.Id.Entry ?? "";
-        GD.Print($"[DeckTracker] ModifyPowerAmountGivenPostfix. RelicId: {relicId}, PowerId: {powerId}, Amount: {amount}, Result: {__result}");
+        Log.Debug($"ModifyPowerAmountGivenPostfix. RelicId: {relicId}, PowerId: {powerId}, Amount: {amount}, Result: {__result}");
 
         // __result is the additive contribution this relic returns, not the accumulated total.
         // amount is the base input — comparing __result > amount would fail when the bonus (e.g. 1) is less than the base (e.g. 3).
@@ -85,16 +85,16 @@ public static class RelicExecutionManager
                 // Only track during an active card play to avoid inflating relic poison shares before any power is applied.
                 if (!CardRegistry.IsCardPlayActive())
                 {
-                    GD.Print($"[DeckTracker] ModifyPowerAmountGivenPostfix. Skipping {relicId} — no active card play (preview/tooltip).");
+                    Log.Debug($"ModifyPowerAmountGivenPostfix. Skipping {relicId} — no active card play (preview/tooltip).");
                     return;
                 }
 
                 CardRegistry.AddPoisonSharesById(target, delta, relicId);
-                GD.Print($"[DeckTracker] ModifyPowerAmountGivenPostfix. {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
+                Log.Debug($"ModifyPowerAmountGivenPostfix. {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
             }
             else
             {
-                GD.Print($"[DeckTracker] Warning: ModifyPowerAmountGivenPostfix encountered unsupported power amount modification. PowerId: {powerId}");
+                Log.Warn($"ModifyPowerAmountGivenPostfix. Unsupported power amount modification. PowerId: {powerId}");
             }
         }
     }
@@ -184,7 +184,7 @@ public static class RelicExecutionManager
             if (originalMethod != null)
             {
                 harmony.Patch(originalMethod, prefix: prefix, postfix: postfix);
-                Godot.GD.Print($"[DeckTracker] Dynamically Patched Direct Damage Relic: {relicType.Name}");
+                Log.Debug($"Dynamically Patched Direct Damage Relic: {relicType.Name}");
             }
         }
     }

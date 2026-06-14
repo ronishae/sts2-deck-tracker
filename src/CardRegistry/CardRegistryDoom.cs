@@ -81,7 +81,7 @@ public static partial class CardRegistry
 
             var uniqueId = GetTrackingId(cardSource);
             DoomHistory[target].Add(new Contribution { TrackingId = uniqueId, Amount = amount });
-            GD.Print($"[DeckTracker] Added {amount} Doom to FIFO queue for {uniqueId}.");
+            Log.Debug($"Added {amount} Doom to FIFO queue for {uniqueId}.");
         }
         Publish();
     }
@@ -95,7 +95,7 @@ public static partial class CardRegistry
             if (!DoomHistory.ContainsKey(target)) DoomHistory[target] = new List<Contribution>();
 
             DoomHistory[target].Add(new Contribution { TrackingId = uniqueId, Amount = amount });
-            GD.Print($"[DeckTracker] Chained {amount} Doom to FIFO queue for {uniqueId}.");
+            Log.Debug($"Chained {amount} Doom to FIFO queue for {uniqueId}.");
         }
         Publish();
     }
@@ -110,7 +110,7 @@ public static partial class CardRegistry
                 if (creature.CurrentHp > 0)
                 {
                     PendingDoomHp[creature] = creature.CurrentHp;
-                    GD.Print($"[DeckTracker] Captured {creature.CurrentHp} HP for {creature.Name} before Doom execution.");
+                    Log.Debug($"Captured {creature.CurrentHp} HP for {creature.Name} before Doom execution.");
                 }
             }
         }
@@ -142,7 +142,7 @@ public static partial class CardRegistry
 
                     var amountToAttribute = Math.Min(remainingHp, contribution.Amount);
                     
-                    GD.Print($"[DeckTracker] Attributing {amountToAttribute} Doom damage to {contribution.TrackingId}");
+                    Log.Debug($"Attributing {amountToAttribute} Doom damage to {contribution.TrackingId}");
                     
                     AddDamageById(contribution.TrackingId, amountToAttribute);
                     
@@ -151,7 +151,7 @@ public static partial class CardRegistry
 
                 if (remainingHp > 0)
                 {
-                    GD.Print($"[DeckTracker] Warning: {remainingHp} Doom damage unaccounted for by card history.");
+                    Log.Warn($"DistributeDoomDamage. {remainingHp} Doom damage unaccounted for by card history.");
                 }
 
                 DoomHistory.Remove(creature);

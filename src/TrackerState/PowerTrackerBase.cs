@@ -20,7 +20,7 @@ public abstract class PowerTrackerBase : ITrackerState
     public void StartExecution()
     {
         _isExecuting.Value = true;
-        GD.Print($"[DeckTracker] StartExecution ({PowerId}).");
+        Log.VeryDebug($"StartExecution ({PowerId}).");
     }
 
     public async Task AwaitTaskAsync(Task originalTask)
@@ -33,7 +33,7 @@ public abstract class PowerTrackerBase : ITrackerState
         finally
         {
             _isExecuting.Value = false;
-            GD.Print($"[DeckTracker] AwaitTaskAsync ({PowerId}) finished.");
+            Log.VeryDebug($"AwaitTaskAsync ({PowerId}) finished.");
         }
     }
 }

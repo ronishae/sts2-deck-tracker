@@ -91,7 +91,7 @@ public static partial class DeckTrackerOverlay
     {
         if (GodotObject.IsInstanceValid(_instance))
         {
-            GD.Print("[DeckTracker] OnGameExiting. Freeing overlay nodes.");
+            Log.Info("OnGameExiting. Freeing overlay nodes.");
             _instance.Free();
             _instance = null;
         }

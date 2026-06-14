@@ -16,7 +16,7 @@ public class TargetedDamageTracker : PowerTrackerBase
         {
             _ledgers.Clear();
             _isExecuting.Value = false;
-            GD.Print($"[DeckTracker] Reset (Targeted: {PowerId}). Ledgers and execution flag cleared.");
+            Log.Debug($"Reset (Targeted: {PowerId}). Ledgers and execution flag cleared.");
         }
     }
 
@@ -37,7 +37,7 @@ public class TargetedDamageTracker : PowerTrackerBase
 
             var trackingId = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : "External_Source";
             ledger.Add(new Contribution { TrackingId = trackingId, Amount = amount });
-            GD.Print($"[DeckTracker] LogApply (Targeted: {PowerId}). Target: {target.Name}, Source: {trackingId}, Amount: {amount}");
+            Log.Debug($"LogApply (Targeted: {PowerId}). Target: {target.Name}, Source: {trackingId}, Amount: {amount}");
         }
     }
 
@@ -47,7 +47,7 @@ public class TargetedDamageTracker : PowerTrackerBase
         {
             if (_ledgers.Remove(target))
             {
-                GD.Print($"[DeckTracker] ClearTarget ({PowerId}). Target: {target.Name}");
+                Log.Debug($"ClearTarget ({PowerId}). Target: {target.Name}");
             }
         }
     }
@@ -63,12 +63,12 @@ public class TargetedDamageTracker : PowerTrackerBase
         {
             if (!_ledgers.TryGetValue(target, out var ledger))
             {
-                GD.Print($"[DeckTracker] DistributeDamage ({PowerId}). No ledger found for {target.Name}");
+                Log.Warn($"DistributeDamage ({PowerId}). No ledger found for {target.Name}");
                 return;
             }
 
             var remainingDamage = totalDamage;
-            GD.Print($"[DeckTracker] DistributeDamage ({PowerId}). Target: {target.Name}, Total Damage: {totalDamage}");
+            Log.Debug($"DistributeDamage ({PowerId}). Target: {target.Name}, Total Damage: {totalDamage}");
 
             for (var i = 0; i < ledger.Count && remainingDamage > 0; i++)
             {
@@ -79,13 +79,13 @@ public class TargetedDamageTracker : PowerTrackerBase
                 {
                     CardRegistry.AddDamageById(contribution.TrackingId, share);
                     remainingDamage -= share;
-                    GD.Print($"[DeckTracker]   -> Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
+                    Log.VeryDebug($"  -> Attributed {share} to {contribution.TrackingId}. Remaining: {remainingDamage}");
                 }
             }
 
             if (remainingDamage > 0)
             {
-                GD.Print($"[DeckTracker]   -> {remainingDamage} damage unattributed (ledger exhausted).");
+                Log.Warn($"  -> {remainingDamage} damage unattributed (ledger exhausted).");
             }
         }
     }

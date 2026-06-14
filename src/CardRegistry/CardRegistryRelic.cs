@@ -15,7 +15,7 @@ public static partial class CardRegistry
         {
             // GetOrCreateRelicStats ensures the entry exists in EntityLedger before AddCombatDamage runs.
             GetOrCreateRelicStats(relicId).AddCombatDamage(amount, _currentAct, _currentCombatType);
-            GD.Print($"[DeckTracker] Added {amount} damage to Relic: {relicId}");
+            Log.Debug($"Added {amount} damage to Relic: {relicId}");
         }
         Publish();
     }
@@ -29,7 +29,7 @@ public static partial class CardRegistry
             {
                 entity.FloorRemoved = floorRemoved;
                 entity.IsActive = false;
-                GD.Print($"[DeckTracker] Handled removal for Relic: {relic.Id.Entry} on floor {floorRemoved}");
+                Log.Debug($"Handled removal for Relic: {relic.Id.Entry} on floor {floorRemoved}");
             }
         }
         Publish();

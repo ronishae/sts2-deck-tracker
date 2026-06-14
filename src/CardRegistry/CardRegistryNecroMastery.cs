@@ -34,7 +34,7 @@ public static partial class CardRegistry
         {
             var trackingId = cardSource != null ? GetTrackingId(cardSource) : "External_Source";
             _necroMasteryLedger.Add(trackingId);
-            GD.Print($"[DeckTracker] LogNecroMasteryApply. Card: {trackingId}, Amount: {amount}");
+            Log.Debug($"LogNecroMasteryApply. Card: {trackingId}, Amount: {amount}");
         }
     }
 
@@ -45,7 +45,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var remainingDamage = totalDamage;
-            GD.Print($"[DeckTracker] DistributeNecroMasteryDamage. Total Damage: {totalDamage} with delta: {_delta.Value}");
+            Log.Debug($"DistributeNecroMasteryDamage. Total Damage: {totalDamage} with delta: {_delta.Value}");
 
             foreach (var trackingId in _necroMasteryLedger)
             {
@@ -53,12 +53,12 @@ public static partial class CardRegistry
                 var share = Math.Min(remainingDamage, -_delta.Value);
                 AddDamageById(trackingId, share);
                 remainingDamage -= share;
-                GD.Print($"[DeckTracker] DistributeNecroMasteryDamage. Attributed {share} to {trackingId}. Remaining: {remainingDamage}");
+                Log.Debug($"DistributeNecroMasteryDamage. Attributed {share} to {trackingId}. Remaining: {remainingDamage}");
             }
 
             if (remainingDamage > 0)
             {
-                GD.Print($"[DeckTracker] DistributeNecroMasteryDamage. {remainingDamage} damage unattributed (more stacks than contributions?)");
+                Log.Warn($"DistributeNecroMasteryDamage. {remainingDamage} damage unattributed (more stacks than contributions?)");
             }
         }
     }
@@ -73,7 +73,7 @@ public static partial class CardRegistry
         finally
         {
             _isNecroMasteryExecuting.Value = false;
-            GD.Print("[DeckTracker] AwaitNecroMasteryTaskAsync finished.");
+            Log.VeryDebug("AwaitNecroMasteryTaskAsync finished.");
         }
     }
 }

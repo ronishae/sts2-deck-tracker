@@ -36,7 +36,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             PoisonShares.Clear();
-            GD.Print("[DeckTracker] ResetPoisonState. Poison shares cleared.");
+            Log.Debug("ResetPoisonState. Poison shares cleared.");
         }
     }
     
@@ -64,7 +64,7 @@ public static partial class CardRegistry
             {
                 PoisonShares[target].Add(new Contribution { TrackingId = uniqueId, Amount = amount });
             }
-            GD.Print($"[DeckTracker] AddPoisonSharesById. Added {amount} shares to {uniqueId} for {target.Name}");
+            Log.Debug($"AddPoisonSharesById. Added {amount} shares to {uniqueId} for {target.Name}");
         }
     }
     
@@ -98,19 +98,19 @@ public static partial class CardRegistry
             // Safety check: If a monster is cleansed of all poison, just wipe the bucket
             if (decreaseAmount >= totalShares)
             {
-                GD.Print($"[DeckTracker] RemovePoisonSharesProportionally. Poison wiped from {target.Name}.");
+                Log.Debug($"RemovePoisonSharesProportionally. Poison wiped from {target.Name}.");
                 PoisonShares.Remove(target);
                 return;
             }
 
-            GD.Print($"[DeckTracker] RemovePoisonSharesProportionally. Removing {decreaseAmount} from {totalShares} total shares on {target.Name}");
+            Log.Debug($"RemovePoisonSharesProportionally. Removing {decreaseAmount} from {totalShares} total shares on {target.Name}");
             foreach (var share in shares)
             {
                 var percentage = share.Amount / totalShares;
                 var amountToShave = decreaseAmount * percentage;
                 
                 share.Amount -= amountToShave;
-                GD.Print($"[DeckTracker]   -> Decayed {share.TrackingId} by {amountToShave:F2}");
+                Log.VeryDebug($"  -> Decayed {share.TrackingId} by {amountToShave:F2}");
             }
 
             shares.RemoveAll(c => c.Amount <= 0.01m);
@@ -136,14 +136,14 @@ public static partial class CardRegistry
                 return;
             }
 
-            GD.Print($"[DeckTracker] DistributePoisonDamage. Target: {target.Name}, Total: {totalDamage}");
+            Log.Debug($"DistributePoisonDamage. Target: {target.Name}, Total: {totalDamage}");
             foreach (var share in shares)
             {
                 var percentage = share.Amount / totalShares;
                 var attributedDamage = totalDamage * percentage;
 
                 AddDamageById(share.TrackingId, attributedDamage);
-                GD.Print($"[DeckTracker]   -> Attributed {attributedDamage:F2} to {share.TrackingId}");
+                Log.VeryDebug($"  -> Attributed {attributedDamage:F2} to {share.TrackingId}");
             }
         }
         Publish();
@@ -158,7 +158,7 @@ public static partial class CardRegistry
         finally
         {
             CurrentPoisonTarget.Value = null;
-            GD.Print("[DeckTracker] AwaitPoisonTaskAsync finished.");
+            Log.VeryDebug("AwaitPoisonTaskAsync finished.");
         }
     }
 }

@@ -14,7 +14,7 @@ public class ProportionalShareTracker : PowerTrackerBase
         {
             _ledger.Clear();
             _isExecuting.Value = false;
-            GD.Print($"[DeckTracker] Reset ({PowerId}). Ledger cleared.");
+            Log.Debug($"Reset ({PowerId}). Ledger cleared.");
         }
     }
 
@@ -35,7 +35,7 @@ public class ProportionalShareTracker : PowerTrackerBase
             {
                 _ledger.Add(new Contribution { TrackingId = trackingId, Amount = amount });
             }
-            GD.Print($"[DeckTracker] AddShares ({PowerId}). Source: {trackingId}, Amount: {amount}");
+            Log.Debug($"AddShares ({PowerId}). Source: {trackingId}, Amount: {amount}");
         }
     }
 
@@ -56,17 +56,17 @@ public class ProportionalShareTracker : PowerTrackerBase
             if (amountToRemove >= totalShares)
             {
                 _ledger.Clear();
-                GD.Print($"[DeckTracker] RemoveSharesProportionally ({PowerId}). Amount {amountToRemove} >= total {totalShares}. Ledger wiped.");
+                Log.Debug($"RemoveSharesProportionally ({PowerId}). Amount {amountToRemove} >= total {totalShares}. Ledger wiped.");
                 return;
             }
 
-            GD.Print($"[DeckTracker] RemoveSharesProportionally ({PowerId}). Removing {amountToRemove} from {totalShares} total shares.");
+            Log.Debug($"RemoveSharesProportionally ({PowerId}). Removing {amountToRemove} from {totalShares} total shares.");
             foreach (var share in _ledger)
             {
                 var proportion = share.Amount / totalShares;
                 var reduction = amountToRemove * proportion;
                 share.Amount = Math.Max(0, share.Amount - reduction);
-                GD.Print($"[DeckTracker]   -> Reduced {share.TrackingId} by {reduction:F2}");
+                Log.VeryDebug($"  -> Reduced {share.TrackingId} by {reduction:F2}");
             }
             _ledger.RemoveAll(x => x.Amount <= 0.01m);
         }
@@ -77,7 +77,7 @@ public class ProportionalShareTracker : PowerTrackerBase
         lock (CardRegistry.SyncRoot)
         {
             _ledger.Clear();
-            GD.Print($"[DeckTracker] Clear ({PowerId}). Ledger wiped.");
+            Log.Debug($"Clear ({PowerId}). Ledger wiped.");
         }
     }
 
@@ -95,7 +95,7 @@ public class ProportionalShareTracker : PowerTrackerBase
                 return;
             }
 
-            GD.Print($"[DeckTracker] DistributeProportional ({PowerId}). Context: {contextName}, Total: {totalAmount}");
+            Log.Debug($"DistributeProportional ({PowerId}). Context: {contextName}, Total: {totalAmount}");
             foreach (var share in _ledger)
             {
                 var proportion = share.Amount / totalShares;
@@ -104,7 +104,7 @@ public class ProportionalShareTracker : PowerTrackerBase
                 if (attributed > 0)
                 {
                     distributionAction(share.TrackingId, attributed);
-                    GD.Print($"[DeckTracker]   -> {share.TrackingId}: {attributed:F2}");
+                    Log.VeryDebug($"  -> {share.TrackingId}: {attributed:F2}");
                 }
             }
         }

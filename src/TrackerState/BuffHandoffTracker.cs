@@ -23,7 +23,7 @@ public class BuffHandoffTracker : PowerTrackerBase
     public override void Reset()
     {
         _isExecuting.Value = false;
-        GD.Print($"[DeckTracker] Reset ({PowerId}). Execution flag cleared.");
+        Log.Debug($"Reset ({PowerId}). Execution flag cleared.");
     }
 
     public void ProcessHandoff(string secondaryBuffId, decimal amount)
@@ -35,7 +35,7 @@ public class BuffHandoffTracker : PowerTrackerBase
 
         lock (CardRegistry.SyncRoot)
         {
-            GD.Print($"[DeckTracker] ProcessHandoff ({PowerId}). Target: {secondaryBuffId}, Amount: {amount}, Strategy: {Strategy}");
+            Log.Debug($"ProcessHandoff ({PowerId}). Target: {secondaryBuffId}, Amount: {amount}, Strategy: {Strategy}");
             if (CardRegistry.PersistentLedgers.TryGetValue(TargetPersistentLedgerId, out var ledger))
             {
                 switch (Strategy)
@@ -68,12 +68,12 @@ public class BuffHandoffTracker : PowerTrackerBase
             var handoffAmount = Math.Min(remainingToHandOff, contribution.Amount);
             CardRegistry.AddPersistentBuffById(secondaryBuffId, handoffAmount, contribution.TrackingId);
             remainingToHandOff -= handoffAmount;
-            GD.Print($"[DeckTracker]   -> Handed off {handoffAmount} to {contribution.TrackingId}");
+            Log.VeryDebug($"  -> Handed off {handoffAmount} to {contribution.TrackingId}");
         }
         if (remainingToHandOff > 0)
         {
             CardRegistry.AddPersistentBuffById(secondaryBuffId, remainingToHandOff, "External_Buff");
-            GD.Print($"[DeckTracker]   -> Handed off remainder {remainingToHandOff} to External_Buff");
+            Log.VeryDebug($"  -> Handed off remainder {remainingToHandOff} to External_Buff");
         }
     }
 
@@ -88,14 +88,14 @@ public class BuffHandoffTracker : PowerTrackerBase
                 if (share > 0)
                 {
                     CardRegistry.AddConsumableBuffById(secondaryBuffId, share, contribution.TrackingId);
-                    GD.Print($"[DeckTracker]   -> Proportional handoff {share:F2} to {contribution.TrackingId}");
+                    Log.VeryDebug($"  -> Proportional handoff {share:F2} to {contribution.TrackingId}");
                 }
             }
         }
         else
         {
             CardRegistry.AddConsumableBuffById(secondaryBuffId, amount, "External_Buff");
-            GD.Print($"[DeckTracker]   -> Handoff fallback to External_Buff (Empty Pool)");
+            Log.Warn($"  -> Handoff fallback to External_Buff (Empty Pool)");
         }
     }
 
@@ -110,6 +110,6 @@ public class BuffHandoffTracker : PowerTrackerBase
                 CardRegistry.AddConsumableBuffById(secondaryBuffId, amount, "External_Buff");
                 break;
         }
-        GD.Print($"[DeckTracker]   -> Handoff fallback to External_Buff (No Ledger)");
+        Log.Warn($"  -> Handoff fallback to External_Buff (No Ledger)");
     }
 }
