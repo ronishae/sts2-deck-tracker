@@ -76,6 +76,15 @@ internal static partial class HookPatches
                 return;
             }
 
+            // ModifyDamage also fires for sourceless damage: enemy attack-intent recalcs (which
+            // happen on every hover) and poison ticks. These pass previewMode None so the check
+            // above misses them, and a snapshot with no card source can never be consumed in
+            // AfterDamageGivenPostfix. Skip them to avoid spamming logs and building dead snapshots.
+            if (cardSource == null)
+            {
+                return;
+            }
+
             var snapshot = new CardRegistry.DamageSnapshot
             {
                 BaseDamage = damage,
