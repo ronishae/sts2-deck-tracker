@@ -44,8 +44,8 @@ public static partial class DeckTrackerOverlay
 
     private static bool _includeConnectedForge;
     private static bool _showRawForge;
-    private static bool _mergeCardVersions;
-    private static bool _hideZeroDamageCards;
+    private static bool _mergeCardVersions = true;
+    private static bool _hideZeroDamageCards = true;
     // When on, the card list shows only cards active in the current combat; stacked rows count only the
     // copies made this combat (e.g. only this combat's Shivs), keeping the overlay uncluttered.
     private static bool _thisCombatOnly;

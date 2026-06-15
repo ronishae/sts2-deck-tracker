@@ -83,10 +83,10 @@ public static partial class DeckTrackerOverlay
         _toggleForgeDmgBtnLarge = new Button { Text = "Include Connected Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnLarge.Pressed += ToggleForgeDamage;
 
-        _mergeVersionsBtnLarge = new Button { Text = "Merge Versions: OFF", FocusMode = Control.FocusModeEnum.None };
+        _mergeVersionsBtnLarge = new Button { Text = "Merge Versions: ON", FocusMode = Control.FocusModeEnum.None };
         _mergeVersionsBtnLarge.Pressed += ToggleMergeVersions;
 
-        _hideZeroDamageBtnLarge = new Button { Text = "Hide 0 Damage: OFF", FocusMode = Control.FocusModeEnum.None };
+        _hideZeroDamageBtnLarge = new Button { Text = "Hide 0 Damage: ON", FocusMode = Control.FocusModeEnum.None };
         _hideZeroDamageBtnLarge.Pressed += ToggleHideZeroDamage;
 
         _thisCombatOnlyBtnLarge = new Button { Text = "Show Generated Cards From: All Combats", FocusMode = Control.FocusModeEnum.None };
