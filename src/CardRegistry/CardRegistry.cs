@@ -357,7 +357,7 @@ public static partial class CardRegistry
     // and cards already tracked/tagged. Stays silent when no source is executing: RegisterCard warns later.
     public static void TagGeneratedCardOnCreation(CardModel card)
     {
-        if (card.FloorAddedToDeck != null || IsStatusCard(card))
+        if (card.FloorAddedToDeck != null || IsStatusCard(card) || IsGenerationAttributionExcluded(card))
         {
             return;
         }
@@ -439,6 +439,12 @@ public static partial class CardRegistry
     // Wound/Dazed/Burn and other enemy-added status cards are not player-generated and are hidden from the
     // UI, so they are never attributed to a player source. Matches the UI's "Status" filter.
     private static bool IsStatusCard(CardModel card) => card.Type.ToString() == "Status";
+
+    // Cards with bespoke damage/forge tracking (Sovereign Blade) must not be attributed as generated cards;
+    // they keep their own row and custom forge distribution. SingletonCardIds is exactly these cards and
+    // notably excludes SHIV, so genuine generated-card attribution is unaffected.
+    private static bool IsGenerationAttributionExcluded(CardModel card) =>
+        SingletonCardIds.Contains(card.Id.Entry ?? "");
 
     // When a card's identity (upgrade/enchant) changes mid-combat its tracking id changes, so its stats
     // would split across two ledger entries (e.g. the draw on the old upgrade, the play on the new). This
@@ -990,7 +996,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             bool isGenerated = card.FloorAddedToDeck == null;
-            if (isGenerated && !IsStatusCard(card))
+            if (isGenerated && !IsStatusCard(card) && !IsGenerationAttributionExcluded(card))
             {
                 TryTagGeneratedCard(card);
             }
