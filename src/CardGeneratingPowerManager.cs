@@ -14,6 +14,11 @@ public static class CardGeneratingPowerManager
     {
         (typeof(InfiniteBladesPower), nameof(InfiniteBladesPower.BeforeHandDraw)),
         (typeof(SpectrumShiftPower), nameof(SpectrumShiftPower.BeforeHandDraw)),
+        (typeof(CallOfTheVoidPower), nameof(CallOfTheVoidPower.BeforeHandDraw)),
+        (typeof(CreativeAiPower), nameof(CreativeAiPower.BeforeHandDraw)),
+        (typeof(CalamityPower), nameof(CalamityPower.AfterCardPlayed)),
+        (typeof(HelloWorldPower), nameof(HelloWorldPower.BeforeHandDraw)),
+        (typeof(EntropyPower), nameof(EntropyPower.AfterPlayerTurnStart)),
     };
 
     // The power types above. BeforePowerAmountChanged uses this to map each applied instance to the card
