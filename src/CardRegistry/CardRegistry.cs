@@ -48,39 +48,15 @@ public static partial class CardRegistry
     // itself (or its DeckVersion). Cleared each combat.
     private static readonly Dictionary<CardModel, CardModel> _cardOrigin = new();
     // Generated card model -> the tracking id of the source (card/power/potion/relic) that created it,
-    // captured from the executing context at generation time and gated by KnownCardGenerators. Distinct
-    // from the self-clone seam (_cardCreatedBy): this covers cross-source generation (Shiv, etc.). The
-    // generated card keeps its own row; its damage is also summed onto this creator's generated bucket.
-    // Cleared each combat (transient cards only).
+    // captured from whatever was executing at generation time. Distinct from the self-clone seam
+    // (_cardCreatedBy): this covers cross-source generation (Shiv, etc.). The generated card keeps its own
+    // row; its damage is also summed onto this creator's generated bucket. Cleared each combat.
     private static readonly Dictionary<CardModel, string> _cardGeneratedBy = new();
     // The tracking id each live card model was last registered under this combat. When a card's identity
     // changes mid-combat (upgrade/downgrade/enchant — Cunning Potion, Armaments, Drain Power, enemy
     // debuffs), its tracking id changes; this lets us migrate the old entry's stats onto the new id so the
     // card stays one row instead of splitting. Cleared each combat (ids are recomputed fresh per combat).
     private static readonly Dictionary<CardModel, string> _cardCurrentTrackingId = new();
-
-    // Base ids of sources allowed to take credit for generating a card. Gating on a known set keeps
-    // mis-attribution from silently happening: an executing source whose base id is not listed here logs
-    // a warning and the generated card falls back to a standalone "GEN" row. Extend this as new
-    // generators are confirmed (card base ids, relic entries, potion entries).
-    // NOTE: PHANTOM_BLADES/ACCURACY are deliberately excluded — they are Shiv damage modifiers, not
-    // generators. KNIFE_TRAP is also excluded — it replays Shivs already in the exhaust pile rather than
-    // generating new ones, so each replayed Shiv keeps its original creator.
-    private static readonly HashSet<string> KnownCardGenerators = new()
-    {
-        "LEADING_STRIKE",
-        "BLADE_DANCE",
-        "CLOAK_AND_DAGGER",
-        "HIDDEN_DAGGERS",
-        "UP_MY_SLEEVE",
-        "BLADE_OF_INK",
-        "STORM_OF_STEEL",
-        "INFINITE_BLADES",
-        "FAN_OF_KNIVES",
-        // Relic and potion generators (matched by relic entry / potion entry).
-        "NINJA_SCROLL",
-        "CUNNING_POTION",
-    };
 
     // Cards that always share one tracking entry regardless of how many instances are generated mid-combat.
     private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
@@ -374,20 +350,14 @@ public static partial class CardRegistry
         }
     }
 
-    // Tags a freshly generated combat card (e.g. a Shiv) with the source currently executing, so its
-    // damage can later be credited to that creator's generated-damage bucket. Gated by KnownCardGenerators
-    // (allowlist + warn + GEN): an unknown/unsupported executing source logs a warning and leaves the card
-    // untagged, so it falls back to the existing standalone "GEN" row. Self-generation is guarded against
-    // (a played generated card sees itself as the playing card and must not tag itself). Must be called
-    // under SyncRoot.
     // Eagerly captures the generator link the moment a generated card is created into ANY pile, while the
     // generating source is still executing. Cards that overflow a full hand are created straight into the
     // discard pile and never enter Hand here, so they would otherwise only be seen — with no executing
-    // context — when later drawn. No-op for non-generated cards and for cards already tracked/tagged.
-    // Stays silent when no known generator is executing: RegisterCard issues the warn+GEN fallback later.
+    // context — when later drawn. No-op for non-generated cards, status cards (enemy-added Wound/Dazed/...),
+    // and cards already tracked/tagged. Stays silent when no source is executing: RegisterCard warns later.
     public static void TagGeneratedCardOnCreation(CardModel card)
     {
-        if (card.FloorAddedToDeck != null)
+        if (card.FloorAddedToDeck != null || IsStatusCard(card))
         {
             return;
         }
@@ -401,20 +371,24 @@ public static partial class CardRegistry
         }
     }
 
-    // Tags a generated card to the executing source if it is a known generator. Called at registration
-    // (with a warn+GEN fallback) and eagerly at creation (silent). Must be called under SyncRoot.
+    // Tags a generated card to whatever source is currently executing. Called at registration (warns when
+    // nothing is executing — a likely sign a relic/power generator needs wrapping) and eagerly at creation
+    // (silent). Must be called under SyncRoot.
     private static void TryTagGeneratedCard(CardModel card)
     {
         if (TryApplyGeneratorTag(card) || _cardGeneratedBy.ContainsKey(card))
         {
             return;
         }
-        Log.Warn($"TryTagGeneratedCard. Card: {card.Id.Entry} generated by unknown/unsupported source; falling back to GEN.");
+        Log.Warn($"TryTagGeneratedCard. Card: {card.Id.Entry} generated with no tracked source; falling back to GEN (a relic/power generator may need wrapping).");
     }
 
-    // Resolves the currently executing source and, if it is a known generator, tags the card to that
-    // generator's chain root. Returns true when a tag was applied (or already present). Must be called
-    // under SyncRoot.
+    // Attributes a generated card to the source currently executing, in priority order: the card being
+    // played -> executing relic -> playing potion -> executing power. The card branch is first and uses the
+    // innermost play, so a force-played generator (Mayhem/Cascade auto-playing a Shiv-maker) gets credit
+    // over the card/power that played it. Tags the chain root so a generated card that itself generates
+    // rolls all the way up to the original creator. Returns true when a tag was applied (or already
+    // present); false when no source is executing. Must be called under SyncRoot.
     private static bool TryApplyGeneratorTag(CardModel card)
     {
         if (_cardGeneratedBy.ContainsKey(card))
@@ -428,34 +402,27 @@ public static partial class CardRegistry
             return false;
         }
 
-        // Card plays are the dominant generator (Shiv-makers like Fan of Knives); relics/potions are
-        // resolved via their prefixed tracking ids, powers via their executing source id (the tracking id
-        // of the card that applied the power, e.g. Infinite Blades creating a Shiv at turn start).
-        var playingCard = CurrentPlayingCard;
         string? generatorId;
-        string? generatorBaseId;
-        if (playingCard != null)
+        if (CurrentPlayingCard != null)
         {
-            generatorId = GetTrackingId(playingCard);
-            generatorBaseId = playingCard.Id.Entry;
+            generatorId = GetTrackingId(CurrentPlayingCard);
         }
         else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
         {
-            generatorBaseId = RelicExecutionManager.ExecutingRelicId.Value;
-            generatorId = "RELIC_" + generatorBaseId;
+            generatorId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
         }
         else if (!string.IsNullOrEmpty(CurrentPlayingPotionId))
         {
             generatorId = CurrentPlayingPotionId;
-            generatorBaseId = ExtractPotionEntry(CurrentPlayingPotionId!);
         }
         else
         {
+            // A relic/power only sets an executing id while a method we've wrapped runs, so this branch is
+            // the implicit opt-in for those generators (cards and potions always have a context).
             generatorId = InstancedTracker.ExecutingSourceId;
-            generatorBaseId = ExtractCardBaseId(generatorId);
         }
 
-        if (string.IsNullOrEmpty(generatorId) || generatorBaseId == null || !KnownCardGenerators.Contains(generatorBaseId))
+        if (string.IsNullOrEmpty(generatorId))
         {
             return false;
         }
@@ -465,9 +432,13 @@ public static partial class CardRegistry
         // cached in _cardGeneratedBy, so RouteGeneratedDamage never re-walks per damage event.
         var rootGeneratorId = ResolveRootGenerator(generatorId);
         _cardGeneratedBy[card] = rootGeneratorId;
-        Log.Debug($"TryApplyGeneratorTag. Card: {card.Id.Entry} tagged to generator: {rootGeneratorId} (immediate: {generatorId}, base: {generatorBaseId})");
+        Log.Debug($"TryApplyGeneratorTag. Card: {card.Id.Entry} tagged to generator: {rootGeneratorId} (immediate: {generatorId})");
         return true;
     }
+
+    // Wound/Dazed/Burn and other enemy-added status cards are not player-generated and are hidden from the
+    // UI, so they are never attributed to a player source. Matches the UI's "Status" filter.
+    private static bool IsStatusCard(CardModel card) => card.Type.ToString() == "Status";
 
     // When a card's identity (upgrade/enchant) changes mid-combat its tracking id changes, so its stats
     // would split across two ledger entries (e.g. the draw on the old upgrade, the play on the new). This
@@ -549,38 +520,6 @@ public static partial class CardRegistry
             current = stat.GeneratedById;
         }
         return current;
-    }
-
-    // Strips a card tracking id ("{baseId}_F{floor}_C{copy}_U{upgrade}_{enchant}_P{owner}") back to its
-    // base id for allowlist checks. baseId may contain underscores, so split at the first "_F" that is
-    // followed by a digit. Returns null for non-card ids (RELIC_/POTION_/External_Source).
-    private static string? ExtractCardBaseId(string? trackingId)
-    {
-        if (string.IsNullOrEmpty(trackingId))
-        {
-            return null;
-        }
-        for (var i = 0; i + 2 < trackingId.Length; i++)
-        {
-            if (trackingId[i] == '_' && trackingId[i + 1] == 'F' && char.IsDigit(trackingId[i + 2]))
-            {
-                return trackingId.Substring(0, i);
-            }
-        }
-        return null;
-    }
-
-    // Strips a potion tracking id ("POTION_{entry}_{counter}") back to its raw entry for allowlist checks.
-    private static string? ExtractPotionEntry(string potionTrackingId)
-    {
-        const string prefix = "POTION_";
-        if (!potionTrackingId.StartsWith(prefix))
-        {
-            return null;
-        }
-        var withoutPrefix = potionTrackingId.Substring(prefix.Length);
-        var lastUnderscore = withoutPrefix.LastIndexOf('_');
-        return lastUnderscore > 0 ? withoutPrefix.Substring(0, lastUnderscore) : withoutPrefix;
     }
 
     // Deck cards: deterministic ordinal per (owner, identity), recomputed each scan so the id set is always
@@ -1051,7 +990,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             bool isGenerated = card.FloorAddedToDeck == null;
-            if (isGenerated)
+            if (isGenerated && !IsStatusCard(card))
             {
                 TryTagGeneratedCard(card);
             }
