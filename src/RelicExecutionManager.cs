@@ -155,9 +155,6 @@ public static class RelicExecutionManager
             (typeof(SlingOfCourage), nameof(SlingOfCourage.AfterRoomEntered)),
             (typeof(Brimstone), nameof(Brimstone.AfterSideTurnStart)),
             (typeof(ToastyMittens), nameof(ToastyMittens.BeforeHandDraw)),
-            // Card generator: sets the relic execution context while it creates Shivs at combat start, so
-            // those Shivs are attributed to NINJA_SCROLL by TagGeneratedCardOnCreation.
-            (typeof(NinjaScroll), nameof(NinjaScroll.BeforeHandDraw)),
             (typeof(EmberTea),  nameof(EmberTea.AfterRoomEntered)),
             (typeof(SwordOfJade), nameof(SwordOfJade.AfterRoomEntered)),
             
@@ -179,6 +176,15 @@ public static class RelicExecutionManager
             
             // Forge
             (typeof(FencingManual), nameof(FencingManual.AfterSideTurnStart)),
+            
+            // Card Gen
+            (typeof(NinjaScroll), nameof(NinjaScroll.BeforeHandDraw)),
+            (typeof(VexingPuzzlebox), nameof(VexingPuzzlebox.AfterPlayerTurnStart)),
+            (typeof(BurningSticks), nameof(BurningSticks.AfterCardExhausted)),
+            (typeof(Toolbox), nameof(Toolbox.BeforeHandDraw)),
+            (typeof(Crossbow), nameof(Crossbow.AfterSideTurnStart)),
+            (typeof(ChoicesParadox), nameof(ChoicesParadox.AfterPlayerTurnStart)),
+            (typeof(MusicBox), nameof(MusicBox.AfterCardPlayed)),
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)
