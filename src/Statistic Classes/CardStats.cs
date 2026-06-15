@@ -10,6 +10,10 @@ public sealed class CardStats : EntityStats
     public string BaseCardKey { get; set; } = "";
     // Index into the ordered player list — used to colour-code and filter cards per player in the overlay
     public int PlayerIndex { get; set; }
+    // Tracking id of the source (card/potion/relic) that generated this card mid-combat, when it was made
+    // by a known generator. Empty for deck cards and for generated cards with no resolvable creator. Used
+    // by the overlay to nest generated cards under their creator, and persisted for later history export.
+    public string GeneratedById { get; set; } = "";
 
     public override EntityStats Clone()
     {
@@ -21,6 +25,7 @@ public sealed class CardStats : EntityStats
             UpgradeLevel = UpgradeLevel,
             BaseCardKey = BaseCardKey,
             PlayerIndex = PlayerIndex,
+            GeneratedById = GeneratedById,
             RawForgeCombat = RawForgeCombat,
             ConnectedForgeCombat = ConnectedForgeCombat,
             ReceivedForgeCombat = ReceivedForgeCombat

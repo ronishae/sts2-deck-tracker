@@ -33,11 +33,19 @@ public static partial class DeckTrackerOverlay
 
         foreach (Node child in _smallRowsContainer.GetChildren()) { _smallRowsContainer.RemoveChild(child); child.QueueFree(); }
 
-        var allCards = BuildStackedCardList(stats)
-            .Where(s => s.CardType != "Status")
+        // Effective combat = summed damage buckets (direct + generated-card damage + connected-forge adj).
+        decimal SmallEffectiveCombat(CardStats s) =>
+            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
+
+        var stacked = BuildStackedCardList(ApplyCombatOnlyFilter(stats)).Where(s => s.CardType != "Status").ToList();
+        // Generated cards roll into their creator's total, so drop them when the creator is also shown to
+        // avoid counting the same damage twice (matches the full-screen nesting behaviour).
+        var smallPresentIds = stacked.Select(s => s.Id).ToHashSet();
+        var allCards = stacked
+            .Where(s => string.IsNullOrEmpty(s.GeneratedById) || !smallPresentIds.Contains(s.GeneratedById))
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
-            .Where(x => (_showRawForge ? x.Stat.RawForgeCombat : x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0)) > 0)
-            .OrderByDescending(x => _showRawForge ? x.Stat.RawForgeCombat : (x.Stat.CombatDamage + (_includeConnectedForge ? x.Stat.ConnectedForgeCombat - x.Stat.ReceivedForgeCombat : 0)))
+            .Where(x => SmallEffectiveCombat(x.Stat) > 0)
+            .OrderByDescending(x => SmallEffectiveCombat(x.Stat))
             .ThenBy(x => x.Stat.FloorAdded)
             .ToList();
 
@@ -47,9 +55,11 @@ public static partial class DeckTrackerOverlay
             var agg = item.Agg;
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-            Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            var generatorName = ResolveGeneratorDisplayName(stat.GeneratedById);
+            var nameText = generatorName != null ? $"{GetEntityDisplayTitle(stat)} ({generatorName})" : GetEntityDisplayTitle(stat);
+            Label nameLabel = new Label { Text = nameText, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-            decimal combatDamage = _showRawForge ? stat.RawForgeCombat : (stat.CombatDamage + (_includeConnectedForge ? stat.ConnectedForgeCombat - stat.ReceivedForgeCombat : 0));
+            decimal combatDamage = SmallEffectiveCombat(stat);
             Label damageLabel = new Label { Text = combatDamage.ToString("0.##") };
             Color dmgColor = (_includeConnectedForge && stat.ConnectedForgeCombat > 0) ? new Color("38BDF8") : new Color("4ADE80");
             damageLabel.AddThemeColorOverride("font_color", dmgColor);
@@ -90,7 +100,8 @@ public static partial class DeckTrackerOverlay
 
     private static void RenderFullScreenCards(List<CardStats> stats)
     {
-        var mergedStats = _mergeCardVersions ? BuildMergedCardList(stats) : stats;
+        var combatScopedStats = ApplyCombatOnlyFilter(stats);
+        var mergedStats = _mergeCardVersions ? BuildMergedCardList(combatScopedStats) : combatScopedStats;
         var effectiveStats = BuildStackedCardList(mergedStats);
 
         _fullScreenHeadersContainer!.AddChild(CreateSortableHeader("CARD NAME", "NAME", 300));
@@ -107,11 +118,22 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("EVOLVED", "EVOLVED", 80));
 
+        // Effective = the displayed damage value. In normal mode it SUMS every damage bucket (direct +
+        // generated-card damage + connected-forge adjustment); future buckets only need adding here.
         decimal EffectiveCombat(CardStats s) =>
-            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
+            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
 
         decimal EffectiveRun(ActData a) =>
-            _showRawForge ? a.RawForgeTotal : (a.TotalDamage + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
+            _showRawForge ? a.RawForgeTotal : (a.TotalDamage + a.GeneratedDamageTotal + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
+
+        decimal EffectiveHallway(ActData a) =>
+            _showRawForge ? a.RawForgeHallway : (a.DamageHallway + a.GeneratedDamageHallway + (_includeConnectedForge ? a.ConnectedForgeHallway - a.ReceivedForgeHallway : 0));
+
+        decimal EffectiveElite(ActData a) =>
+            _showRawForge ? a.RawForgeElite : (a.DamageElite + a.GeneratedDamageElite + (_includeConnectedForge ? a.ConnectedForgeElite - a.ReceivedForgeElite : 0));
+
+        decimal EffectiveBoss(ActData a) =>
+            _showRawForge ? a.RawForgeBoss : (a.DamageBoss + a.GeneratedDamageBoss + (_includeConnectedForge ? a.ConnectedForgeBoss - a.ReceivedForgeBoss : 0));
 
         var unsortedList = effectiveStats
             .Where(s => s.CardType != "Status")
@@ -139,20 +161,20 @@ public static partial class DeckTrackerOverlay
                 : unsortedList.OrderByDescending(x => EffectiveRun(x.Agg)),
 
             "AVG_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Agg.EncountersSeenTotal > 0 ? (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) / x.Agg.EncountersSeenTotal : 0)
-                : unsortedList.OrderByDescending(x => x.Agg.EncountersSeenTotal > 0 ? (_showRawForge ? x.Agg.RawForgeTotal : (x.Agg.TotalDamage + (_includeConnectedForge ? x.Agg.ConnectedForgeTotal - x.Agg.ReceivedForgeTotal : 0))) / x.Agg.EncountersSeenTotal : 0),
+                ? unsortedList.OrderBy(x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0)
+                : unsortedList.OrderByDescending(x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0),
 
             "HALLWAY_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeHallway : (x.Agg.DamageHallway + (_includeConnectedForge ? x.Agg.ConnectedForgeHallway - x.Agg.ReceivedForgeHallway : 0)))
-                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeHallway : (x.Agg.DamageHallway + (_includeConnectedForge ? x.Agg.ConnectedForgeHallway - x.Agg.ReceivedForgeHallway : 0))),
+                ? unsortedList.OrderBy(x => EffectiveHallway(x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveHallway(x.Agg)),
 
             "ELITE_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeElite : (x.Agg.DamageElite + (_includeConnectedForge ? x.Agg.ConnectedForgeElite - x.Agg.ReceivedForgeElite : 0)))
-                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeElite : (x.Agg.DamageElite + (_includeConnectedForge ? x.Agg.ConnectedForgeElite - x.Agg.ReceivedForgeElite : 0))),
+                ? unsortedList.OrderBy(x => EffectiveElite(x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveElite(x.Agg)),
 
             "BOSS_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeBoss : (x.Agg.DamageBoss + (_includeConnectedForge ? x.Agg.ConnectedForgeBoss - x.Agg.ReceivedForgeBoss : 0)))
-                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeBoss : (x.Agg.DamageBoss + (_includeConnectedForge ? x.Agg.ConnectedForgeBoss - x.Agg.ReceivedForgeBoss : 0))),
+                ? unsortedList.OrderBy(x => EffectiveBoss(x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveBoss(x.Agg)),
 
             "ADDED" => _currentSort.Ascending
                 ? unsortedList.OrderBy(x => x.Stat.FloorAdded)
@@ -177,13 +199,13 @@ public static partial class DeckTrackerOverlay
 
         var allCards = finalSort.ThenBy(x => x.Stat.FloorAdded).ToList();
 
-        foreach (var item in allCards)
+        // Builds one card row's content. namePrefix lets callers prepend an expand arrow (generators) or
+        // an indent marker (nested generated children); every damage column shows the summed Effective value.
+        Control BuildCardRow(CardStats stat, ActData agg, string namePrefix, string nameSuffix = "")
         {
-            var stat = item.Stat;
-            var agg = item.Agg;
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-            Label nameLabel = new Label { Text = GetEntityDisplayTitle(stat), CustomMinimumSize = new Vector2(300, 0) };
+            Label nameLabel = new Label { Text = namePrefix + GetEntityDisplayTitle(stat) + nameSuffix, CustomMinimumSize = new Vector2(300, 0) };
             Label playRateLabel = new Label { Text = $"{agg.TimesPlayed}/{agg.TimesDrawn} ({agg.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(130, 0) };
             playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
@@ -191,13 +213,13 @@ public static partial class DeckTrackerOverlay
             decimal valRunTotal = EffectiveRun(agg);
             decimal avgTotal = agg.EncountersSeenTotal > 0 ? valRunTotal / agg.EncountersSeenTotal : 0;
 
-            decimal valHallway = _showRawForge ? agg.RawForgeHallway : (agg.DamageHallway + (_includeConnectedForge ? agg.ConnectedForgeHallway - agg.ReceivedForgeHallway : 0));
+            decimal valHallway = EffectiveHallway(agg);
             decimal avgHallway = agg.EncountersSeenHallway > 0 ? valHallway / agg.EncountersSeenHallway : 0;
 
-            decimal valElite = _showRawForge ? agg.RawForgeElite : (agg.DamageElite + (_includeConnectedForge ? agg.ConnectedForgeElite - agg.ReceivedForgeElite : 0));
+            decimal valElite = EffectiveElite(agg);
             decimal avgElite = agg.EncountersSeenElite > 0 ? valElite / agg.EncountersSeenElite : 0;
 
-            decimal valBoss = _showRawForge ? agg.RawForgeBoss : (agg.DamageBoss + (_includeConnectedForge ? agg.ConnectedForgeBoss - agg.ReceivedForgeBoss : 0));
+            decimal valBoss = EffectiveBoss(agg);
             decimal avgBoss = agg.EncountersSeenBoss > 0 ? valBoss / agg.EncountersSeenBoss : 0;
 
             Color statColor = new Color("A0A8B4");
@@ -245,14 +267,88 @@ public static partial class DeckTrackerOverlay
             row.AddChild(removedLabel);
             row.AddChild(evolvedLabel);
 
-            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row, GetPlayerRowBgColor(stat.PlayerIndex)));
+            return row;
+        }
+
+        // A generated card nests under its creator when that creator is itself a visible row; otherwise it
+        // stays top-level (genuine GEN, e.g. an unattributable or dev-spawned card). Children keep their own
+        // direct-damage row and are excluded from the top-level list so their damage is not counted twice
+        // (the generator's row already aggregates it via the generated-damage bucket).
+        var presentIds = allCards.Select(x => x.Stat.Id).ToHashSet();
+        bool IsNestedChild(CardStats s) => !string.IsNullOrEmpty(s.GeneratedById) && presentIds.Contains(s.GeneratedById);
+        var childrenByGenerator = allCards
+            .Where(x => IsNestedChild(x.Stat))
+            .GroupBy(x => x.Stat.GeneratedById)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var item in allCards)
+        {
+            if (IsNestedChild(item.Stat))
+            {
+                continue;
+            }
+
+            var isGenerator = childrenByGenerator.ContainsKey(item.Stat.Id);
+            var expanded = isGenerator && _expandedGenerators.Contains(item.Stat.Id);
+            var prefix = isGenerator ? (expanded ? "▼ " : "▶ ") : "";
+
+            // A top-level generated card whose creator isn't a card row to nest under (a relic or potion,
+            // or a card filtered out) shows its source inline as "(Creator)" so the row makes sense alone.
+            var generatorName = ResolveGeneratorDisplayName(item.Stat.GeneratedById);
+            var suffix = generatorName != null ? $" ({generatorName})" : "";
+
+            var content = BuildCardRow(item.Stat, item.Agg, prefix, suffix);
+            var rowPanel = CreateHoverableRow(content, GetPlayerRowBgColor(item.Stat.PlayerIndex));
+
+            if (isGenerator)
+            {
+                // Let clicks anywhere on the generator row reach the panel so it toggles expansion.
+                DisableMouseBlocking(content);
+                var generatorId = item.Stat.Id;
+                rowPanel.GuiInput += (InputEvent ev) =>
+                {
+                    if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+                    {
+                        if (!_expandedGenerators.Remove(generatorId)) _expandedGenerators.Add(generatorId);
+                        RedrawUI(_latestStats);
+                    }
+                };
+            }
+
+            _fullScreenRowsContainer!.AddChild(rowPanel);
+
+            if (!expanded)
+            {
+                continue;
+            }
+
+            foreach (var child in childrenByGenerator[item.Stat.Id])
+            {
+                var childContent = BuildCardRow(child.Stat, child.Agg, "      └ ");
+                _fullScreenRowsContainer!.AddChild(CreateHoverableRow(childContent, GetPlayerRowBgColor(child.Stat.PlayerIndex)));
+            }
+        }
+    }
+
+    // Makes a control and all its descendants ignore mouse input so a clickable parent (a generator row)
+    // receives the click instead of being blocked by child labels.
+    private static void DisableMouseBlocking(Control control)
+    {
+        control.MouseFilter = Control.MouseFilterEnum.Ignore;
+        foreach (var child in control.GetChildren())
+        {
+            if (child is Control childControl)
+            {
+                DisableMouseBlocking(childControl);
+            }
         }
     }
 
     private static List<CardStats> BuildMergedCardList(List<CardStats> stats)
     {
         // BaseCardKey already encodes the owner, but include PlayerIndex explicitly so versions never merge across players.
-        var groups = stats.GroupBy(s => (string.IsNullOrEmpty(s.BaseCardKey) ? s.Id : s.BaseCardKey, s.PlayerIndex));
+        // GeneratedById is included so generated cards (which share a BaseCardKey) never merge across different creators.
+        var groups = stats.GroupBy(s => (string.IsNullOrEmpty(s.BaseCardKey) ? s.Id : s.BaseCardKey, s.PlayerIndex, s.GeneratedById));
         var result = new List<CardStats>();
 
         foreach (var group in groups)
@@ -276,6 +372,7 @@ public static partial class DeckTrackerOverlay
                 UpgradeLevel = representative.UpgradeLevel,
                 BaseCardKey = representative.BaseCardKey,
                 PlayerIndex = representative.PlayerIndex,
+                GeneratedById = representative.GeneratedById,
                 FloorAdded = versions.Min(s => s.FloorAdded),
                 FloorRemoved = representative.FloorRemoved,
                 FloorLeftDeck = evolvedFloor,
@@ -283,6 +380,8 @@ public static partial class DeckTrackerOverlay
                 CopiesInDeck = versions.Sum(s => s.CopiesInDeck),
                 CombatDamage = versions.Sum(s => s.CombatDamage),
                 RunDamage = versions.Sum(s => s.RunDamage),
+                GeneratedCombatDamage = versions.Sum(s => s.GeneratedCombatDamage),
+                GeneratedRunDamage = versions.Sum(s => s.GeneratedRunDamage),
                 CombatTimesDrawn = versions.Sum(s => s.CombatTimesDrawn),
                 CombatTimesPlayed = versions.Sum(s => s.CombatTimesPlayed),
                 RawForgeCombat = versions.Sum(s => s.RawForgeCombat),
@@ -316,8 +415,10 @@ public static partial class DeckTrackerOverlay
         const int StackThreshold = 7;
         var result = new List<CardStats>();
 
-        // Include PlayerIndex so identical cards from different players never stack into one row.
-        var groups = stats.GroupBy(s => (ExtractBaseId(s), s.UpgradeLevel, s.Enchantment, s.PlayerIndex));
+        // Include PlayerIndex so identical cards from different players never stack into one row, and
+        // GeneratedById so generated cards stack per-creator (e.g. Shivs from Fan of Knives stay separate
+        // from Shivs from Blade Dance, ready to nest under their respective generators).
+        var groups = stats.GroupBy(s => (ExtractBaseId(s), s.UpgradeLevel, s.Enchantment, s.PlayerIndex, s.GeneratedById));
 
         foreach (var group in groups)
         {
@@ -341,6 +442,7 @@ public static partial class DeckTrackerOverlay
                 UpgradeLevel = representative.UpgradeLevel,
                 BaseCardKey = representative.BaseCardKey,
                 PlayerIndex = representative.PlayerIndex,
+                GeneratedById = representative.GeneratedById,
                 FloorAdded = versions.Min(s => s.FloorAdded),
                 FloorRemoved = -1,
                 FloorLeftDeck = -1,
@@ -348,6 +450,8 @@ public static partial class DeckTrackerOverlay
                 CopiesInDeck = versions.Count,
                 CombatDamage = versions.Sum(s => s.CombatDamage),
                 RunDamage = versions.Sum(s => s.RunDamage),
+                GeneratedCombatDamage = versions.Sum(s => s.GeneratedCombatDamage),
+                GeneratedRunDamage = versions.Sum(s => s.GeneratedRunDamage),
                 CombatTimesDrawn = versions.Sum(s => s.CombatTimesDrawn),
                 CombatTimesPlayed = versions.Sum(s => s.CombatTimesPlayed),
                 RawForgeCombat = versions.Sum(s => s.RawForgeCombat),

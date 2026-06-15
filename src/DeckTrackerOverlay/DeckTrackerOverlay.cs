@@ -22,6 +22,7 @@ public static partial class DeckTrackerOverlay
     private static Button? _toggleRawForgeBtnLarge;
     private static Button? _mergeVersionsBtnLarge;
     private static Button? _hideZeroDamageBtnLarge;
+    private static Button? _thisCombatOnlyBtnLarge;
     private static CheckBox? _act1Check;
     private static CheckBox? _act2Check;
     private static CheckBox? _act3Check;
@@ -45,6 +46,12 @@ public static partial class DeckTrackerOverlay
     private static bool _showRawForge;
     private static bool _mergeCardVersions;
     private static bool _hideZeroDamageCards;
+    // When on, the card list shows only cards active in the current combat; stacked rows count only the
+    // copies made this combat (e.g. only this combat's Shivs), keeping the overlay uncluttered.
+    private static bool _thisCombatOnly;
+    // Tracking ids of generator rows the user has expanded to reveal their generated cards. Generators
+    // are collapsed by default; this persists expand state across redraws within a session.
+    private static readonly HashSet<string> _expandedGenerators = new();
 
     private static bool _act1Enabled = true;
     private static bool _act2Enabled = true;

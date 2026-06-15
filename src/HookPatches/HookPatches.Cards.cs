@@ -26,9 +26,13 @@ internal static partial class HookPatches
         {
             return;
         }
+        // Capture the creator the instant a generated card is placed into any pile (including the discard
+        // pile when the hand is full), while the generating source is still executing. Registration may
+        // not happen until the card is later drawn, by which point the context is gone.
+        CardRegistry.TagGeneratedCardOnCreation(card);
         if (card.Pile != null && card.Pile.Type == PileType.Hand && oldPile != PileType.Draw)
         {
-            if (CardRegistry.IsCardPlayActive())
+            if (CardRegistry.IsDeferringDraws())
             {
                 Log.Debug($"AfterCardChangedPilesPostfix. Deferring draw for {card.Id.Entry}");
                 CardRegistry.DeferDraw(card);

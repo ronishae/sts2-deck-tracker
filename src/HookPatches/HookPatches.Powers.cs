@@ -61,7 +61,8 @@ internal static partial class HookPatches
             return;
         }
 
-        if (powerId == "ROLLING_BOULDER_POWER" || powerId == "PANACHE_POWER" || powerId == "MONOLOGUE_POWER")
+        if (powerId == "ROLLING_BOULDER_POWER" || powerId == "PANACHE_POWER" || powerId == "MONOLOGUE_POWER"
+            || powerId == "INFINITE_BLADES_POWER")
         {
              CardRegistry.InstancedTracker.LogInstance(power, cardSource, CardRegistry.GetCurrentSourceId());
         }
@@ -442,6 +443,24 @@ internal static partial class HookPatches
         catch (Exception e)
         {
             LogHookError(nameof(RollingBoulderAfterPlayerTurnStartPostfix), e);
+        }
+    }
+
+    public static void InfiniteBladesBeforeHandDrawPrefix(InfiniteBladesPower __instance) => Guard(nameof(InfiniteBladesBeforeHandDrawPrefix), () =>
+    {
+        Log.VeryDebug("InfiniteBladesBeforeHandDrawPrefix.");
+        CardRegistry.InstancedTracker.StartExecution(__instance);
+    });
+
+    public static void InfiniteBladesBeforeHandDrawPostfix(InfiniteBladesPower __instance, ref Task __result)
+    {
+        try
+        {
+            __result = CardRegistry.InstancedTracker.AwaitTaskAsync(__result, __instance);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(InfiniteBladesBeforeHandDrawPostfix), e);
         }
     }
 

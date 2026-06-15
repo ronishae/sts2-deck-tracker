@@ -10,7 +10,15 @@ public class ActData
     public decimal DamageElite { get; set; }
     public decimal DamageBoss { get; set; }
     public decimal TotalDamage => DamageHallway + DamageElite + DamageBoss;
-    
+
+    // Damage dealt by cards this entity generated (e.g. Shivs). Kept as a separate bucket from direct
+    // damage so the UI can show them distinctly; future damage buckets (thorns, vulnerable-added, ...)
+    // follow this same shape.
+    public decimal GeneratedDamageHallway { get; set; }
+    public decimal GeneratedDamageElite { get; set; }
+    public decimal GeneratedDamageBoss { get; set; }
+    public decimal GeneratedDamageTotal => GeneratedDamageHallway + GeneratedDamageElite + GeneratedDamageBoss;
+
     public decimal RawForgeHallway { get; set; }
     public decimal RawForgeElite { get; set; }
     public decimal RawForgeBoss { get; set; }
@@ -43,6 +51,16 @@ public class ActData
             case "Elite": DamageElite += amount; break;
             case "Boss": DamageBoss += amount; break;
             default: DamageHallway += amount; break;
+        }
+    }
+
+    public void AddGeneratedDamage(string combatType, decimal amount)
+    {
+        switch (combatType)
+        {
+            case "Elite": GeneratedDamageElite += amount; break;
+            case "Boss": GeneratedDamageBoss += amount; break;
+            default: GeneratedDamageHallway += amount; break;
         }
     }
 
@@ -86,6 +104,32 @@ public class ActData
         }
     }
 
+    // Merges another act's stats into this one. Used when a card's identity changes mid-combat and its
+    // ledger entry is migrated/merged onto the new tracking id (see CardRegistry.MigrateStatsOnIdentityChange).
+    public void Add(ActData other)
+    {
+        TimesDrawn += other.TimesDrawn;
+        TimesPlayed += other.TimesPlayed;
+        DamageHallway += other.DamageHallway;
+        DamageElite += other.DamageElite;
+        DamageBoss += other.DamageBoss;
+        GeneratedDamageHallway += other.GeneratedDamageHallway;
+        GeneratedDamageElite += other.GeneratedDamageElite;
+        GeneratedDamageBoss += other.GeneratedDamageBoss;
+        RawForgeHallway += other.RawForgeHallway;
+        RawForgeElite += other.RawForgeElite;
+        RawForgeBoss += other.RawForgeBoss;
+        ConnectedForgeHallway += other.ConnectedForgeHallway;
+        ConnectedForgeElite += other.ConnectedForgeElite;
+        ConnectedForgeBoss += other.ConnectedForgeBoss;
+        ReceivedForgeHallway += other.ReceivedForgeHallway;
+        ReceivedForgeElite += other.ReceivedForgeElite;
+        ReceivedForgeBoss += other.ReceivedForgeBoss;
+        EncountersSeenHallway += other.EncountersSeenHallway;
+        EncountersSeenElite += other.EncountersSeenElite;
+        EncountersSeenBoss += other.EncountersSeenBoss;
+    }
+
     public ActData Clone()
     {
         return new ActData
@@ -95,6 +139,9 @@ public class ActData
             DamageHallway = DamageHallway,
             DamageElite = DamageElite,
             DamageBoss = DamageBoss,
+            GeneratedDamageHallway = GeneratedDamageHallway,
+            GeneratedDamageElite = GeneratedDamageElite,
+            GeneratedDamageBoss = GeneratedDamageBoss,
             RawForgeHallway = RawForgeHallway,
             RawForgeElite = RawForgeElite,
             RawForgeBoss = RawForgeBoss,

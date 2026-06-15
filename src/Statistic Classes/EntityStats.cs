@@ -30,6 +30,16 @@ public abstract class EntityStats
     public int CombatTimesDrawn { get; set; }
     public int CombatTimesPlayed { get; set; }
 
+    // Damage dealt by cards this entity generated (e.g. a card/potion/relic that makes Shivs). Tracked
+    // separately from direct damage so the UI can attribute generated-card damage to its creator.
+    public decimal GeneratedCombatDamage { get; set; }
+    public decimal GeneratedRunDamage { get; set; }
+
+    // Summed totals across every damage bucket — the single seam the UI reads. Adding a future bucket
+    // (thorns, vulnerable-added, ...) only requires adding its term here.
+    public decimal TotalCombatDamage => CombatDamage + GeneratedCombatDamage;
+    public decimal TotalRunDamage => RunDamage + GeneratedRunDamage;
+
     // Forge specifics
     public decimal RawForgeCombat { get; set; }
     public decimal ConnectedForgeCombat { get; set; }
@@ -54,6 +64,13 @@ public abstract class EntityStats
         GetAct(actNum)?.AddDamage(combatType, amount);
     }
 
+    public void AddGeneratedDamage(decimal amount, int actNum, string combatType)
+    {
+        GeneratedCombatDamage += amount;
+        GeneratedRunDamage += amount;
+        GetAct(actNum)?.AddGeneratedDamage(combatType, amount);
+    }
+
     // Enforce that all subclasses must be able to clone themselves
     public abstract EntityStats Clone();
 
@@ -72,6 +89,8 @@ public abstract class EntityStats
         cloneTarget.Act4 = Act4.Clone();
         cloneTarget.CombatDamage = CombatDamage;
         cloneTarget.RunDamage = RunDamage;
+        cloneTarget.GeneratedCombatDamage = GeneratedCombatDamage;
+        cloneTarget.GeneratedRunDamage = GeneratedRunDamage;
         cloneTarget.CombatTimesDrawn = CombatTimesDrawn;
         cloneTarget.CombatTimesPlayed = CombatTimesPlayed;
         cloneTarget.RawForgeCombat = RawForgeCombat;

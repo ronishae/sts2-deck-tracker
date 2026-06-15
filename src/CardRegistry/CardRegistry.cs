@@ -47,6 +47,40 @@ public static partial class CardRegistry
     // re-walk the chain. A clone inherits its creator's cached origin in O(1); a non-created card maps to
     // itself (or its DeckVersion). Cleared each combat.
     private static readonly Dictionary<CardModel, CardModel> _cardOrigin = new();
+    // Generated card model -> the tracking id of the source (card/power/potion/relic) that created it,
+    // captured from the executing context at generation time and gated by KnownCardGenerators. Distinct
+    // from the self-clone seam (_cardCreatedBy): this covers cross-source generation (Shiv, etc.). The
+    // generated card keeps its own row; its damage is also summed onto this creator's generated bucket.
+    // Cleared each combat (transient cards only).
+    private static readonly Dictionary<CardModel, string> _cardGeneratedBy = new();
+    // The tracking id each live card model was last registered under this combat. When a card's identity
+    // changes mid-combat (upgrade/downgrade/enchant — Cunning Potion, Armaments, Drain Power, enemy
+    // debuffs), its tracking id changes; this lets us migrate the old entry's stats onto the new id so the
+    // card stays one row instead of splitting. Cleared each combat (ids are recomputed fresh per combat).
+    private static readonly Dictionary<CardModel, string> _cardCurrentTrackingId = new();
+
+    // Base ids of sources allowed to take credit for generating a card. Gating on a known set keeps
+    // mis-attribution from silently happening: an executing source whose base id is not listed here logs
+    // a warning and the generated card falls back to a standalone "GEN" row. Extend this as new
+    // generators are confirmed (card base ids, relic entries, potion entries).
+    // NOTE: PHANTOM_BLADES/ACCURACY are deliberately excluded — they are Shiv damage modifiers, not
+    // generators. KNIFE_TRAP is also excluded — it replays Shivs already in the exhaust pile rather than
+    // generating new ones, so each replayed Shiv keeps its original creator.
+    private static readonly HashSet<string> KnownCardGenerators = new()
+    {
+        "LEADING_STRIKE",
+        "BLADE_DANCE",
+        "CLOAK_AND_DAGGER",
+        "HIDDEN_DAGGERS",
+        "UP_MY_SLEEVE",
+        "BLADE_OF_INK",
+        "STORM_OF_STEEL",
+        "INFINITE_BLADES",
+        "FAN_OF_KNIVES",
+        // Relic and potion generators (matched by relic entry / potion entry).
+        "NINJA_SCROLL",
+        "CUNNING_POTION",
+    };
 
     // Cards that always share one tracking entry regardless of how many instances are generated mid-combat.
     private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
@@ -88,7 +122,39 @@ public static partial class CardRegistry
     {
         return _currentPlayingCard.Value != null;
     }
-    
+
+    // Potion uses open the same draw-deferral window a card play does, so cards a potion creates — and
+    // upgrades as part of the same action (e.g. Cunning Potion's upgraded Shivs) — are registered once the
+    // potion fully resolves, at their final identity, instead of at their initial (un-upgraded) state.
+    private static readonly AsyncLocal<bool> _potionUseDeferringDraws = new();
+
+    public static void StartPotionUse()
+    {
+        if (_deferredDraws.Value != null)
+        {
+            return; // a card-play deferral is already open; don't clobber it
+        }
+        _deferredDraws.Value = new List<CardModel>();
+        _potionUseDeferringDraws.Value = true;
+    }
+
+    public static void EndPotionUse()
+    {
+        if (!_potionUseDeferringDraws.Value)
+        {
+            return;
+        }
+        ProcessDeferredDraws();
+        _deferredDraws.Value = null;
+        _potionUseDeferringDraws.Value = false;
+    }
+
+    // True while any draw-deferral window is open (card play or potion use).
+    public static bool IsDeferringDraws()
+    {
+        return _deferredDraws.Value != null;
+    }
+
     public static void ClearStateForTarget(Creature target)
     {
         lock (SyncRoot)
@@ -308,6 +374,215 @@ public static partial class CardRegistry
         }
     }
 
+    // Tags a freshly generated combat card (e.g. a Shiv) with the source currently executing, so its
+    // damage can later be credited to that creator's generated-damage bucket. Gated by KnownCardGenerators
+    // (allowlist + warn + GEN): an unknown/unsupported executing source logs a warning and leaves the card
+    // untagged, so it falls back to the existing standalone "GEN" row. Self-generation is guarded against
+    // (a played generated card sees itself as the playing card and must not tag itself). Must be called
+    // under SyncRoot.
+    // Eagerly captures the generator link the moment a generated card is created into ANY pile, while the
+    // generating source is still executing. Cards that overflow a full hand are created straight into the
+    // discard pile and never enter Hand here, so they would otherwise only be seen — with no executing
+    // context — when later drawn. No-op for non-generated cards and for cards already tracked/tagged.
+    // Stays silent when no known generator is executing: RegisterCard issues the warn+GEN fallback later.
+    public static void TagGeneratedCardOnCreation(CardModel card)
+    {
+        if (card.FloorAddedToDeck != null)
+        {
+            return;
+        }
+        lock (SyncRoot)
+        {
+            if (_cardGeneratedBy.ContainsKey(card) || _cardInstanceIds.ContainsKey(card))
+            {
+                return;
+            }
+            TryApplyGeneratorTag(card);
+        }
+    }
+
+    // Tags a generated card to the executing source if it is a known generator. Called at registration
+    // (with a warn+GEN fallback) and eagerly at creation (silent). Must be called under SyncRoot.
+    private static void TryTagGeneratedCard(CardModel card)
+    {
+        if (TryApplyGeneratorTag(card) || _cardGeneratedBy.ContainsKey(card))
+        {
+            return;
+        }
+        Log.Warn($"TryTagGeneratedCard. Card: {card.Id.Entry} generated by unknown/unsupported source; falling back to GEN.");
+    }
+
+    // Resolves the currently executing source and, if it is a known generator, tags the card to that
+    // generator's chain root. Returns true when a tag was applied (or already present). Must be called
+    // under SyncRoot.
+    private static bool TryApplyGeneratorTag(CardModel card)
+    {
+        if (_cardGeneratedBy.ContainsKey(card))
+        {
+            return true;
+        }
+
+        // A card playing itself is never a generation event (it is being played, not created).
+        if (CurrentPlayingCard == card)
+        {
+            return false;
+        }
+
+        // Card plays are the dominant generator (Shiv-makers like Fan of Knives); relics/potions are
+        // resolved via their prefixed tracking ids, powers via their executing source id (the tracking id
+        // of the card that applied the power, e.g. Infinite Blades creating a Shiv at turn start).
+        var playingCard = CurrentPlayingCard;
+        string? generatorId;
+        string? generatorBaseId;
+        if (playingCard != null)
+        {
+            generatorId = GetTrackingId(playingCard);
+            generatorBaseId = playingCard.Id.Entry;
+        }
+        else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+        {
+            generatorBaseId = RelicExecutionManager.ExecutingRelicId.Value;
+            generatorId = "RELIC_" + generatorBaseId;
+        }
+        else if (!string.IsNullOrEmpty(CurrentPlayingPotionId))
+        {
+            generatorId = CurrentPlayingPotionId;
+            generatorBaseId = ExtractPotionEntry(CurrentPlayingPotionId!);
+        }
+        else
+        {
+            generatorId = InstancedTracker.ExecutingSourceId;
+            generatorBaseId = ExtractCardBaseId(generatorId);
+        }
+
+        if (string.IsNullOrEmpty(generatorId) || generatorBaseId == null || !KnownCardGenerators.Contains(generatorBaseId))
+        {
+            return false;
+        }
+
+        // Credit the ROOT generator: if the immediate generator is itself a generated card, walk up the
+        // chain so the original creator accumulates the whole subtree's damage. Resolved once here and
+        // cached in _cardGeneratedBy, so RouteGeneratedDamage never re-walks per damage event.
+        var rootGeneratorId = ResolveRootGenerator(generatorId);
+        _cardGeneratedBy[card] = rootGeneratorId;
+        Log.Debug($"TryApplyGeneratorTag. Card: {card.Id.Entry} tagged to generator: {rootGeneratorId} (immediate: {generatorId}, base: {generatorBaseId})");
+        return true;
+    }
+
+    // When a card's identity (upgrade/enchant) changes mid-combat its tracking id changes, so its stats
+    // would split across two ledger entries (e.g. the draw on the old upgrade, the play on the new). This
+    // moves the previous entry's accumulated stats onto the new id so one row tracks the card across
+    // mid-combat upgrades AND downgrades. Must be called under SyncRoot.
+    private static void MigrateStatsOnIdentityChange(CardModel card, string newTrackingId)
+    {
+        if (!_cardCurrentTrackingId.TryGetValue(card, out var oldTrackingId) || oldTrackingId == newTrackingId)
+        {
+            _cardCurrentTrackingId[card] = newTrackingId;
+            return;
+        }
+        _cardCurrentTrackingId[card] = newTrackingId;
+
+        if (!EntityLedger.TryGetValue(oldTrackingId, out var oldEntity) || oldEntity is not CardStats oldStat)
+        {
+            return;
+        }
+
+        // Carry the per-combat encounter-seen flag so re-registration under the new id doesn't double-count.
+        if (_incrementedThisCombat.Remove(oldTrackingId))
+        {
+            _incrementedThisCombat.Add(newTrackingId);
+        }
+
+        if (EntityLedger.TryGetValue(newTrackingId, out var newEntity) && newEntity is CardStats newStat)
+        {
+            MergeCardStats(newStat, oldStat);
+            EntityLedger.Remove(oldTrackingId);
+            Log.Debug($"MigrateStatsOnIdentityChange. Merged {oldTrackingId} into existing {newTrackingId}");
+            return;
+        }
+
+        // Re-key the old entry under the new id and refresh the identity fields the id encodes.
+        EntityLedger.Remove(oldTrackingId);
+        oldStat.Id = newTrackingId;
+        oldStat.UpgradeLevel = card.CurrentUpgradeLevel;
+        oldStat.Enchantment = card.Enchantment?.Id.Entry ?? "";
+        oldStat.BaseCardKey = GetBaseCardKey(card);
+        oldStat.DisplayName = card.Title ?? card.Id.Entry ?? oldStat.DisplayName;
+        EntityLedger[newTrackingId] = oldStat;
+        Log.Debug($"MigrateStatsOnIdentityChange. Renamed {oldTrackingId} -> {newTrackingId}");
+    }
+
+    // Folds one card's accumulated stats into another (used when a mid-combat identity change lands on an
+    // id that already exists). Must be called under SyncRoot.
+    private static void MergeCardStats(CardStats target, CardStats source)
+    {
+        target.CombatDamage += source.CombatDamage;
+        target.RunDamage += source.RunDamage;
+        target.GeneratedCombatDamage += source.GeneratedCombatDamage;
+        target.GeneratedRunDamage += source.GeneratedRunDamage;
+        target.CombatTimesDrawn += source.CombatTimesDrawn;
+        target.CombatTimesPlayed += source.CombatTimesPlayed;
+        target.RawForgeCombat += source.RawForgeCombat;
+        target.ConnectedForgeCombat += source.ConnectedForgeCombat;
+        target.ReceivedForgeCombat += source.ReceivedForgeCombat;
+        target.Act1.Add(source.Act1);
+        target.Act2.Add(source.Act2);
+        target.Act3.Add(source.Act3);
+        target.Act4.Add(source.Act4);
+    }
+
+    // Walks GeneratedById links through the ledger up to the first non-generated source, so the root
+    // generator gets credit for a chain of generated cards (G -> A -> B all credit G). Bounded loop guards
+    // against any accidental cycle. Must be called under SyncRoot.
+    private static string ResolveRootGenerator(string generatorId)
+    {
+        var current = generatorId;
+        for (var guard = 0; guard < 16; guard++)
+        {
+            if (!EntityLedger.TryGetValue(current, out var entity)
+                || entity is not CardStats stat
+                || string.IsNullOrEmpty(stat.GeneratedById)
+                || stat.GeneratedById == current)
+            {
+                break;
+            }
+            current = stat.GeneratedById;
+        }
+        return current;
+    }
+
+    // Strips a card tracking id ("{baseId}_F{floor}_C{copy}_U{upgrade}_{enchant}_P{owner}") back to its
+    // base id for allowlist checks. baseId may contain underscores, so split at the first "_F" that is
+    // followed by a digit. Returns null for non-card ids (RELIC_/POTION_/External_Source).
+    private static string? ExtractCardBaseId(string? trackingId)
+    {
+        if (string.IsNullOrEmpty(trackingId))
+        {
+            return null;
+        }
+        for (var i = 0; i + 2 < trackingId.Length; i++)
+        {
+            if (trackingId[i] == '_' && trackingId[i + 1] == 'F' && char.IsDigit(trackingId[i + 2]))
+            {
+                return trackingId.Substring(0, i);
+            }
+        }
+        return null;
+    }
+
+    // Strips a potion tracking id ("POTION_{entry}_{counter}") back to its raw entry for allowlist checks.
+    private static string? ExtractPotionEntry(string potionTrackingId)
+    {
+        const string prefix = "POTION_";
+        if (!potionTrackingId.StartsWith(prefix))
+        {
+            return null;
+        }
+        var withoutPrefix = potionTrackingId.Substring(prefix.Length);
+        var lastUnderscore = withoutPrefix.LastIndexOf('_');
+        return lastUnderscore > 0 ? withoutPrefix.Substring(0, lastUnderscore) : withoutPrefix;
+    }
+
     // Deck cards: deterministic ordinal per (owner, identity), recomputed each scan so the id set is always
     // C0..C(N-1) for N copies — stable across client re-syncs (no churn-induced duplicate/EVOLVED rows).
     private static void AssignDeckCopyIndex(CardModel sourceCard, string ownerNetId)
@@ -455,6 +730,8 @@ public static partial class CardRegistry
             _incrementedThisCombat.Clear();
             _cardCreatedBy.Clear();
             _cardOrigin.Clear();
+            _cardGeneratedBy.Clear();
+            _cardCurrentTrackingId.Clear();
             ResetForgeState();
             ResetSovereignBladeState();
             ResetNecroMasteryState();
@@ -692,6 +969,7 @@ public static partial class CardRegistry
             foreach (var entity in EntityLedger.Values)
             {
                 entity.CombatDamage = 0;
+                entity.GeneratedCombatDamage = 0;
                 entity.RawForgeCombat = 0;
                 entity.ConnectedForgeCombat = 0;
                 entity.ReceivedForgeCombat = 0;
@@ -773,6 +1051,16 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             bool isGenerated = card.FloorAddedToDeck == null;
+            if (isGenerated)
+            {
+                TryTagGeneratedCard(card);
+            }
+            // Deck scans recompute ids deterministically and rely on the existing version-merge UI, so only
+            // live draw/play registrations migrate a card whose identity changed mid-combat.
+            if (!isDeckScan)
+            {
+                MigrateStatsOnIdentityChange(card, uniqueTrackingId);
+            }
             if (!EntityLedger.TryGetValue(uniqueTrackingId, out var existing) || existing is not CardStats stat)
             {
                 string displayName = sourceCard.Title ?? sourceCard.Id.Entry ?? "Unknown";
@@ -798,6 +1086,10 @@ public static partial class CardRegistry
 
             stat.PlayerIndex = ResolvePlayerIndex(owner);
             stat.Model = card;
+            if (_cardGeneratedBy.TryGetValue(card, out var generatorId))
+            {
+                stat.GeneratedById = generatorId;
+            }
 
             if (_currentCombatType != "Unknown" && isGenerated && _incrementedThisCombat.Add(uniqueTrackingId))
             {
@@ -842,6 +1134,34 @@ public static partial class CardRegistry
     {
         var uniqueTrackingId = GetTrackingId(card);
         AddDamageById(uniqueTrackingId, amount);
+        RouteGeneratedDamage(card, amount);
+    }
+
+    // If this card was generated by a known source, also credit the generator's separate generated-damage
+    // bucket so the overlay can attribute the generated card's damage back to its creator. The generated
+    // card still keeps its own direct-damage row; this is an additive second bucket, never a replacement.
+    private static void RouteGeneratedDamage(CardModel card, decimal amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        lock (SyncRoot)
+        {
+            if (!_cardGeneratedBy.TryGetValue(card, out var generatorId) || string.IsNullOrEmpty(generatorId))
+            {
+                return;
+            }
+            if (!EntityLedger.TryGetValue(generatorId, out var generator))
+            {
+                Log.Warn($"RouteGeneratedDamage. Generator {generatorId} for {card.Id.Entry} not in ledger; generated damage {amount} dropped.");
+                return;
+            }
+            generator.AddGeneratedDamage(amount, _currentAct, _currentCombatType);
+            Log.VeryDebug($"RouteGeneratedDamage. Card: {card.Id.Entry}, Amount: {amount}, Generator: {generatorId}");
+        }
+        Publish();
     }
     
     public static void AddDamageById(string trackingId, decimal amount)

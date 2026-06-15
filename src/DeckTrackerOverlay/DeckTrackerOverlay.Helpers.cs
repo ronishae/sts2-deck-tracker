@@ -18,6 +18,25 @@ public static partial class DeckTrackerOverlay
         return title;
     }
 
+    // True when the card saw any activity in the current combat (drawn, played, or dealt damage of any
+    // bucket). All these counters reset each combat in StartCombat, so it is a clean per-combat signal.
+    private static bool IsActiveThisCombat(CardStats stat) =>
+        stat.CombatDamage > 0 || stat.GeneratedCombatDamage > 0 || stat.CombatTimesDrawn > 0 || stat.CombatTimesPlayed > 0;
+
+    // "This Combat Only" prunes ONLY generated cards (FloorAdded == 0, the "GEN" marker) that were not
+    // created this combat — deck cards always stay, even if not yet drawn this combat. Applied per-instance
+    // before stacking, so a stacked row (e.g. Shivs) keeps only the copies made this combat and its counts
+    // reflect that, rather than the whole row being dropped.
+    private static List<CardStats> ApplyCombatOnlyFilter(List<CardStats> stats) =>
+        _thisCombatOnly ? stats.Where(s => s.FloorAdded != 0 || IsActiveThisCombat(s)).ToList() : stats;
+
+    // Resolves a generated card's creator display name (by its tracking id) for the "(Source)" suffix
+    // shown on relic/potion-generated cards in the card list. Returns null when the creator can't be found.
+    private static string? ResolveGeneratorDisplayName(string generatedById) =>
+        !string.IsNullOrEmpty(generatedById) && CardRegistry.EntityLedger.TryGetValue(generatedById, out var entity)
+            ? entity.DisplayName
+            : null;
+
     private static ActData AggregateActData(EntityStats stat)
     {
         ActData result = new ActData();
@@ -35,6 +54,9 @@ public static partial class DeckTrackerOverlay
         target.DamageHallway += source.DamageHallway;
         target.DamageElite += source.DamageElite;
         target.DamageBoss += source.DamageBoss;
+        target.GeneratedDamageHallway += source.GeneratedDamageHallway;
+        target.GeneratedDamageElite += source.GeneratedDamageElite;
+        target.GeneratedDamageBoss += source.GeneratedDamageBoss;
         target.RawForgeHallway += source.RawForgeHallway;
         target.RawForgeElite += source.RawForgeElite;
         target.RawForgeBoss += source.RawForgeBoss;

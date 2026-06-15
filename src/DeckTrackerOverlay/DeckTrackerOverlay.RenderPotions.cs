@@ -16,11 +16,13 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("USED", "USED", 100));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("DISCARDED", "REMOVED", 100));
 
+        // Effective = the displayed damage value, summing every damage bucket (direct + generated-card
+        // damage from cards this potion created + connected-forge adjustment).
         decimal EffectiveCombat(PotionStats s) =>
-            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
+            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
 
         decimal EffectiveRun(ActData agg) =>
-            _showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0));
+            _showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + agg.GeneratedDamageTotal + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0));
 
         var unsortedList = CardRegistry.EntityLedger.Values.OfType<PotionStats>()
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })

@@ -19,11 +19,22 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ADDED", "ADDED", 80));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
 
+        // Effective = the displayed damage value, summing every damage bucket (direct + generated-card
+        // damage from cards this relic created + connected-forge adjustment).
         decimal EffectiveCombat(RelicStats s) =>
-            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
+            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
 
         decimal EffectiveRun(ActData a) =>
-            _showRawForge ? a.RawForgeTotal : (a.TotalDamage + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
+            _showRawForge ? a.RawForgeTotal : (a.TotalDamage + a.GeneratedDamageTotal + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
+
+        decimal EffectiveHallway(ActData a) =>
+            _showRawForge ? a.RawForgeHallway : (a.DamageHallway + a.GeneratedDamageHallway + (_includeConnectedForge ? a.ConnectedForgeHallway - a.ReceivedForgeHallway : 0));
+
+        decimal EffectiveElite(ActData a) =>
+            _showRawForge ? a.RawForgeElite : (a.DamageElite + a.GeneratedDamageElite + (_includeConnectedForge ? a.ConnectedForgeElite - a.ReceivedForgeElite : 0));
+
+        decimal EffectiveBoss(ActData a) =>
+            _showRawForge ? a.RawForgeBoss : (a.DamageBoss + a.GeneratedDamageBoss + (_includeConnectedForge ? a.ConnectedForgeBoss - a.ReceivedForgeBoss : 0));
 
         var unsortedList = CardRegistry.EntityLedger.Values.OfType<RelicStats>()
             .Select(r => new { Stat = r, Agg = AggregateActData(r) })
@@ -49,16 +60,16 @@ public static partial class DeckTrackerOverlay
                 : unsortedList.OrderByDescending(x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0),
 
             "HALLWAY_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeHallway : (x.Agg.DamageHallway + (_includeConnectedForge ? x.Agg.ConnectedForgeHallway - x.Agg.ReceivedForgeHallway : 0)))
-                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeHallway : (x.Agg.DamageHallway + (_includeConnectedForge ? x.Agg.ConnectedForgeHallway - x.Agg.ReceivedForgeHallway : 0))),
+                ? unsortedList.OrderBy(x => EffectiveHallway(x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveHallway(x.Agg)),
 
             "ELITE_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeElite : (x.Agg.DamageElite + (_includeConnectedForge ? x.Agg.ConnectedForgeElite - x.Agg.ReceivedForgeElite : 0)))
-                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeElite : (x.Agg.DamageElite + (_includeConnectedForge ? x.Agg.ConnectedForgeElite - x.Agg.ReceivedForgeElite : 0))),
+                ? unsortedList.OrderBy(x => EffectiveElite(x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveElite(x.Agg)),
 
             "BOSS_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => _showRawForge ? x.Agg.RawForgeBoss : (x.Agg.DamageBoss + (_includeConnectedForge ? x.Agg.ConnectedForgeBoss - x.Agg.ReceivedForgeBoss : 0)))
-                : unsortedList.OrderByDescending(x => _showRawForge ? x.Agg.RawForgeBoss : (x.Agg.DamageBoss + (_includeConnectedForge ? x.Agg.ConnectedForgeBoss - x.Agg.ReceivedForgeBoss : 0))),
+                ? unsortedList.OrderBy(x => EffectiveBoss(x.Agg))
+                : unsortedList.OrderByDescending(x => EffectiveBoss(x.Agg)),
 
             "ADDED" => _currentSort.Ascending
                 ? unsortedList.OrderBy(x => x.Stat.FloorAdded)
@@ -91,13 +102,13 @@ public static partial class DeckTrackerOverlay
             decimal valTotal = EffectiveRun(agg);
             decimal avgTotal = agg.EncountersSeenTotal > 0 ? valTotal / agg.EncountersSeenTotal : 0;
 
-            decimal valHallway = _showRawForge ? agg.RawForgeHallway : (agg.DamageHallway + (_includeConnectedForge ? agg.ConnectedForgeHallway - agg.ReceivedForgeHallway : 0));
+            decimal valHallway = EffectiveHallway(agg);
             decimal avgHallway = agg.EncountersSeenHallway > 0 ? valHallway / agg.EncountersSeenHallway : 0;
 
-            decimal valElite = _showRawForge ? agg.RawForgeElite : (agg.DamageElite + (_includeConnectedForge ? agg.ConnectedForgeElite - agg.ReceivedForgeElite : 0));
+            decimal valElite = EffectiveElite(agg);
             decimal avgElite = agg.EncountersSeenElite > 0 ? valElite / agg.EncountersSeenElite : 0;
 
-            decimal valBoss = _showRawForge ? agg.RawForgeBoss : (agg.DamageBoss + (_includeConnectedForge ? agg.ConnectedForgeBoss - agg.ReceivedForgeBoss : 0));
+            decimal valBoss = EffectiveBoss(agg);
             decimal avgBoss = agg.EncountersSeenBoss > 0 ? valBoss / agg.EncountersSeenBoss : 0;
 
             Color statColor = new Color("A0A8B4");

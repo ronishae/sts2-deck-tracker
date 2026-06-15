@@ -89,6 +89,9 @@ public static partial class DeckTrackerOverlay
         _hideZeroDamageBtnLarge = new Button { Text = "Hide 0 Damage: OFF", FocusMode = Control.FocusModeEnum.None };
         _hideZeroDamageBtnLarge.Pressed += ToggleHideZeroDamage;
 
+        _thisCombatOnlyBtnLarge = new Button { Text = "Show Generated Cards From: All Combats", FocusMode = Control.FocusModeEnum.None };
+        _thisCombatOnlyBtnLarge.Pressed += ToggleThisCombatOnly;
+
         Button closeBtn = new Button { Text = "  X  ", FocusMode = Control.FocusModeEnum.None };
         closeBtn.AddThemeColorOverride("font_color", new Color("F87171"));
         closeBtn.Pressed += OnClosePressed;
@@ -101,6 +104,7 @@ public static partial class DeckTrackerOverlay
         header.AddChild(_toggleForgeDmgBtnLarge);
         header.AddChild(_mergeVersionsBtnLarge);
         header.AddChild(_hideZeroDamageBtnLarge);
+        header.AddChild(_thisCombatOnlyBtnLarge);
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
 

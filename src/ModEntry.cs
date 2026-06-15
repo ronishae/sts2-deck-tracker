@@ -101,7 +101,13 @@ public static class ModEntry
         _harmony.Patch(AccessTools.Method(typeof(RollingBoulderPower), nameof(RollingBoulderPower.AfterPlayerTurnStart)),
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RollingBoulderAfterPlayerTurnStartPostfix))));
-        
+
+        // Infinite Blades makes a Shiv each turn in BeforeHandDraw; wrap it so the generated Shiv resolves
+        // back to the Infinite Blades card that applied the power.
+        _harmony.Patch(AccessTools.Method(typeof(InfiniteBladesPower), nameof(InfiniteBladesPower.BeforeHandDraw)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfiniteBladesBeforeHandDrawPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.InfiniteBladesBeforeHandDrawPostfix))));
+
         _harmony.Patch(AccessTools.Method(typeof(PrepTimePower), nameof(PrepTimePower.AfterSideTurnStart)),
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PrepTimePostfix))));

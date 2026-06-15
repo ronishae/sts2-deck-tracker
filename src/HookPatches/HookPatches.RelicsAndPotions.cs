@@ -44,11 +44,16 @@ internal static partial class HookPatches
         Log.Debug($"BeforePotionUsedPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
         var resolvedId = CardRegistry.MarkPotionUsed(potion, floor);
         CardRegistry.SetPlayingPotion(potion, resolvedId);
+        CardRegistry.StartPotionUse();
     });
 
     public static void AfterPotionUsedPrefix(PotionModel potion) => Guard(nameof(AfterPotionUsedPrefix), () =>
     {
         Log.Debug($"AfterPotionUsedPrefix. Potion: {potion.Id.Entry}");
+        // Register any cards the potion generated now that its effect (including upgrades, e.g. Cunning
+        // Potion) has fully resolved, so they record at their final identity. Done before clearing the
+        // potion context so the generated cards still attribute to it.
+        CardRegistry.EndPotionUse();
         CardRegistry.SetPlayingPotion(null);
     });
 

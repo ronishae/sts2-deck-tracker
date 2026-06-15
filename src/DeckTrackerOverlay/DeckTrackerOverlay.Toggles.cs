@@ -31,6 +31,16 @@ public static partial class DeckTrackerOverlay
         RedrawUI(_latestStats);
     }
 
+    private static void ToggleThisCombatOnly()
+    {
+        _thisCombatOnly = !_thisCombatOnly;
+        if (_thisCombatOnlyBtnLarge != null)
+        {
+            _thisCombatOnlyBtnLarge.Text = _thisCombatOnly ? "Show Generated Cards From: This Combat" : "Show Generated Cards From: All Combats";
+        }
+        RedrawUI(_latestStats);
+    }
+
     private static void ToggleRawForge()
     {
         _showRawForge = !_showRawForge;

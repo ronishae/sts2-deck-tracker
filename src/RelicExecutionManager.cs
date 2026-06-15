@@ -155,6 +155,9 @@ public static class RelicExecutionManager
             (typeof(SlingOfCourage), nameof(SlingOfCourage.AfterRoomEntered)),
             (typeof(Brimstone), nameof(Brimstone.AfterSideTurnStart)),
             (typeof(ToastyMittens), nameof(ToastyMittens.BeforeHandDraw)),
+            // Card generator: sets the relic execution context while it creates Shivs at combat start, so
+            // those Shivs are attributed to NINJA_SCROLL by TagGeneratedCardOnCreation.
+            (typeof(NinjaScroll), nameof(NinjaScroll.BeforeHandDraw)),
             (typeof(EmberTea),  nameof(EmberTea.AfterRoomEntered)),
             (typeof(SwordOfJade), nameof(SwordOfJade.AfterRoomEntered)),
             
