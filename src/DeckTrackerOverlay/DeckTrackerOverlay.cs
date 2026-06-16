@@ -14,6 +14,12 @@ public static partial class DeckTrackerOverlay
     private static Button? _expandBtn;
     private static Button? _toggleForgeDmgBtnSmall;
 
+    // Small-panel placement/drag state. Initial right-side placement runs once so a later content resize or a
+    // user drag is never overridden.
+    private static bool _smallPanelPositioned;
+    private static bool _smallPanelDragging;
+    private static Vector2 _smallPanelDragOffset;
+
     // --- Full Screen UI Elements ---
     private static PanelContainer? _fullScreenPanel;
     private static VBoxContainer? _fullScreenRowsContainer;

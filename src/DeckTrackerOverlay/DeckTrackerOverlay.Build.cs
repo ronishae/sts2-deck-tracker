@@ -6,8 +6,11 @@ public static partial class DeckTrackerOverlay
 {
     private static void BuildSmallOverlay(CanvasLayer layer)
     {
-        _smallPanel = new PanelContainer { Position = new Vector2(20, 100), CustomMinimumSize = new Vector2(280, 50) };
+        _smallPanel = new PanelContainer { Position = new Vector2(20, 160), CustomMinimumSize = new Vector2(280, 50) };
         _smallPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0.8f), CornerRadiusTopLeft = 4, CornerRadiusTopRight = 4, CornerRadiusBottomLeft = 4, CornerRadiusBottomRight = 4 });
+        // Placed against the right edge (below the relic bar) once it is in the tree and measured, so it no
+        // longer overlaps the left-side multiplayer health bars.
+        _smallPanel.Ready += PositionSmallPanelTopRight;
 
         MarginContainer margin = new MarginContainer();
         margin.AddThemeConstantOverride("margin_left", 10); margin.AddThemeConstantOverride("margin_right", 10);
@@ -18,6 +21,11 @@ public static partial class DeckTrackerOverlay
 
         _titleLabel = new Label { Text = "Combat Damage", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _titleLabel.AddThemeColorOverride("font_color", new Color("FACC15"));
+        // The title bar doubles as the drag handle for repositioning the panel.
+        _titleLabel.MouseFilter = Control.MouseFilterEnum.Stop;
+        _titleLabel.MouseDefaultCursorShape = Control.CursorShape.Move;
+        _titleLabel.TooltipText = "Drag to move";
+        _titleLabel.GuiInput += OnSmallPanelDragInput;
 
         _toggleForgeDmgBtnSmall = new Button { Text = "+Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnSmall.AddThemeFontSizeOverride("font_size", 12);
@@ -43,6 +51,47 @@ public static partial class DeckTrackerOverlay
         margin.AddChild(mainCol);
         _smallPanel.AddChild(margin);
         layer.AddChild(_smallPanel);
+    }
+
+    // Places the panel against the right edge, below the relic bar. Runs once so a later content resize (rows
+    // added each combat) or a user drag is never overridden.
+    private static void PositionSmallPanelTopRight()
+    {
+        if (_smallPanelPositioned || !GodotObject.IsInstanceValid(_smallPanel))
+        {
+            return;
+        }
+        var viewport = _smallPanel.GetViewportRect().Size;
+        var panelWidth = Mathf.Max(_smallPanel.GetCombinedMinimumSize().X, _smallPanel.Size.X);
+        _smallPanel.Position = new Vector2(viewport.X - panelWidth - 20f, 160f);
+        _smallPanelPositioned = true;
+    }
+
+    // Drag the panel by its title bar. The grab point stays under the cursor, so motion events keep landing on
+    // the handle as the panel follows. Position is clamped to keep the panel on-screen.
+    private static void OnSmallPanelDragInput(InputEvent ev)
+    {
+        if (!GodotObject.IsInstanceValid(_smallPanel))
+        {
+            return;
+        }
+        if (ev is InputEventMouseButton { ButtonIndex: MouseButton.Left } mb)
+        {
+            _smallPanelDragging = mb.Pressed;
+            if (mb.Pressed)
+            {
+                _smallPanelDragOffset = _smallPanel.GetGlobalMousePosition() - _smallPanel.Position;
+            }
+        }
+        else if (ev is InputEventMouseMotion && _smallPanelDragging)
+        {
+            var viewport = _smallPanel.GetViewportRect().Size;
+            var size = _smallPanel.Size;
+            var target = _smallPanel.GetGlobalMousePosition() - _smallPanelDragOffset;
+            _smallPanel.Position = new Vector2(
+                Mathf.Clamp(target.X, 0f, Mathf.Max(0f, viewport.X - size.X)),
+                Mathf.Clamp(target.Y, 0f, Mathf.Max(0f, viewport.Y - size.Y)));
+        }
     }
 
     private static void BuildFullScreenOverlay(CanvasLayer layer)
