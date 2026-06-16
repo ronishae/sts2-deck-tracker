@@ -135,69 +135,137 @@ public static partial class DeckTrackerOverlay
         decimal EffectiveBoss(ActData a) =>
             _showRawForge ? a.RawForgeBoss : (a.DamageBoss + a.GeneratedDamageBoss + (_includeConnectedForge ? a.ConnectedForgeBoss - a.ReceivedForgeBoss : 0));
 
-        var unsortedList = effectiveStats
-            .Where(s => s.CardType != "Status")
-            .Where(s => _enabledPlayers.Contains(s.PlayerIndex))
-            .Select(s => new { Stat = s, Agg = AggregateActData(s) })
-            .Where(x => !_hideZeroDamageCards || EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
+        // --- Build the generation tree (multi-level, keyed by immediate parent) ---------------------------
+        // Every row shows its SUBTREE total of direct damage: a card's own damage counted once at its node,
+        // summed over all descendants. The grand total (sum of top-level rows) therefore equals the true
+        // total by construction — no reliance on the routed generated bucket and no double counting.
+        var working = effectiveStats
+            .Where(s => s.CardType != "Status" && _enabledPlayers.Contains(s.PlayerIndex))
             .ToList();
 
-        var sortedList = _currentSort.Column switch
+        var presentIds = working.Select(s => s.Id).ToHashSet();
+        bool IsNested(CardStats s) =>
+            !string.IsNullOrEmpty(s.GeneratedByImmediateId) && presentIds.Contains(s.GeneratedByImmediateId);
+
+        var childrenByImmediate = working
+            .Where(IsNested)
+            .GroupBy(s => s.GeneratedByImmediateId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Subtree sum of DIRECT (bucket-excluded) damage for a node and all its descendants. Memoized; the
+        // placeholder write before recursing guards against any accidental cycle in the immediate links.
+        var subtreeCache = new Dictionary<string, (decimal Combat, decimal Hallway, decimal Elite, decimal Boss)>();
+        (decimal Combat, decimal Hallway, decimal Elite, decimal Boss) Subtree(CardStats node)
         {
-            "NAME" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat))
-                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
+            if (subtreeCache.TryGetValue(node.Id, out var cached)) return cached;
+            subtreeCache[node.Id] = default;
 
-            "PLAY_RATE" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Agg.PlayRate)
-                : unsortedList.OrderByDescending(x => x.Agg.PlayRate),
+            var own = AggregateActData(node);
+            var combat = node.CombatDamage;
+            var hallway = own.DamageHallway;
+            var elite = own.DamageElite;
+            var boss = own.DamageBoss;
 
-            "COMBAT_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveCombat(x.Stat))
-                : unsortedList.OrderByDescending(x => EffectiveCombat(x.Stat)),
+            if (childrenByImmediate.TryGetValue(node.Id, out var kids))
+            {
+                foreach (var sub in kids.Select(Subtree))
+                {
+                    combat += sub.Combat;
+                    hallway += sub.Hallway;
+                    elite += sub.Elite;
+                    boss += sub.Boss;
+                }
+            }
 
-            "RUN_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveRun(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveRun(x.Agg)),
-
-            "AVG_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0)
-                : unsortedList.OrderByDescending(x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0),
-
-            "HALLWAY_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveHallway(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveHallway(x.Agg)),
-
-            "ELITE_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveElite(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveElite(x.Agg)),
-
-            "BOSS_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveBoss(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveBoss(x.Agg)),
-
-            "ADDED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorAdded)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorAdded),
-
-            "REMOVED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorRemoved)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorRemoved),
-
-            "EVOLVED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorLeftDeck)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorLeftDeck),
-
-            _ => unsortedList.OrderByDescending(x => EffectiveRun(x.Agg))
-        };
-
-        var finalSort = sortedList;
-        if (_currentSort.Column != "RUN_DMG")
-        {
-            finalSort = finalSort.ThenByDescending(x => EffectiveRun(x.Agg));
+            var result = (combat, hallway, elite, boss);
+            subtreeCache[node.Id] = result;
+            return result;
         }
 
-        var allCards = finalSort.ThenBy(x => x.Stat.FloorAdded).ToList();
+        // Synthetic display stat/agg: subtree damage in the damage columns, the node's own
+        // encounters/play-rate/forge/identity elsewhere, generated bucket zeroed (the subtree already folds in
+        // descendant damage, so the existing Effective* helpers yield the subtree totals unchanged).
+        var displayCache = new Dictionary<string, (CardStats Stat, ActData Agg)>();
+        (CardStats Stat, ActData Agg) Display(CardStats node)
+        {
+            if (displayCache.TryGetValue(node.Id, out var cached)) return cached;
+            var (combat, hallway, elite, boss) = Subtree(node);
+            var stat = (CardStats)node.Clone();
+            stat.CombatDamage = combat;
+            stat.GeneratedCombatDamage = 0;
+            var agg = AggregateActData(node);
+            agg.DamageHallway = hallway;
+            agg.DamageElite = elite;
+            agg.DamageBoss = boss;
+            agg.GeneratedDamageHallway = 0;
+            agg.GeneratedDamageElite = 0;
+            agg.GeneratedDamageBoss = 0;
+            var pair = (stat, agg);
+            displayCache[node.Id] = pair;
+            return pair;
+        }
+
+        // Hide 0 Damage keeps a node when its SUBTREE has damage, so an intermediate generator (e.g. Discovery)
+        // stays whenever a descendant dealt damage. Kept nodes imply kept ancestors, so the tree never orphans.
+        bool Kept(CardStats s)
+        {
+            if (!_hideZeroDamageCards)
+            {
+                return true;
+            }
+            var (stat, agg) = Display(s);
+            return EffectiveCombat(stat) > 0 || EffectiveRun(agg) > 0;
+        }
+
+        // Orders sibling nodes by the active sort column using their subtree (Display) values, with the same
+        // secondary sorts as the flat list used (run damage, then floor added).
+        List<CardStats> SortNodes(IEnumerable<CardStats> nodes)
+        {
+            IOrderedEnumerable<CardStats> ordered = _currentSort.Column switch
+            {
+                "NAME" => _currentSort.Ascending
+                    ? nodes.OrderBy(GetEntityDisplayTitle)
+                    : nodes.OrderByDescending(GetEntityDisplayTitle),
+                "PLAY_RATE" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => Display(s).Agg.PlayRate)
+                    : nodes.OrderByDescending(s => Display(s).Agg.PlayRate),
+                "COMBAT_DMG" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => EffectiveCombat(Display(s).Stat))
+                    : nodes.OrderByDescending(s => EffectiveCombat(Display(s).Stat)),
+                "RUN_DMG" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => EffectiveRun(Display(s).Agg))
+                    : nodes.OrderByDescending(s => EffectiveRun(Display(s).Agg)),
+                "AVG_DMG" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => Display(s).Agg.EncountersSeenTotal > 0 ? EffectiveRun(Display(s).Agg) / Display(s).Agg.EncountersSeenTotal : 0)
+                    : nodes.OrderByDescending(s => Display(s).Agg.EncountersSeenTotal > 0 ? EffectiveRun(Display(s).Agg) / Display(s).Agg.EncountersSeenTotal : 0),
+                "HALLWAY_DMG" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => EffectiveHallway(Display(s).Agg))
+                    : nodes.OrderByDescending(s => EffectiveHallway(Display(s).Agg)),
+                "ELITE_DMG" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => EffectiveElite(Display(s).Agg))
+                    : nodes.OrderByDescending(s => EffectiveElite(Display(s).Agg)),
+                "BOSS_DMG" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => EffectiveBoss(Display(s).Agg))
+                    : nodes.OrderByDescending(s => EffectiveBoss(Display(s).Agg)),
+                "ADDED" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => s.FloorAdded)
+                    : nodes.OrderByDescending(s => s.FloorAdded),
+                "REMOVED" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => s.FloorRemoved)
+                    : nodes.OrderByDescending(s => s.FloorRemoved),
+                "EVOLVED" => _currentSort.Ascending
+                    ? nodes.OrderBy(s => s.FloorLeftDeck)
+                    : nodes.OrderByDescending(s => s.FloorLeftDeck),
+                _ => nodes.OrderByDescending(s => EffectiveRun(Display(s).Agg))
+            };
+
+            return ordered
+                .ThenByDescending(s => EffectiveRun(Display(s).Agg))
+                .ThenBy(s => s.FloorAdded)
+                .ToList();
+        }
+
+        var topLevel = SortNodes(working.Where(s => !IsNested(s) && Kept(s)));
 
         // Builds one card row's content. namePrefix lets callers prepend an expand arrow (generators) or
         // an indent marker (nested generated children); every damage column shows the summed Effective value.
@@ -205,7 +273,17 @@ public static partial class DeckTrackerOverlay
         {
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-            Label nameLabel = new Label { Text = namePrefix + GetEntityDisplayTitle(stat) + nameSuffix, CustomMinimumSize = new Vector2(300, 0) };
+            // Fixed-width, ellipsis-clipped name so a deeply-indented generation chain never widens the column
+            // and pushes the other columns out of alignment; the full name is available on hover.
+            string fullName = namePrefix + GetEntityDisplayTitle(stat) + nameSuffix;
+            Label nameLabel = new Label
+            {
+                Text = fullName,
+                CustomMinimumSize = new Vector2(300, 0),
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                TooltipText = fullName
+            };
             Label playRateLabel = new Label { Text = $"{agg.TimesPlayed}/{agg.TimesDrawn} ({agg.PlayRate * 100:0.#}%)", CustomMinimumSize = new Vector2(130, 0) };
             playRateLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
@@ -270,41 +348,38 @@ public static partial class DeckTrackerOverlay
             return row;
         }
 
-        // A generated card nests under its creator when that creator is itself a visible row; otherwise it
-        // stays top-level (genuine GEN, e.g. an unattributable or dev-spawned card). Children keep their own
-        // direct-damage row and are excluded from the top-level list so their damage is not counted twice
-        // (the generator's row already aggregates it via the generated-damage bucket).
-        var presentIds = allCards.Select(x => x.Stat.Id).ToHashSet();
-        bool IsNestedChild(CardStats s) => !string.IsNullOrEmpty(s.GeneratedById) && presentIds.Contains(s.GeneratedById);
-        var childrenByGenerator = allCards
-            .Where(x => IsNestedChild(x.Stat))
-            .GroupBy(x => x.Stat.GeneratedById)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        foreach (var item in allCards)
+        // Recursively emits a node and, when it is an expanded generator, its immediate children indented one
+        // level deeper — so a generation chain (Spectrum Shift -> Discovery -> Noxious Fumes) reads as a tree.
+        void EmitNode(CardStats node, int depth)
         {
-            if (IsNestedChild(item.Stat))
+            childrenByImmediate.TryGetValue(node.Id, out var rawKids);
+            var kids = rawKids?.Where(Kept).ToList() ?? new List<CardStats>();
+            var isGenerator = kids.Count > 0;
+            var expanded = isGenerator && _expandedGenerators.Contains(node.Id);
+
+            var branch = depth > 0 ? new string(' ', depth * 4) + "└ " : "";
+            var arrow = isGenerator ? (expanded ? "▼ " : "▶ ") : "";
+            var prefix = branch + arrow;
+
+            // A top-level generated card whose immediate creator isn't a present row (a relic/potion, or a
+            // filtered-out card) shows its source inline so the row makes sense on its own.
+            var suffix = "";
+            if (depth == 0)
             {
-                continue;
+                var generatorName = ResolveGeneratorDisplayName(node.GeneratedByImmediateId)
+                    ?? ResolveGeneratorDisplayName(node.GeneratedById);
+                if (generatorName != null) suffix = $" ({generatorName})";
             }
 
-            var isGenerator = childrenByGenerator.ContainsKey(item.Stat.Id);
-            var expanded = isGenerator && _expandedGenerators.Contains(item.Stat.Id);
-            var prefix = isGenerator ? (expanded ? "▼ " : "▶ ") : "";
-
-            // A top-level generated card whose creator isn't a card row to nest under (a relic or potion,
-            // or a card filtered out) shows its source inline as "(Creator)" so the row makes sense alone.
-            var generatorName = ResolveGeneratorDisplayName(item.Stat.GeneratedById);
-            var suffix = generatorName != null ? $" ({generatorName})" : "";
-
-            var content = BuildCardRow(item.Stat, item.Agg, prefix, suffix);
-            var rowPanel = CreateHoverableRow(content, GetPlayerRowBgColor(item.Stat.PlayerIndex));
+            var (displayStat, displayAgg) = Display(node);
+            var content = BuildCardRow(displayStat, displayAgg, prefix, suffix);
+            var rowPanel = CreateHoverableRow(content, GetPlayerRowBgColor(node.PlayerIndex));
 
             if (isGenerator)
             {
                 // Let clicks anywhere on the generator row reach the panel so it toggles expansion.
                 DisableMouseBlocking(content);
-                var generatorId = item.Stat.Id;
+                var generatorId = node.Id;
                 rowPanel.GuiInput += (InputEvent ev) =>
                 {
                     if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
@@ -319,14 +394,18 @@ public static partial class DeckTrackerOverlay
 
             if (!expanded)
             {
-                continue;
+                return;
             }
 
-            foreach (var child in childrenByGenerator[item.Stat.Id])
+            foreach (var kid in SortNodes(kids))
             {
-                var childContent = BuildCardRow(child.Stat, child.Agg, "      └ ");
-                _fullScreenRowsContainer!.AddChild(CreateHoverableRow(childContent, GetPlayerRowBgColor(child.Stat.PlayerIndex)));
+                EmitNode(kid, depth + 1);
             }
+        }
+
+        foreach (var node in topLevel)
+        {
+            EmitNode(node, 0);
         }
     }
 
@@ -430,10 +509,13 @@ public static partial class DeckTrackerOverlay
             for (var i = 0; i < result.Count; i++)
             {
                 var card = result[i];
-                if (!string.IsNullOrEmpty(card.GeneratedById) && idRemap.TryGetValue(card.GeneratedById, out var newId))
+                var rootRemapped = !string.IsNullOrEmpty(card.GeneratedById) && idRemap.TryGetValue(card.GeneratedById, out var newRootId);
+                var immediateRemapped = !string.IsNullOrEmpty(card.GeneratedByImmediateId) && idRemap.TryGetValue(card.GeneratedByImmediateId, out var newImmediateId);
+                if (rootRemapped || immediateRemapped)
                 {
                     var clone = (CardStats)card.Clone();
-                    clone.GeneratedById = newId;
+                    if (rootRemapped) clone.GeneratedById = idRemap[card.GeneratedById];
+                    if (immediateRemapped) clone.GeneratedByImmediateId = idRemap[card.GeneratedByImmediateId];
                     result[i] = clone;
                 }
             }
@@ -477,6 +559,7 @@ public static partial class DeckTrackerOverlay
             BaseCardKey = representative.BaseCardKey,
             PlayerIndex = representative.PlayerIndex,
             GeneratedById = representative.GeneratedById,
+            GeneratedByImmediateId = representative.GeneratedByImmediateId,
             FloorAdded = versions.Min(s => s.FloorAdded),
             FloorRemoved = representative.FloorRemoved,
             FloorLeftDeck = evolvedFloor,
@@ -519,7 +602,7 @@ public static partial class DeckTrackerOverlay
         // Include PlayerIndex so identical cards from different players never stack into one row, and
         // GeneratedById so generated cards stack per-creator (e.g. Shivs from Fan of Knives stay separate
         // from Shivs from Blade Dance, ready to nest under their respective generators).
-        var groups = stats.GroupBy(s => (ExtractBaseId(s), s.UpgradeLevel, s.Enchantment, s.PlayerIndex, s.GeneratedById));
+        var groups = stats.GroupBy(s => (ExtractBaseId(s), s.UpgradeLevel, s.Enchantment, s.PlayerIndex, s.GeneratedById, s.GeneratedByImmediateId));
 
         foreach (var group in groups)
         {
@@ -544,6 +627,7 @@ public static partial class DeckTrackerOverlay
                 BaseCardKey = representative.BaseCardKey,
                 PlayerIndex = representative.PlayerIndex,
                 GeneratedById = representative.GeneratedById,
+                GeneratedByImmediateId = representative.GeneratedByImmediateId,
                 FloorAdded = versions.Min(s => s.FloorAdded),
                 FloorRemoved = -1,
                 FloorLeftDeck = -1,

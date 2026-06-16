@@ -52,6 +52,10 @@ public static partial class CardRegistry
     // (_cardCreatedBy): this covers cross-source generation (Shiv, etc.). The generated card keeps its own
     // row; its damage is also summed onto this creator's generated bucket. Cleared each combat.
     private static readonly Dictionary<CardModel, string> _cardGeneratedBy = new();
+    // The IMMEDIATE generator (one step up the chain, before rolling up to the root) for each generated card
+    // model. Parallel to _cardGeneratedBy; used to build the overlay's multi-level generation tree. Cleared
+    // each combat alongside _cardGeneratedBy.
+    private static readonly Dictionary<CardModel, string> _cardGeneratedByImmediate = new();
     // The tracking id each live card model was last registered under this combat. When a card's identity
     // changes mid-combat (upgrade/downgrade/enchant — Cunning Potion, Armaments, Drain Power, enemy
     // debuffs), its tracking id changes; this lets us migrate the old entry's stats onto the new id so the
@@ -438,6 +442,7 @@ public static partial class CardRegistry
         // cached in _cardGeneratedBy, so RouteGeneratedDamage never re-walks per damage event.
         var rootGeneratorId = ResolveRootGenerator(generatorId);
         _cardGeneratedBy[card] = rootGeneratorId;
+        _cardGeneratedByImmediate[card] = generatorId;
         Log.Debug($"TryApplyGeneratorTag. Card: {card.Id.Entry} tagged to generator: {rootGeneratorId} (immediate: {generatorId})");
         return true;
     }
@@ -682,6 +687,7 @@ public static partial class CardRegistry
             _cardCreatedBy.Clear();
             _cardOrigin.Clear();
             _cardGeneratedBy.Clear();
+            _cardGeneratedByImmediate.Clear();
             _cardCurrentTrackingId.Clear();
             ResetForgeState();
             ResetSovereignBladeState();
@@ -1042,6 +1048,10 @@ public static partial class CardRegistry
             if (_cardGeneratedBy.TryGetValue(card, out var generatorId))
             {
                 stat.GeneratedById = generatorId;
+            }
+            if (_cardGeneratedByImmediate.TryGetValue(card, out var immediateGeneratorId))
+            {
+                stat.GeneratedByImmediateId = immediateGeneratorId;
             }
 
             if (_currentCombatType != "Unknown" && isGenerated && _incrementedThisCombat.Add(uniqueTrackingId))
