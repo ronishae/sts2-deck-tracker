@@ -172,7 +172,10 @@ public static partial class CardRegistry
         _deferredDraws.Value.Clear();
     }
 
-    private static readonly string SavePath = ProjectSettings.GlobalizePath("user://deck_tracker_save.json");
+    // One save file per run, keyed by run seed, so different runs (other profiles / multiplayer lobbies)
+    // can each be resumed instead of only the most recent. Growth is bounded by MaxStoredRuns (LRU).
+    private static readonly string SaveDirectory = ProjectSettings.GlobalizePath("user://deck_tracker_saves/");
+    private const int MaxStoredRuns = 5;
 
     public static event Action<List<CardStats>>? Changed;
 
@@ -253,9 +256,13 @@ public static partial class CardRegistry
                 };
             }
 
+            System.IO.Directory.CreateDirectory(SaveDirectory);
+            var path = GetRunSavePath(state.RunSeed);
             string json = JsonSerializer.Serialize(state, SavedStateCtx.Default.SavedRunState);
-            System.IO.File.WriteAllText(SavePath, json);
-            Log.Info("SaveState. State saved successfully.");
+            System.IO.File.WriteAllText(path, json);
+            Log.Info($"SaveState. State saved successfully. Seed: {state.RunSeed}, Path: {path}");
+
+            EvictOldRuns();
         }
         catch (Exception e)
         {
@@ -263,17 +270,66 @@ public static partial class CardRegistry
         }
     }
 
+    // Maps a run seed to its save file path. Sanitises the seed to filesystem-safe characters and appends
+    // a short stable hash so two distinct seeds can never collide to the same name. The authoritative seed
+    // check lives inside the file (TryLoadState validates state.RunSeed), so the name only needs to be unique.
+    private static string GetRunSavePath(string seed)
+    {
+        var sanitized = new string(seed.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+        var path = System.IO.Path.Combine(SaveDirectory, $"{sanitized}_{StableHash(seed)}.json");
+        Log.VeryDebug($"GetRunSavePath. Seed: {seed}, Path: {path}");
+        return path;
+    }
+
+    // Deterministic 8-char hex hash of the seed (string.GetHashCode is not stable across processes).
+    private static string StableHash(string value)
+    {
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        var bytes = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(bytes, 0, 4);
+    }
+
+    // LRU cap: keep only the MaxStoredRuns most-recently-written run files, deleting the oldest beyond that.
+    // Each SaveState refreshes the active run's timestamp, so the run being played is never evicted.
+    private static void EvictOldRuns()
+    {
+        try
+        {
+            var files = System.IO.Directory.GetFiles(SaveDirectory, "*.json");
+            if (files.Length <= MaxStoredRuns)
+            {
+                Log.VeryDebug($"EvictOldRuns. Within cap. Count: {files.Length}, Max: {MaxStoredRuns}");
+                return;
+            }
+
+            var oldest = files
+                .OrderBy(System.IO.File.GetLastWriteTimeUtc)
+                .Take(files.Length - MaxStoredRuns)
+                .ToList();
+            foreach (var file in oldest)
+            {
+                System.IO.File.Delete(file);
+            }
+            Log.Info($"EvictOldRuns. Removed old run saves. Removed: {oldest.Count}, Remaining: {MaxStoredRuns}");
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"EvictOldRuns Failed: {e.Message}");
+        }
+    }
+
     private static bool TryLoadState(string targetSeed)
     {
         try
         {
-            if (!System.IO.File.Exists(SavePath))
+            var path = GetRunSavePath(targetSeed);
+            if (!System.IO.File.Exists(path))
             {
-                Log.Debug("TryLoadState. No save file found.");
+                Log.Debug($"TryLoadState. No save file found. Seed: {targetSeed}, Path: {path}");
                 return false;
             }
 
-            string json = System.IO.File.ReadAllText(SavePath);
+            string json = System.IO.File.ReadAllText(path);
             SavedRunState? state = JsonSerializer.Deserialize(json, SavedStateCtx.Default.SavedRunState);
 
             if (state == null || state.RunSeed != targetSeed)
