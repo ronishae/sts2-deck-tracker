@@ -796,6 +796,11 @@ public static partial class CardRegistry
                 {
                     stat.IsActive = true;
                     stat.CopiesInDeck = count;
+                    // A card present in the live deck is not removed — clear any stale removal markers so a
+                    // card that was temporarily taken (e.g. stolen by a Thieving Hopper) and returned shows
+                    // N/A again. A genuinely lost card never re-enters this branch, so its FloorRemoved stays.
+                    stat.FloorRemoved = -1;
+                    stat.FloorLeftDeck = -1;
                 }
             }
         }
