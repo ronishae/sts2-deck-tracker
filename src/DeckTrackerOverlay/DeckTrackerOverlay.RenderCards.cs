@@ -311,10 +311,10 @@ public static partial class DeckTrackerOverlay
             Color statColor = new Color("A0A8B4");
 
             Label runDataLabel = new Label { Text = $"{valRunTotal:0.##}", CustomMinimumSize = new Vector2(150, 0) };
-            runDataLabel.AddThemeColorOverride("font_color", _includeConnectedForge && agg.ConnectedForgeTotal > 0 ? new Color("38BDF8") : new Color("4ADE80"));
+            runDataLabel.AddThemeColorOverride("font_color", !_showRawForge && _includeConnectedForge && agg.ConnectedForgeTotal > 0 ? new Color("38BDF8") : (_showRawForge ? statColor : new Color("4ADE80")));
 
             Label combatDataLabel = new Label { Text = $"{valCombat:0.##}", CustomMinimumSize = new Vector2(150, 0) };
-            combatDataLabel.AddThemeColorOverride("font_color", _includeConnectedForge && stat.ConnectedForgeCombat > 0 ? new Color("38BDF8") : new Color("4ADE80"));
+            combatDataLabel.AddThemeColorOverride("font_color", !_showRawForge && _includeConnectedForge && stat.ConnectedForgeCombat > 0 ? new Color("38BDF8") : (_showRawForge ? statColor : new Color("4ADE80")));
 
             Label avgDataLabel = new Label { Text = $"({avgTotal:0.#}) (#{agg.EncountersSeenTotal})", CustomMinimumSize = new Vector2(130, 0) };
             avgDataLabel.AddThemeColorOverride("font_color", statColor);

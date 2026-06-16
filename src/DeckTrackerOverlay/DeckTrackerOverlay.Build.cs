@@ -130,6 +130,7 @@ public static partial class DeckTrackerOverlay
         _toggleRawForgeBtnLarge.Pressed += ToggleRawForge;
 
         _toggleForgeDmgBtnLarge = new Button { Text = "Include Connected Forge: OFF", FocusMode = Control.FocusModeEnum.None };
+        _toggleForgeDmgBtnLarge.TooltipText = "Only applies to the Damage view (disabled while Show Raw Forge is on)";
         _toggleForgeDmgBtnLarge.Pressed += ToggleForgeDamage;
 
         _mergeVersionsBtnLarge = new Button { Text = "Merge Versions: ON", FocusMode = Control.FocusModeEnum.None };

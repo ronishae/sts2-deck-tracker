@@ -45,6 +45,9 @@ public static partial class DeckTrackerOverlay
     {
         _showRawForge = !_showRawForge;
         if (_toggleRawForgeBtnLarge != null) _toggleRawForgeBtnLarge.Text = _showRawForge ? "Show Raw Forge: ON" : "Show Raw Forge: OFF";
+        // Include Connected Forge only applies to the Damage view; grey it out (preserving its state) while
+        // Raw Forge is on so the two toggles can't fight over the same columns.
+        if (_toggleForgeDmgBtnLarge != null) _toggleForgeDmgBtnLarge.Disabled = _showRawForge;
         RedrawUI(_latestStats);
     }
 
