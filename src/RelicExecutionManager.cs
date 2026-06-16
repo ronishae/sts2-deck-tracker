@@ -177,6 +177,9 @@ public static class RelicExecutionManager
             // Forge
             (typeof(FencingManual), nameof(FencingManual.AfterSideTurnStart)),
             
+            // Vulnerable
+            (typeof(BagOfMarbles), nameof(BagOfMarbles.BeforeSideTurnStart)),
+            
             // Card Gen
             (typeof(NinjaScroll), nameof(NinjaScroll.BeforeHandDraw)),
             (typeof(VexingPuzzlebox), nameof(VexingPuzzlebox.AfterPlayerTurnStart)),
