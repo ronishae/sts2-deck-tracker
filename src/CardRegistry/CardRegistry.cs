@@ -1159,6 +1159,16 @@ public static partial class CardRegistry
         Publish();
     }
 
+    // Registers a card and credits a draw in one step, used when a draw must be counted outside the
+    // normal draw hooks (e.g. a card autoplayed without ever entering the hand). Done directly rather
+    // than via the deferral window so the draw pairs with the play, which is also counted directly.
+    public static void RegisterAndAddDraw(CardModel card)
+    {
+        RegisterCard(card);
+        AddDraw(card);
+        ForcePublish();
+    }
+
     public static void AddPlay(CardModel card)
     {
         string uniqueTrackingId = GetTrackingId(card);

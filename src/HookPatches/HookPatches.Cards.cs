@@ -70,6 +70,24 @@ internal static partial class HookPatches
         }
     });
 
+    // A card autoplayed without ever entering the hand (Uproar's draw-pile attack, Cascade/Mayhem via
+    // AutoPlayFromDrawPile which pre-moves cards to the Play pile, or a generated card played directly)
+    // never triggers a draw hook, yet its play is counted in BeforeCardPlayedPostfix — so play rate
+    // could exceed 100%. Credit an implicit draw here. Cards still in hand (Stampede, Hellraiser) and
+    // Sly discards (autoplayed from the discard pile, type SlyDiscard) were already drawn, so skip them
+    // to avoid double-counting. This hook fires only after AutoPlay's bail-outs, so the card truly plays.
+    public static void BeforeCardAutoPlayedPostfix(CardModel card, AutoPlayType type) => Guard(nameof(BeforeCardAutoPlayedPostfix), () =>
+    {
+        var pileType = card.Pile?.Type;
+        if (type == AutoPlayType.SlyDiscard || pileType == PileType.Hand)
+        {
+            Log.Debug($"BeforeCardAutoPlayedPostfix. Skip draw (already drawn). Card: {card.Id.Entry}, Type: {type}, Pile: {pileType}");
+            return;
+        }
+        Log.Debug($"BeforeCardAutoPlayedPostfix. Implicit draw. Card: {card.Id.Entry}, Type: {type}, Pile: {pileType}");
+        CardRegistry.RegisterAndAddDraw(card);
+    });
+
     // Has ref parameters, which cannot be captured by the Guard lambda, so it is isolated inline instead.
     public static void ModifyDamagePostfix(Decimal damage, Creature? target, Creature? dealer, ValueProp props, CardModel? cardSource, CardPreviewMode previewMode, ref IEnumerable<AbstractModel> modifiers, ref Decimal __result)
     {
