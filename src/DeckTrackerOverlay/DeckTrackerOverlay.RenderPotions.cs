@@ -96,7 +96,7 @@ public static partial class DeckTrackerOverlay
             row.AddChild(usedLabel);
             row.AddChild(discardedLabel);
 
-            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row));
+            _fullScreenRowsContainer!.AddChild(CreateHoverableRow(row, GetPlayerRowBgColor(stat.PlayerIndex)));
         }
     }
 }

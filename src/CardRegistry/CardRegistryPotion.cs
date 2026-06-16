@@ -35,6 +35,7 @@ public static partial class CardRegistry
                 Model = potion,
                 FloorObtained = floor,
                 OwnerNetId = potion.Owner?.NetId.ToString(),
+                PlayerIndex = ResolvePlayerIndex(potion.Owner?.NetId.ToString() ?? ""),
                 IsActive = true
             };
             Log.Debug($"Procured Potion: {displayName} ({id}), Owner: {potion.Owner?.NetId.ToString() ?? "NONE"}");

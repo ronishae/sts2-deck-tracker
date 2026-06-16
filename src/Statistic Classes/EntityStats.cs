@@ -17,6 +17,9 @@ public abstract class EntityStats
     public int FloorRemoved { get; set; } = -1;
     public int FloorLeftDeck { get; set; } = -1;
     public bool IsActive { get; set; } = true; // True if in deck OR currently owned relic
+
+    // Index into the ordered player list — used to colour-code and order rows per player in the overlay.
+    public int PlayerIndex { get; set; }
     
     // Act Splits
     public ActData Act1 { get; set; } = new();
@@ -83,6 +86,7 @@ public abstract class EntityStats
         cloneTarget.FloorRemoved = FloorRemoved;
         cloneTarget.FloorLeftDeck = FloorLeftDeck;
         cloneTarget.IsActive = IsActive;
+        cloneTarget.PlayerIndex = PlayerIndex;
         cloneTarget.Act1 = Act1.Clone();
         cloneTarget.Act2 = Act2.Clone();
         cloneTarget.Act3 = Act3.Clone();

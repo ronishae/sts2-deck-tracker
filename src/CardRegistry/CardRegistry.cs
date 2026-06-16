@@ -857,6 +857,7 @@ public static partial class CardRegistry
                 var stats = GetOrCreateRelicStats(relic.Id.Entry);
                 stats.Model = relic;
                 stats.IsActive = true;
+                stats.PlayerIndex = playerIdx;
             }
 
             foreach (var card in player.Deck.Cards)
@@ -902,6 +903,7 @@ public static partial class CardRegistry
                 var potionStat = (PotionStats)EntityLedger[existingId];
                 potionStat.OwnerNetId ??= netId; // Backfill owner for saves made before owner tracking.
                 potionStat.Model = potion;
+                potionStat.PlayerIndex = playerIdx;
             }
         }
         Log.Debug("RestoreLiveInstances. Live object references restored.");
