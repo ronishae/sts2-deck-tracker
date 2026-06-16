@@ -48,7 +48,7 @@ public static partial class DeckTrackerOverlay
     private static readonly ConcurrentQueue<List<CardStats>> UpdateQueue = new();
     private static bool _isHookedToProcess;
 
-    private static bool _includeConnectedForge;
+    private static bool _includeConnectedForge = true;
     private static bool _showRawForge;
     private static bool _mergeCardVersions = true;
     private static bool _hideZeroDamageCards = true;

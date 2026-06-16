@@ -27,7 +27,7 @@ public static partial class DeckTrackerOverlay
         _titleLabel.TooltipText = "Drag to move";
         _titleLabel.GuiInput += OnSmallPanelDragInput;
 
-        _toggleForgeDmgBtnSmall = new Button { Text = "+Forge: OFF", FocusMode = Control.FocusModeEnum.None };
+        _toggleForgeDmgBtnSmall = new Button { Text = "+Forge: ON", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnSmall.AddThemeFontSizeOverride("font_size", 12);
         _toggleForgeDmgBtnSmall.Pressed += ToggleForgeDamage;
 
@@ -129,7 +129,7 @@ public static partial class DeckTrackerOverlay
         _toggleRawForgeBtnLarge = new Button { Text = "Show Raw Forge: OFF", FocusMode = Control.FocusModeEnum.None };
         _toggleRawForgeBtnLarge.Pressed += ToggleRawForge;
 
-        _toggleForgeDmgBtnLarge = new Button { Text = "Include Connected Forge: OFF", FocusMode = Control.FocusModeEnum.None };
+        _toggleForgeDmgBtnLarge = new Button { Text = "Include Connected Forge: ON", FocusMode = Control.FocusModeEnum.None };
         _toggleForgeDmgBtnLarge.TooltipText = "Only applies to the Damage view (disabled while Show Raw Forge is on)";
         _toggleForgeDmgBtnLarge.Pressed += ToggleForgeDamage;
 
