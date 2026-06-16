@@ -172,6 +172,11 @@ internal static partial class HookPatches
         }
     });
 
+    public static void LoseBlockPrefix(Creature creature, decimal amount) => Guard(nameof(LoseBlockPrefix), () =>
+    {
+        CardRegistry.HandleForcedBlockLoss(creature, amount);
+    });
+
     public static void AfterDamageGivenPostfix(PlayerChoiceContext? choiceContext, ICombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource) => Guard(nameof(AfterDamageGivenPostfix), () =>
     {
         if (target.IsPlayer)
