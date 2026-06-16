@@ -38,7 +38,7 @@ public static partial class DeckTrackerOverlay
 
         var unsortedList = CardRegistry.EntityLedger.Values.OfType<RelicStats>()
             .Select(r => new { Stat = r, Agg = AggregateActData(r) })
-            .Where(x => EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
+            .Where(x => !_hideZeroDamageCards || EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
             .ToList();
 
         var sortedList = _currentSort.Column switch
