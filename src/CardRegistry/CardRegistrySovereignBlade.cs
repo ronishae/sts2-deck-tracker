@@ -18,7 +18,7 @@ public static partial class CardRegistry
         switch (cardSource.Id.Entry)
         {
             case "SOVEREIGN_BLADE":
-                AddSovereignBladeDamageHistoryItem(new DamageHistoryItem(combatState, dealer, results, target, cardSource));
+                AddSovereignBladeDamageHistoryItem(new DamageHistoryItem(combatState, dealer, results, target, cardSource, baseDmg));
                 return true;
             case "SHIV":
                 AddShivDamage(cardSource, baseDmg);
@@ -97,13 +97,16 @@ public static partial class CardRegistry
         Publish();
     }
     
-    private static void SplitForgeDamage(CardModel bladeCard, DamageResult results, Creature target, CardModel? seekingEdge, CardModel? replayModifyingCard)
+    private static void SplitForgeDamage(CardModel bladeCard, DamageResult results, decimal baseDamage, Creature target, CardModel? seekingEdge, CardModel? replayModifyingCard)
     {
         lock (SyncRoot)
         {
             var conquerorId = GetEarliestActiveConqueror(target);
             Log.VeryDebug($"ConquerorID requested: {conquerorId}.");
-            var damageToAttribute = results.TotalDamage;
+            // Split the card-intrinsic base damage (modifiers like Strength/Vigor/Vulnerable have already
+            // been paid out to their own sources by ProcessDamageSnapshot), not Results.TotalDamage, or
+            // those modifiers would be double-counted onto the blade.
+            var damageToAttribute = baseDamage;
             Log.Debug($"SplitForgeDamage. Damage to attribute: {damageToAttribute}.");
 
             if (conquerorId != null)
@@ -253,12 +256,12 @@ public static partial class CardRegistry
             if (damageHistoryItem == maxTotalDamageInstance)
             {
                 Log.Debug($"ProcessSovereignBladeHistory. Max-damage hit; attributing to blade and forgers (no seeking edge).");
-                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, null, replayModifyingCard);
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.BaseDamage, damageHistoryItem.Target, null, replayModifyingCard);
             }
             else
             {
                 Log.Debug($"ProcessSovereignBladeHistory. Attributing to Seeking Edge: {GetTrackingId(_activeSeekingEdgeCard)}.");
-                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.Target, _activeSeekingEdgeCard, replayModifyingCard);
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.BaseDamage, damageHistoryItem.Target, _activeSeekingEdgeCard, replayModifyingCard);
             }
         }
         

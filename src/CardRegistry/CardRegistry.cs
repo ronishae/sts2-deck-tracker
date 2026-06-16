@@ -190,6 +190,12 @@ public static partial class CardRegistry
             if (TryLoadState(runSeed))
             {
                 Log.Info($"SyncRun. Resumed run data for seed: {runSeed}");
+                // Resuming replays the active combat from its start, but the mod's combat accumulators
+                // (ForgeHistory, Sovereign Blade history, buff/poison/orb ledgers, generation seam maps)
+                // are normally cleared only at combat end — which never fired before the save/quit. Clear
+                // them now so the replayed combat starts clean; the loaded run stats (EntityLedger) are kept
+                // and deck identity is rebuilt by RestoreLiveInstances below.
+                ResetInternalsCombat();
             }
             else
             {
