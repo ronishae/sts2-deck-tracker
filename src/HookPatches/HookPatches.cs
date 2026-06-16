@@ -116,6 +116,46 @@ internal static partial class HookPatches
         }
     }
 
+    private static int _lastDeckSignature;
+
+    // Re-scans + republishes the deck the moment its composition changes out of combat, so card
+    // add/remove/upgrade/enchant show instantly instead of waiting for the next combat. Gated to
+    // out-of-combat: the rescan's BeginDeckScan resets copy-index maps that live card tracking relies on
+    // during combat.
+    public static void PollDeckChange() => Guard(nameof(PollDeckChange), () =>
+    {
+        var run = CardRegistry.GetLiveRunState();
+        if (run == null || CardRegistry.IsCombatActive)
+        {
+            return;
+        }
+        var signature = ComputeDeckSignature(run);
+        if (signature == _lastDeckSignature)
+        {
+            return;
+        }
+        _lastDeckSignature = signature;
+        Log.Debug($"PollDeckChange. Deck changed (sig {signature}); resyncing.");
+        CardRegistry.SyncDeckState(ExtractFloorNum(run), ScanDeckForCards(run));
+    });
+
+    // Order-independent signature over every player's master deck: changes on add/remove (count + members),
+    // upgrade (CurrentUpgradeLevel) and enchant (Enchantment).
+    private static int ComputeDeckSignature(IRunState run)
+    {
+        long sum = 0;
+        var count = 0;
+        foreach (var p in run.Players)
+        {
+            foreach (var c in p.Deck.Cards)
+            {
+                sum += HashCode.Combine(c.Id.Entry, c.CurrentUpgradeLevel, c.Enchantment?.Id.Entry ?? "", p.NetId);
+                count++;
+            }
+        }
+        return HashCode.Combine(sum, count);
+    }
+
     private static List<string> ScanDeckForCards(IRunState? runState)
     {
         List<string> ids = new();

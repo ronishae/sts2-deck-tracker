@@ -65,6 +65,10 @@ public static partial class DeckTrackerOverlay
 
     private static List<CardStats> _latestStats = [];
 
+    // Throttle for the out-of-combat deck-change poll (frames between checks).
+    private const int DeckPollIntervalFrames = 10;
+    private static int _deckPollCounter;
+
     private static bool _smallUIVisibleInternal = true;
     private static bool _hWasPressed;
     private static bool _tabWasPressed;
@@ -114,6 +118,15 @@ public static partial class DeckTrackerOverlay
     {
         HandleInputs();
         if (!GodotObject.IsInstanceValid(_smallRowsContainer)) return;
+
+        // Detect out-of-combat deck edits (add/remove/upgrade/enchant) and resync so they show instantly.
+        // PollDeckChange publishes when the deck changed; the dequeue loop below redraws this same frame.
+        if (++_deckPollCounter >= DeckPollIntervalFrames)
+        {
+            _deckPollCounter = 0;
+            HookPatches.PollDeckChange();
+        }
+
         bool hasUpdate = false;
         while (UpdateQueue.TryDequeue(out var stats))
         {

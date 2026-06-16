@@ -766,6 +766,10 @@ public static partial class CardRegistry
         Publish();
     }
     
+    // True while a combat is in progress (set at StartCombat, cleared to "Unknown" by ResetInternalsCombat at
+    // combat end). Used to gate the out-of-combat deck-change poll away from mid-combat rescans.
+    public static bool IsCombatActive => _currentCombatType != "Unknown";
+
     public static void SyncDeckState(int currentFloor, List<string> activeDeckIds)
     {
         lock (SyncRoot)
