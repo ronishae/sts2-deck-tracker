@@ -15,6 +15,9 @@ public static partial class CardRegistry
     
     public static Dictionary<string, EntityStats> EntityLedger = new();
     private static string _currentRunSeed = "";
+    // Set by BeginNewRun when the game starts a fresh run; makes the next SyncRun reset rather than resume,
+    // even if the seed matches a previous run's save (same-seed restart).
+    private static bool _pendingFreshRun;
     
     private static int _currentAct = 1;
     private static string _currentCombatType = "Unknown";
@@ -175,6 +178,19 @@ public static partial class CardRegistry
 
     // --- Persistence Logic ---
 
+    // Called when the game sets up a brand-new run (not a load/resume). Forces the next SyncRun to start
+    // clean even if the seed matches a prior run's save, so a same-seed restart never shows stale data.
+    public static void BeginNewRun()
+    {
+        lock (SyncRoot)
+        {
+            _pendingFreshRun = true;
+            _currentRunSeed = "";   // ensure SyncRun re-initialises even on the same seed
+            ResetRun();             // wipe immediately so the overlay doesn't briefly show the old run
+            Log.Info("BeginNewRun. New run starting; tracker reset.");
+        }
+    }
+
     public static void SyncRun(string runSeed)
     {
         if (string.IsNullOrEmpty(runSeed))
@@ -184,14 +200,14 @@ public static partial class CardRegistry
 
         lock (SyncRoot)
         {
-            if (_currentRunSeed == runSeed)
+            if (_currentRunSeed == runSeed && !_pendingFreshRun)
             {
                 return;
             }
 
             _currentRunSeed = runSeed;
 
-            if (TryLoadState(runSeed))
+            if (!_pendingFreshRun && TryLoadState(runSeed))
             {
                 Log.Info($"SyncRun. Resumed run data for seed: {runSeed}");
                 // Resuming replays the active combat from its start, but the mod's combat accumulators
@@ -206,6 +222,7 @@ public static partial class CardRegistry
                 Log.Info($"SyncRun. Starting fresh tracker for seed: {runSeed}");
                 ResetRun();
             }
+            _pendingFreshRun = false;
             RestoreLiveInstances();
         }
         Publish();

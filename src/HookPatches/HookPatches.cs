@@ -80,6 +80,9 @@ internal static partial class HookPatches
 
     public static void RunManagerCleanUpPrefix() => Guard(nameof(RunManagerCleanUpPrefix), CardRegistry.ClearSession);
 
+    // Fires only for a brand-new run (not a load/resume), so a same-seed restart wipes the prior run's data.
+    public static void SetUpNewRunPostfix() => Guard(nameof(SetUpNewRunPostfix), CardRegistry.BeginNewRun);
+
     private static int ExtractFloorNum(IRunState? runState) => runState?.TotalFloor ?? 1;
     private static int ExtractActNum(IRunState? runState) => (runState?.CurrentActIndex ?? 0) + 1;
 

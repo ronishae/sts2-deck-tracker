@@ -26,6 +26,12 @@ public static class ModEntry
         var cleanUpMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.CleanUp));
         var cleanUpPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RunManagerCleanUpPrefix)));
         _harmony.Patch(cleanUpMethod, prefix: cleanUpPrefix);
+
+        // Reset the tracker whenever a brand-new run is set up (not a load/resume), so restarting on the same
+        // seed wipes the previous run's data instead of resuming its stale save.
+        var setUpNewRunPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SetUpNewRunPostfix)));
+        _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.SetUpNewSingleplayer)), postfix: setUpNewRunPostfix);
+        _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.SetUpNewMultiplayer)), postfix: setUpNewRunPostfix);
         
         // --- Potion Lifecycle ---
         PatchHook(nameof(Hook.AfterPotionProcured), nameof(HookPatches.AfterPotionProcuredPrefix));
