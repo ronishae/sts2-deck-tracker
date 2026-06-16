@@ -34,28 +34,36 @@ public static partial class DeckTrackerOverlay
         foreach (Node child in _smallRowsContainer.GetChildren()) { _smallRowsContainer.RemoveChild(child); child.QueueFree(); }
 
         // Effective combat = summed damage buckets (direct + generated-card damage + connected-forge adj).
-        decimal SmallEffectiveCombat(CardStats s) =>
+        // Generalised to EntityStats so cards, relics and potions all use the same value.
+        decimal SmallEffectiveCombat(EntityStats s) =>
             _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
 
-        var stacked = BuildStackedCardList(ApplyCombatOnlyFilter(stats)).Where(s => s.CardType != "Status").ToList();
-        // Generated cards roll into their creator's total, so drop them when the creator is also shown to
-        // avoid counting the same damage twice (matches the full-screen nesting behaviour).
-        var smallPresentIds = stacked.Select(s => s.Id).ToHashSet();
-        var allCards = stacked
-            .Where(s => string.IsNullOrEmpty(s.GeneratedById) || !smallPresentIds.Contains(s.GeneratedById))
-            .Select(s => new { Stat = s, Agg = AggregateActData(s) })
-            .Where(x => SmallEffectiveCombat(x.Stat) > 0)
-            .OrderByDescending(x => SmallEffectiveCombat(x.Stat))
-            .ThenBy(x => x.Stat.FloorAdded)
+        // Cards (stacked), plus relics and potions read straight from the ledger like the full-screen tabs.
+        var entities = new List<EntityStats>();
+        entities.AddRange(BuildStackedCardList(ApplyCombatOnlyFilter(stats)).Where(s => s.CardType != "Status"));
+        entities.AddRange(CardRegistry.EntityLedger.Values.OfType<RelicStats>());
+        entities.AddRange(CardRegistry.EntityLedger.Values.OfType<PotionStats>());
+
+        var present = entities.Where(s => SmallEffectiveCombat(s) > 0).ToList();
+
+        // A generated card's damage already lives in its creator's generated bucket, so drop the card row
+        // when its creator (card/relic/potion) is itself shown — avoids counting the same damage twice. The
+        // creator id on a card's GeneratedById is the ledger-key form ("RELIC_" + entry for relics).
+        string CreatorId(EntityStats e) => e is RelicStats ? "RELIC_" + e.Id : e.Id;
+        var presentCreatorIds = present.Select(CreatorId).ToHashSet();
+
+        var rows = present
+            .Where(s => s is not CardStats c || string.IsNullOrEmpty(c.GeneratedById) || !presentCreatorIds.Contains(c.GeneratedById))
+            .OrderByDescending(SmallEffectiveCombat)
+            .ThenBy(s => s.FloorAdded)
             .ToList();
 
-        foreach (var item in allCards)
+        foreach (var stat in rows)
         {
-            var stat = item.Stat;
-            var agg = item.Agg;
             HBoxContainer row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-            var generatorName = ResolveGeneratorDisplayName(stat.GeneratedById);
+            // Only cards roll up under a generator; relics/potions have no generator suffix.
+            var generatorName = stat is CardStats card ? ResolveGeneratorDisplayName(card.GeneratedById) : null;
             var nameText = generatorName != null ? $"{GetEntityDisplayTitle(stat)} ({generatorName})" : GetEntityDisplayTitle(stat);
             Label nameLabel = new Label { Text = nameText, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
