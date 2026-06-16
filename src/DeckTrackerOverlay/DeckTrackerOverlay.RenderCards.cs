@@ -423,13 +423,18 @@ public static partial class DeckTrackerOverlay
 
         // Re-point generated cards whose creator version was folded into a merged row, so they nest under
         // the surviving creator instead of orphaning. Remap values are always survivors, so one pass suffices.
+        // Clone before rewriting: these CardStats are the shared _latestStats objects reused across redraws,
+        // so mutating them in place would make the re-parenting persist after Merge Versions is toggled off.
         if (idRemap.Count > 0)
         {
-            foreach (var card in result)
+            for (var i = 0; i < result.Count; i++)
             {
+                var card = result[i];
                 if (!string.IsNullOrEmpty(card.GeneratedById) && idRemap.TryGetValue(card.GeneratedById, out var newId))
                 {
-                    card.GeneratedById = newId;
+                    var clone = (CardStats)card.Clone();
+                    clone.GeneratedById = newId;
+                    result[i] = clone;
                 }
             }
         }
