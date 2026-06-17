@@ -2,12 +2,6 @@ using Godot;
 
 namespace DeckTracker;
 
-public enum HandoffStrategy
-{
-    ExactFifo,
-    Proportional
-}
-
 public class BuffHandoffTracker : PowerTrackerBase
 {
     public string TargetPersistentLedgerId { get; }

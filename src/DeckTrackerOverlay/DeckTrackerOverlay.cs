@@ -6,7 +6,6 @@ public static partial class DeckTrackerOverlay
 {
     private static CanvasLayer? _instance;
 
-    // --- Small UI Elements ---
     private static PanelContainer? _smallPanel;
     private static VBoxContainer? _smallRowsContainer;
     private static Label? _titleLabel;
@@ -19,7 +18,6 @@ public static partial class DeckTrackerOverlay
     private static bool _smallPanelDragging;
     private static Vector2 _smallPanelDragOffset;
 
-    // --- Full Screen UI Elements ---
     private static PanelContainer? _fullScreenPanel;
     private static VBoxContainer? _fullScreenRowsContainer;
     private static HBoxContainer? _fullScreenHeadersContainer;
@@ -32,18 +30,15 @@ public static partial class DeckTrackerOverlay
     private static CheckBox? _act2Check;
     private static CheckBox? _act3Check;
 
-    // --- Tab System ---
     private static Button? _cardsTabBtn;
     private static Button? _relicsTabBtn;
     private static Button? _potionsTabBtn;
     private static string _activeTab = "Cards";
 
-    // --- Player Filter State ---
     private static HBoxContainer? _playerFiltersContainer;
     // All player indices enabled by default; the filter only matters when PlayerLabels has >1 entry
     private static readonly HashSet<int> _enabledPlayers = new() { 0, 1, 2, 3 };
 
-    // --- State & Data ---
     private static bool _isHookedToProcess;
 
     private static bool _includeConnectedForge = true;
@@ -72,7 +67,6 @@ public static partial class DeckTrackerOverlay
     private static bool _gWasPressed;
     private static bool _logLevelToggleWasPressed;
 
-    // --- Sort State ---
     private class SortState
     {
         public string Column { get; set; } = "RUN_DMG";

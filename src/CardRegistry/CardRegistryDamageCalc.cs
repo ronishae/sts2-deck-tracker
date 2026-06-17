@@ -31,7 +31,6 @@ public static partial class CardRegistry
 
         Log.Debug($"ProcessDamageSnapshot. Total Calculated: {currentCalculatedDamage}, Actual: {actualDealtDamage}, Overkill: {overkill}, Extra: {extraDamage}");
 
-        // --- MULTIPLIER PEEL (First) ---
         for (int i = snapshot.MultiplicativeModifiers.Count - 1; i >= 0; i--)
         {
             var multMod = snapshot.MultiplicativeModifiers[i];
@@ -114,7 +113,6 @@ public static partial class CardRegistry
             }
         }
 
-        // --- ADDITIVE PEEL (Second) ---
         for (int i = snapshot.AdditiveModifiers.Count - 1; i >= 0; i--)
         {
             var addMod = snapshot.AdditiveModifiers[i];

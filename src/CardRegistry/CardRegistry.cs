@@ -77,8 +77,6 @@ public static partial class CardRegistry
     // Cards added to hand during a play (to wait for enchantments)
     private static readonly AsyncLocal<List<CardModel>?> _deferredDraws = new();
 
-    // --- UNIFIED TRACKER REGISTRY ---
-
     public static readonly Dictionary<string, GenericDamageTracker> SimpleDamageTrackers = new()
     {
         { "FLAME_BARRIER_POWER", new GenericDamageTracker("FLAME_BARRIER_POWER") },

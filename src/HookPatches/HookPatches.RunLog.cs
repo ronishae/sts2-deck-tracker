@@ -154,8 +154,6 @@ internal static partial class HookPatches
         }
     });
 
-    // --- Helpers shared with the core lifecycle hooks (HookPatches.cs) ---
-
     // Records the room entry (path step + timeline event) using the player's current map point when known.
     private static void RecordRoomForLog(IRunState runState, AbstractRoom room)
     {

@@ -115,9 +115,3 @@ public static partial class CardRegistry
         }
     }
 }
-
-public class FurnaceContribution
-{
-    public CardModel CardSource { get; init; } = null!;
-    public decimal PowerAmount { get; init; }
-}

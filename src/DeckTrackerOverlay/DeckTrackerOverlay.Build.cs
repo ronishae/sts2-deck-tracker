@@ -111,7 +111,6 @@ public static partial class DeckTrackerOverlay
 
         VBoxContainer mainCol = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
 
-        // --- Header Row ---
         HBoxContainer header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
         Label title = new Label { Text = "Detailed Deck Statistics", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -158,7 +157,6 @@ public static partial class DeckTrackerOverlay
         header.AddChild(closeBtn);
         mainCol.AddChild(header);
 
-        // --- Tab Bar ---
         HBoxContainer tabsContainer = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
         _cardsTabBtn = new Button { Text = "Cards", FocusMode = Control.FocusModeEnum.None, ToggleMode = true, ButtonPressed = true };
@@ -179,7 +177,6 @@ public static partial class DeckTrackerOverlay
 
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 2), Color = new Color(1, 1, 1, 0.3f) });
 
-        // --- Headers & Rows Container ---
         _fullScreenHeadersContainer = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         mainCol.AddChild(_fullScreenHeadersContainer);
         mainCol.AddChild(new ColorRect { CustomMinimumSize = new Vector2(0, 1), Color = new Color(1, 1, 1, 0.1f) });

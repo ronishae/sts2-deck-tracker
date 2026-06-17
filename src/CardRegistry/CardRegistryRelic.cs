@@ -5,7 +5,6 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    // --- RELIC TRACKING ---
     public static readonly Dictionary<string, string> RelicNameCache = new();
 
     public static void AddRelicDamage(string relicId, decimal amount)

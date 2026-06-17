@@ -6,8 +6,6 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-   // --- SHIV & FAN OF KNIVES TRACKING ---
-
     public class ShivDamageRecord
     {
         public CardModel CardModel { get; set; } = null!;

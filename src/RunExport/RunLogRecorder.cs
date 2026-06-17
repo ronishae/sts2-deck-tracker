@@ -36,8 +36,6 @@ public static class RunLogRecorder
     public const string EventPotionGained = "PotionGained";
     public const string EventGoldGained = "GoldGained";
 
-    // --- Run lifecycle ---
-
     public static void BeginRun(string seed, string character, int ascensionLevel, int startingGold, string gameVersion)
     {
         lock (Lock)
@@ -191,8 +189,6 @@ public static class RunLogRecorder
         }
     }
 
-    // --- Map & path ---
-
     public static void RecordMap(int actIndex, List<MapNodeSnapshot> nodes)
     {
         lock (Lock)
@@ -232,8 +228,6 @@ public static class RunLogRecorder
             AddEvent(EventActEntered, floor, act, actName, $"Act {act}", null, null);
         }
     }
-
-    // --- Combat ---
 
     public static void StartCombat(int floor, int act, string actName, string combatType, string encounterId, int hpBefore, int goldBefore)
     {
@@ -324,8 +318,6 @@ public static class RunLogRecorder
             RunExporter.AppendFightRows(_log);
         }
     }
-
-    // --- Rewards, economy, deck ---
 
     public static void RecordReward(int floor, int act, string rewardType, string detail, bool taken)
     {

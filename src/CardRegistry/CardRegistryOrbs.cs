@@ -8,8 +8,6 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    // --- STATE VARIABLES ---
-    
     public static readonly AsyncLocal<bool> IsApplyingTemporaryFocus = new();
     public static readonly AsyncLocal<bool> IsExpiringTemporaryFocus = new();
     
@@ -51,8 +49,6 @@ public static partial class CardRegistry
         }
     }
 
-    // --- CHANNELING IDENTITY ---
-    
     public static void RegisterChanneledOrb(OrbModel orb, CardModel? sourceCard)
     {
         lock (SyncRoot)
@@ -62,7 +58,6 @@ public static partial class CardRegistry
                     "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
                     "External_Relic");
             
-            // --- GENERIC QUEUE TRACKER INTERCEPT ---
             foreach (var queueTracker in QueueTrackers.Values)
             {
                 if (queueTracker.IsExecuting)

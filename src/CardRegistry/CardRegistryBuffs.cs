@@ -6,7 +6,6 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    // --- CONTEXT CLASSES ---
     public class DamageModifierSnapshot
     {
         public string PowerId { get; set; } = "";
@@ -25,7 +24,6 @@ public static partial class CardRegistry
         public List<DamageModifierSnapshot> MultiplicativeModifiers { get; set; } = new();
     }
 
-    // --- BUFF ROUTING REGISTRIES ---
     // Powers whose only behaviour is add/remove a persistent player buff.
     public static readonly HashSet<string> PersistentBuffPowerIds = new()
     {
@@ -39,7 +37,6 @@ public static partial class CardRegistry
         "VULNERABLE_POWER", "DEBILITATE_POWER", "GIGANTIFICATION_POWER", "FLANKING_POWER", "KNOCKDOWN_POWER",
     };
 
-    // --- STATE VARIABLES ---
     // Maps a specific Creature to their active debuffs (like Vulnerable)
     public static readonly Dictionary<Creature, Dictionary<string, List<Contribution>>> EnemyDebuffLedgers = new();
     public static readonly Dictionary<string, List<Contribution>> PersistentLedgers = new();
@@ -123,9 +120,6 @@ public static partial class CardRegistry
         }
     }
 
-    // --- ENEMY DEBUFF LEDGERS ---
-
-    // --- DURATION LEDGERS (For Vulnerable, Double Damage, Weak, Intangible) ---
     // Maps a Creature (Player or Enemy) to their active turn-based buffs!
     public static readonly Dictionary<Creature, Dictionary<string, List<Contribution>>> DurationLedgers = new();
 
@@ -171,8 +165,6 @@ public static partial class CardRegistry
             DrainLedger(ledger, amount, lifo: false);
         }
     }
-    
-    // --- BUFF LEDGER LOGIC ---
     
     // For Strength, Accuracy, Phantom Blades
     public static void AddPersistentBuff(string buffType, decimal amount, CardModel? cardSource)

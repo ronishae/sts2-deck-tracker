@@ -11,8 +11,6 @@ public static class RelicExecutionManager
     // Holds the Class Name of the Relic currently executing its action
     public static readonly AsyncLocal<string?> ExecutingRelicId = new();
     
-    // --- STATE MANAGEMENT ---
-    
     public static void ResetState()
     {
         ExecutingRelicId.Value = null;
