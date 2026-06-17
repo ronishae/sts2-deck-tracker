@@ -70,6 +70,7 @@ public static partial class DeckTrackerOverlay
     private static bool _smallUIVisibleInternal = true;
     private static bool _hWasPressed;
     private static bool _tabWasPressed;
+    private static bool _logLevelToggleWasPressed;
 
     // --- Sort State ---
     private class SortState
@@ -150,6 +151,15 @@ public static partial class DeckTrackerOverlay
             SetFullScreenVisible(!(_fullScreenPanel?.Visible ?? false));
         }
         _tabWasPressed = tabPressed;
+
+        // Toggle full VeryDebug logging on demand for bug reports; ships quiet at Info (see Log.Level).
+        bool logTogglePressed = Input.IsKeyPressed(Key.J);
+        if (logTogglePressed && !_logLevelToggleWasPressed)
+        {
+            Log.Level = Log.Level == LogLevel.VeryDebug ? LogLevel.Info : LogLevel.VeryDebug;
+            Log.Info($"HandleInputs. Log level toggled. Level: {Log.Level}");
+        }
+        _logLevelToggleWasPressed = logTogglePressed;
     }
 
     private static void SetFullScreenVisible(bool visible)

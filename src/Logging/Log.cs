@@ -6,9 +6,10 @@ namespace DeckTracker;
 // prefix is added here so it stays consistent and grep-able.
 public static class Log
 {
-    // Manual log-level switch. Ships at the most verbose level so end-user bug reports capture
-    // maximum detail; lower it locally during development when the console gets noisy.
-    public static LogLevel Level = LogLevel.VeryDebug;
+    // Manual log-level switch. Ships at Info so normal play stays quiet (the per-event Debug/VeryDebug
+    // flood is the main per-turn cost); press J in-game to toggle VeryDebug back on when capturing a
+    // bug report. Lower it further locally during development if even Info gets noisy.
+    public static LogLevel Level = LogLevel.Info;
 
     public static void VeryDebug(string message) => Write(LogLevel.VeryDebug, message);
 
