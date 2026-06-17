@@ -210,7 +210,8 @@ public static partial class CardRegistry
 
             _currentRunSeed = runSeed;
 
-            if (!_pendingFreshRun && TryLoadState(runSeed))
+            var resumed = !_pendingFreshRun && TryLoadState(runSeed);
+            if (resumed)
             {
                 Log.Info($"SyncRun. Resumed run data for seed: {runSeed}");
                 // Resuming replays the active combat from its start, but the mod's combat accumulators
@@ -227,6 +228,19 @@ public static partial class CardRegistry
             }
             _pendingFreshRun = false;
             RestoreLiveInstances();
+
+            // A fresh run starts a new export log now that the players (character/ascension) are restored.
+            // A resumed run already adopted its log from the save file inside TryLoadState; it only needs its
+            // gold baseline re-synced to the live total so the next gold gain reports a correct delta.
+            var liveRun = GetLiveRunState();
+            if (resumed)
+            {
+                RunLogRecorder.SetGoldBaseline(FirstPlayerGold(liveRun));
+            }
+            else
+            {
+                RunLogRecorder.BeginRun(runSeed, ExtractCharacterLabel(liveRun), liveRun?.AscensionLevel ?? 0, FirstPlayerGold(liveRun));
+            }
         }
         Publish();
     }
@@ -256,6 +270,10 @@ public static partial class CardRegistry
                 };
             }
 
+            // Persist the run's export log alongside the stats so a resumed run keeps its timeline and the
+            // master-CSV high-water mark. Read outside the SyncRoot lock above (RunLogRecorder has its own).
+            state.RunLog = RunLogRecorder.CurrentLog;
+
             System.IO.Directory.CreateDirectory(SaveDirectory);
             var path = GetRunSavePath(state.RunSeed);
             string json = JsonSerializer.Serialize(state, SavedStateCtx.Default.SavedRunState);
@@ -275,10 +293,17 @@ public static partial class CardRegistry
     // check lives inside the file (TryLoadState validates state.RunSeed), so the name only needs to be unique.
     private static string GetRunSavePath(string seed)
     {
-        var sanitized = new string(seed.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
-        var path = System.IO.Path.Combine(SaveDirectory, $"{sanitized}_{StableHash(seed)}.json");
+        var path = System.IO.Path.Combine(SaveDirectory, $"{GetRunFileStem(seed)}.json");
         Log.VeryDebug($"GetRunSavePath. Seed: {seed}, Path: {path}");
         return path;
+    }
+
+    // The per-run filename stem (sanitised seed + stable hash, no extension), shared by the internal save
+    // file and the user-facing export JSON so both resolve to the same name for a given run.
+    public static string GetRunFileStem(string seed)
+    {
+        var sanitized = new string(seed.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+        return $"{sanitized}_{StableHash(seed)}";
     }
 
     // Deterministic 8-char hex hash of the seed (string.GetHashCode is not stable across processes).
@@ -343,6 +368,7 @@ public static partial class CardRegistry
             foreach (var kvp in state.Potions ?? new Dictionary<string, PotionStats>()) EntityLedger[kvp.Key] = kvp.Value;
             foreach (var kvp in state.Relics ?? new Dictionary<string, RelicStats>()) EntityLedger[kvp.Key] = kvp.Value;
             _potionCounter = state.PotionCounter;
+            RunLogRecorder.RestoreFromSave(state.RunLog);
             return true;
         }
         catch (Exception e)
@@ -817,6 +843,7 @@ public static partial class CardRegistry
             _playerIndexByNetId.Clear();
             PlayerLabels.Clear();
             _steamNameCache.Clear();
+            RunLogRecorder.Reset();
             Log.Info("ResetRun. Run state cleared.");
         }
         Publish();
@@ -1036,12 +1063,170 @@ public static partial class CardRegistry
     public static void ProcessCombatEnd()
     {
         Log.Info("ProcessCombatEnd.");
+        // Capture each card's per-combat contribution into the run export log before ResetInternalsCombat,
+        // while the per-combat fields are still intact. SaveState below then persists the updated log.
+        FinalizeCombatExport();
         lock (SyncRoot)
         {
             ResetInternalsCombat();
         }
         SaveState();
         Publish();
+    }
+
+    // Captures the combat that just killed the player. A run-ending loss never fires AfterCombatEnd, so the
+    // fatal fight would otherwise be missing from the export — this records it (with the player dead, so its
+    // outcome is "Died"), resets combat state, and persists. Safe if no combat is open (EndCombat no-ops).
+    public static void FinalizeFatalCombat()
+    {
+        FinalizeCombatExport();
+        lock (SyncRoot)
+        {
+            ResetInternalsCombat();
+        }
+        SaveState();
+    }
+
+    // Snapshots the just-ended combat (each entity's contribution + the local player's HP/alive state) into
+    // the run export log, which triggers the automatic JSON + CSV writes inside RunLogRecorder.EndCombat.
+    private static void FinalizeCombatExport()
+    {
+        var contributions = BuildCombatEntityStats();
+        var run = GetLiveRunState();
+        var player = run != null && run.Players.Count > 0 ? run.Players[0] : null;
+        var hpAfter = player?.Creature.CurrentHp ?? 0;
+        var alive = player?.Creature.IsAlive ?? true;
+        RunLogRecorder.EndCombat(hpAfter, alive, contributions);
+    }
+
+    // Builds the per-entity stats for the combat that just ended from the live per-combat fields. Cards are
+    // included when they participated (drawn / dealt or generated damage); relics and potions only when they
+    // dealt damage this fight, so non-damaging relics don't flood every combat row.
+    private static List<EntityFightStat> BuildCombatEntityStats()
+    {
+        lock (SyncRoot)
+        {
+            var participants = EntityLedger.Values.Where(ParticipatedThisCombat).ToList();
+            var totalDamage = participants.Sum(e => e.CombatDamage);
+            return participants.Select(e => BuildEntityFightStat(e, totalDamage)).ToList();
+        }
+    }
+
+    private static bool ParticipatedThisCombat(EntityStats entity)
+    {
+        if (entity is CardStats)
+        {
+            return entity.CombatTimesDrawn > 0 || entity.CombatDamage > 0 || entity.GeneratedCombatDamage > 0;
+        }
+        return entity.CombatDamage > 0;
+    }
+
+    private static EntityFightStat BuildEntityFightStat(EntityStats entity, decimal totalDamage)
+    {
+        var stat = new EntityFightStat
+        {
+            Name = entity.DisplayName,
+            PlayerIndex = entity.PlayerIndex,
+            Damage = entity.CombatDamage,
+            GeneratedDamage = entity.GeneratedCombatDamage,
+            DamageContribPct = totalDamage > 0 ? Math.Round(entity.CombatDamage / totalDamage * 100, 2) : 0,
+            RawForge = entity.RawForgeCombat,
+            ConnectedForge = entity.ConnectedForgeCombat,
+            ReceivedForge = entity.ReceivedForgeCombat
+        };
+
+        switch (entity)
+        {
+            case CardStats card:
+                var (copyIndex, ownerNetId) = ParseCardId(card.Id);
+                stat.EntityType = "Card";
+                stat.FloorAdded = card.FloorAdded;
+                stat.CopyIndex = copyIndex;
+                stat.OwnerNetId = ownerNetId;
+                stat.UpgradeLevel = card.UpgradeLevel;
+                stat.Enchantment = card.Enchantment;
+                stat.Rarity = (card.Model as CardModel)?.Rarity.ToString() ?? "";
+                stat.TimesDrawn = card.CombatTimesDrawn;
+                stat.TimesPlayed = card.CombatTimesPlayed;
+                stat.PlayRate = card.CombatTimesDrawn > 0
+                    ? Math.Round((decimal)card.CombatTimesPlayed / card.CombatTimesDrawn, 4)
+                    : 0;
+                break;
+            case RelicStats relic:
+                stat.EntityType = "Relic";
+                stat.FloorAdded = relic.FloorAdded;
+                stat.Rarity = relic.Rarity;
+                break;
+            case PotionStats potion:
+                stat.EntityType = "Potion";
+                stat.Rarity = (potion.Model as PotionModel)?.Rarity.ToString() ?? "";
+                // -1 is the "not yet" sentinel for these floors; map it to null so the CSV cell is blank.
+                stat.FloorObtained = potion.FloorObtained >= 0 ? potion.FloorObtained : null;
+                stat.FloorUsed = potion.FloorUsed >= 0 ? potion.FloorUsed : null;
+                stat.FloorDiscarded = potion.FloorDiscarded >= 0 ? potion.FloorDiscarded : null;
+                stat.OwnerNetId = potion.OwnerNetId ?? "";
+                break;
+        }
+        return stat;
+    }
+
+    // Extracts the copy index and owner NetId from a card tracking id ("..._C{copy}_U{up}_{enchant}_P{owner}").
+    // Returns blanks for non-card ids and for the "NONE" owner sentinel.
+    private static (int? copyIndex, string ownerNetId) ParseCardId(string id)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(id, @"_C(\d+)_U\d+_.*_P([^_]+)$");
+        if (!match.Success)
+        {
+            return (null, "");
+        }
+        var copyIndex = int.TryParse(match.Groups[1].Value, out var parsed) ? parsed : (int?)null;
+        var ownerNetId = match.Groups[2].Value;
+        return (copyIndex, ownerNetId == UnknownOwnerKey ? "" : ownerNetId);
+    }
+
+    private static int FirstPlayerGold(IRunState? run) => run != null && run.Players.Count > 0 ? run.Players[0].Gold : 0;
+
+    // The display label for the run's character(s), joined for co-op. Used to stamp the export log at start.
+    private static string ExtractCharacterLabel(IRunState? run)
+    {
+        if (run == null || run.Players.Count == 0)
+        {
+            return "";
+        }
+        try
+        {
+            return string.Join(" + ", run.Players.Select(p => p.Character.Title.GetFormattedText()));
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"ExtractCharacterLabel failed: {e.Message}");
+            return "";
+        }
+    }
+
+    // Snapshots every player's master deck as DeckCardInfo for the export log's out-of-combat deck diff.
+    // Must be called after a deck scan so tracking ids resolve consistently.
+    public static List<DeckCardInfo> BuildDeckInfo(IRunState run)
+    {
+        var list = new List<DeckCardInfo>();
+        lock (SyncRoot)
+        {
+            foreach (var player in run.Players)
+            {
+                var netId = player.NetId.ToString();
+                foreach (var card in player.Deck.Cards)
+                {
+                    var id = GetTrackingId(card, netId);
+                    list.Add(new DeckCardInfo
+                    {
+                        Id = id,
+                        DisplayName = card.Title ?? card.Id.Entry ?? id,
+                        BaseKey = GetBaseCardKey(card, netId)
+                    });
+                }
+            }
+        }
+        return list;
     }
     
     public static void HandleRemove(CardModel card, int floorRemoved)

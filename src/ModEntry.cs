@@ -64,7 +64,21 @@ public static class ModEntry
         PatchHook(nameof(Hook.AfterSideTurnStart), nameof(HookPatches.AfterSideTurnStartPostfix));
         PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
         PatchHook(nameof(Hook.BeforeRoomEntered), nameof(HookPatches.BeforeRoomEnteredPrefix));
-        
+
+        // --- Run Export Timeline ---
+        PatchHook(nameof(Hook.AfterMapGenerated), nameof(HookPatches.AfterMapGeneratedPostfix));
+        PatchHook(nameof(Hook.AfterActEntered), nameof(HookPatches.AfterActEnteredPostfix));
+        PatchHook(nameof(Hook.AfterDamageReceived), nameof(HookPatches.AfterDamageReceivedPostfix));
+        PatchHook(nameof(Hook.AfterBlockGained), nameof(HookPatches.AfterBlockGainedPostfix));
+        PatchHook(nameof(Hook.AfterPlayerTurnStart), nameof(HookPatches.AfterPlayerTurnStartPostfix));
+        PatchHook(nameof(Hook.AfterGoldGained), nameof(HookPatches.AfterGoldGainedPostfix));
+        PatchHook(nameof(Hook.AfterItemPurchased), nameof(HookPatches.AfterItemPurchasedPostfix));
+        PatchHook(nameof(Hook.AfterRewardTaken), nameof(HookPatches.AfterRewardTakenPostfix));
+        PatchHook(nameof(Hook.AfterRestSiteHeal), nameof(HookPatches.AfterRestSiteHealPostfix));
+        PatchHook(nameof(Hook.AfterRestSiteSmith), nameof(HookPatches.AfterRestSiteSmithPostfix));
+        PatchHook(nameof(Hook.AfterCombatVictory), nameof(HookPatches.AfterCombatVictoryPostfix));
+        PatchHook(nameof(Hook.AfterDeath), nameof(HookPatches.AfterDeathPostfix));
+
         // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));
         PatchHook(nameof(Hook.AfterForge), nameof(HookPatches.AfterForgePostfix));

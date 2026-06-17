@@ -37,6 +37,8 @@ internal static partial class HookPatches
         var activeDeckIds = ScanDeckForCards(runState);
         Log.Info($"AfterRoomEnteredPostfix. Floor: {currentFloor}, Room: {room.RoomType}");
         CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
+        RecordRoomForLog(runState, room);
+        RecordDeckSyncForLog(runState, room);
         CardRegistry.SaveState();
     });
 
@@ -57,6 +59,7 @@ internal static partial class HookPatches
         Log.Info($"BeforeCombatStartPostfix. Floor: {currentFloor}, Act: {currentAct}, Type: {combatType}");
 
         CardRegistry.StartCombat(combatType, currentFloor, currentAct, activeDeckIds);
+        RecordCombatStartForLog(runState);
         CardRegistry.ForcePublish();
 
         if (!_overlayScheduled)
@@ -78,7 +81,11 @@ internal static partial class HookPatches
         CardRegistry.ProcessCombatEnd();
     });
 
-    public static void RunManagerCleanUpPrefix() => Guard(nameof(RunManagerCleanUpPrefix), CardRegistry.ClearSession);
+    public static void RunManagerCleanUpPrefix() => Guard(nameof(RunManagerCleanUpPrefix), () =>
+    {
+        FinalizeRunForLog();
+        CardRegistry.ClearSession();
+    });
 
     // Fires only for a brand-new run (not a load/resume), so a same-seed restart wipes the prior run's data.
     public static void SetUpNewRunPostfix() => Guard(nameof(SetUpNewRunPostfix), CardRegistry.BeginNewRun);
@@ -137,6 +144,7 @@ internal static partial class HookPatches
         _lastDeckSignature = signature;
         Log.Debug($"PollDeckChange. Deck changed (sig {signature}); resyncing.");
         CardRegistry.SyncDeckState(ExtractFloorNum(run), ScanDeckForCards(run));
+        RecordDeckSyncForLog(run, run.CurrentRoom);
     });
 
     // Order-independent signature over every player's master deck: changes on add/remove (count + members),
