@@ -792,13 +792,14 @@ public static partial class CardRegistry
         { "INFERNO_POWER", new GenericDamageTracker("INFERNO_POWER") },
         { "OUTBREAK_POWER", new GenericDamageTracker("OUTBREAK_POWER") },
         { "SMOKESTACK_POWER", new GenericDamageTracker("SMOKESTACK_POWER") },
-        { "DEMISE_POWER", new GenericDamageTracker("DEMISE_POWER") },
     };
 
     public static readonly Dictionary<string, TargetedDamageTracker> TargetedTrackers = new()
     {
         { "STRANGLE_POWER", new TargetedDamageTracker("STRANGLE_POWER") },
         { "OBLIVION_POWER", new TargetedDamageTracker("OBLIVION_POWER") },
+        // Enemy-side debuff (Powdered Demise potion); per-target ledger handles multiple enemies.
+        { "DEMISE_POWER", new TargetedDamageTracker("DEMISE_POWER") },
     };
 
     public static readonly Dictionary<string, BuffHandoffTracker> HandoffTrackers = new()

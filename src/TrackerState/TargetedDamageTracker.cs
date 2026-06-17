@@ -35,7 +35,7 @@ public class TargetedDamageTracker : PowerTrackerBase
                 _ledgers[target] = ledger;
             }
 
-            var trackingId = cardSource != null ? CardRegistry.GetTrackingId(cardSource) : "External_Source";
+            var trackingId = CardRegistry.GetCurrentSourceId(cardSource);
             ledger.Add(new Contribution { TrackingId = trackingId, Amount = amount });
             Log.Debug($"LogApply (Targeted: {PowerId}). Target: {target.Name}, Source: {trackingId}, Amount: {amount}");
         }

@@ -169,7 +169,6 @@ public static class ModEntry
             (typeof(InfernoPower), nameof(InfernoPower.AfterDamageReceived)),
             (typeof(OutbreakPower), nameof(OutbreakPower.AfterPowerAmountChanged)),
             (typeof(SmokestackPower), nameof(SmokestackPower.AfterCardGeneratedForCombat)),
-            (typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd)),
         };
         var simplePrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPrefix)));
         var simplePostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GenericPowerPostfix)));
@@ -179,6 +178,7 @@ public static class ModEntry
         var targetedMethods = new (Type, string)[] {
             (typeof(StranglePower), nameof(StranglePower.AfterCardPlayed)),
             (typeof(OblivionPower), nameof(OblivionPower.AfterCardPlayed)),
+            (typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd)),
         };
         var targetedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TargetedPowerPrefix)));
         var targetedPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TargetedPowerPostfix)));
