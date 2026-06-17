@@ -19,6 +19,10 @@ internal static partial class HookPatches
 {
     public static void AfterMapGeneratedPostfix(IRunState runState, ActMap map, int actIndex) => Guard(nameof(AfterMapGeneratedPostfix), () =>
     {
+        // The first act's map is generated before the starting room is entered — i.e. before
+        // BeforeRoomEntered creates the run log — so sync the run here too (idempotent) to ensure the log
+        // exists. Without this, act 1's map is recorded into a null log and dropped.
+        CardRegistry.SyncRun(ExtractRunSeed(runState));
         RunLogRecorder.RecordMap(actIndex, BuildMapNodes(map));
     });
 
