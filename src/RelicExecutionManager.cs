@@ -33,16 +33,15 @@ public static class RelicExecutionManager
     // A generic Postfix that clears it after the task finishes
     public static void GenericRelicPostfix(ref Task __result)
     {
-        var capturedRelicId = ExecutingRelicId.Value;
-        
-        // Wrap the task to clear the async local ONLY after the damage is done
-        async Task WrappedTask(Task originalTask)
-        {
-            try { await originalTask; }
-            finally { ExecutingRelicId.Value = null; }
-        }
-        
-        __result = WrappedTask(__result);
+        __result = ClearRelicIdAfterTask(__result);
+    }
+
+    // Awaits the task and clears ExecutingRelicId in finally so the relic context is gone only after
+    // all async damage has resolved — not immediately when the postfix returns.
+    private static async Task ClearRelicIdAfterTask(Task originalTask)
+    {
+        try { await originalTask; }
+        finally { ExecutingRelicId.Value = null; }
     }
     
     public static void TryModifyPowerAmountReceivedPostfix(RelicModel __instance, PowerModel canonicalPower, Creature target, decimal amount, Creature? applier, ref decimal modifiedAmount, ref bool __result)

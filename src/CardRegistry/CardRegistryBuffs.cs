@@ -167,24 +167,8 @@ public static partial class CardRegistry
             {
                 return;
             }
-
-            var remainingToRemove = amount;
             Log.Debug($"RemoveDurationBuff. Removing {amount} {buffType} from {target.Name}");
-            
-            // FIFO removal because older durations tick down first!
-            for (int i = 0; i < ledger.Count; i++)
-            {
-                if (remainingToRemove <= 0)
-                {
-                    break;
-                }
-                var contribution = ledger[i];
-                decimal erased = Math.Min(remainingToRemove, contribution.Amount);
-                contribution.Amount -= erased;
-                remainingToRemove -= erased;
-                Log.VeryDebug($"  -> Erased {erased} from {contribution.TrackingId}");
-            }
-            ledger.RemoveAll(c => c.Amount <= 0);
+            DrainLedger(ledger, amount, lifo: false);
         }
     }
     
@@ -240,25 +224,9 @@ public static partial class CardRegistry
             {
                 return;
             }
-            
-            var remainingToRemove = amount;
             Log.Debug($"RemovePersistentBuff. Removing {amount} {buffType}");
-            
-            // Remove LIFO (Last-In-First-Out) for things like Temporary Strength expiring or Debuffs
-            for (int i = ledger.Count - 1; i >= 0; i--)
-            {
-                if (remainingToRemove <= 0)
-                {
-                    break;
-                }
-                
-                var contribution = ledger[i];
-                decimal erased = Math.Min(remainingToRemove, contribution.Amount);
-                contribution.Amount -= erased;
-                remainingToRemove -= erased;
-                Log.VeryDebug($"  -> Erased {erased} from {contribution.TrackingId}");
-            }
-            ledger.RemoveAll(c => c.Amount <= 0);
+            // LIFO because temporary strength and debuffs expire in reverse-add order
+            DrainLedger(ledger, amount, lifo: true);
         }
     }
 
@@ -294,26 +262,37 @@ public static partial class CardRegistry
             {
                 return;
             }
-
-            var remainingToRemove = amount;
             Log.Debug($"RemoveConsumableBuff. Consuming {amount} {buffType}");
-            
-            // Remove FIFO (First-In-First-Out) because older Vigor gets consumed first!
-            for (int i = 0; i < ledger.Count; i++)
-            {
-                if (remainingToRemove <= 0)
-                {
-                    break;
-                }
-                
-                var contribution = ledger[i];
-                decimal erased = Math.Min(remainingToRemove, contribution.Amount);
-                contribution.Amount -= erased;
-                remainingToRemove -= erased;
-                Log.VeryDebug($"  -> Erased {erased} from {contribution.TrackingId}");
-            }
-            ledger.RemoveAll(c => c.Amount <= 0);
+            DrainLedger(ledger, amount, lifo: false);
         }
     }
-    
+
+    // Drains `amount` budget from a contribution ledger, erasing oldest-first (FIFO) or newest-first (LIFO).
+    // The remaining > 0 guard lives in the for predicate to keep nesting flat.
+    private static void DrainLedger(List<Contribution> ledger, decimal amount, bool lifo)
+    {
+        var remaining = amount;
+        if (lifo)
+        {
+            for (int i = ledger.Count - 1; i >= 0 && remaining > 0; i--)
+            {
+                decimal erased = Math.Min(remaining, ledger[i].Amount);
+                ledger[i].Amount -= erased;
+                remaining -= erased;
+                Log.VeryDebug($"  -> Erased {erased} from {ledger[i].TrackingId}");
+            }
+        }
+        else
+        {
+            for (int i = 0; i < ledger.Count && remaining > 0; i++)
+            {
+                decimal erased = Math.Min(remaining, ledger[i].Amount);
+                ledger[i].Amount -= erased;
+                remaining -= erased;
+                Log.VeryDebug($"  -> Erased {erased} from {ledger[i].TrackingId}");
+            }
+        }
+        ledger.RemoveAll(c => c.Amount <= 0);
+    }
+
 }

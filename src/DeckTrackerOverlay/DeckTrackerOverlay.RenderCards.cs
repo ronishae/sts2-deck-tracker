@@ -387,15 +387,7 @@ public static partial class DeckTrackerOverlay
             {
                 // Let clicks anywhere on the generator row reach the panel so it toggles expansion.
                 DisableMouseBlocking(content);
-                var generatorId = node.Id;
-                rowPanel.GuiInput += (InputEvent ev) =>
-                {
-                    if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
-                    {
-                        if (!_expandedGenerators.Remove(generatorId)) _expandedGenerators.Add(generatorId);
-                        RedrawUI(_latestStats);
-                    }
-                };
+                rowPanel.GuiInput += (InputEvent ev) => HandleGeneratorRowInput(ev, node.Id);
             }
 
             _fullScreenRowsContainer!.AddChild(rowPanel);
@@ -415,6 +407,19 @@ public static partial class DeckTrackerOverlay
         {
             EmitNode(node, 0);
         }
+    }
+
+    private static void HandleGeneratorRowInput(InputEvent ev, string generatorId)
+    {
+        if (ev is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+        {
+            return;
+        }
+        if (!_expandedGenerators.Remove(generatorId))
+        {
+            _expandedGenerators.Add(generatorId);
+        }
+        RedrawUI(_latestStats);
     }
 
     // Makes a control and all its descendants ignore mouse input so a clickable parent (a generator row)
