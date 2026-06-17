@@ -1170,7 +1170,9 @@ public static partial class CardRegistry
     {
         if (entity is CardStats)
         {
-            return entity.CombatTimesDrawn > 0 || entity.CombatDamage > 0 || entity.GeneratedCombatDamage > 0;
+            // Always include active deck cards so the export represents a full deck snapshot per fight.
+            // Generated/combat cards (IsActive=false, e.g. Shivs) fall through to the draw/damage check.
+            return entity.IsActive || entity.CombatTimesDrawn > 0 || entity.CombatDamage > 0 || entity.GeneratedCombatDamage > 0;
         }
         return entity.CombatDamage > 0;
     }
