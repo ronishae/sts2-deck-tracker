@@ -20,6 +20,10 @@ public static class RunLogRecorder
     private static Dictionary<string, DeckCardInfo> _previousDeck = new();
     private static bool _deckBaselinePending;
 
+    // Run outcome value for a player-abandoned run. Constant so the JSON stays stable and consumers can
+    // distinguish an abandon from a genuine "Death".
+    public const string OutcomeAbandoned = "Abandoned";
+
     // Timeline EventType values. Kept as constants so call sites can't typo them and the JSON stays stable.
     public const string EventRoomEntered = "RoomEntered";
     public const string EventActEntered = "ActEntered";
@@ -147,6 +151,42 @@ public static class RunLogRecorder
             _log.FinalGold = finalGold;
             _log.KilledBy = !string.IsNullOrEmpty(killedBy) ? killedBy : _currentCombat?.EncounterId ?? "";
             Log.Info($"MarkDeath. Floor: {floor}, Gold: {finalGold}, KilledBy: {_log.KilledBy}");
+        }
+    }
+
+    // Marks the active run as player-abandoned. Called from the in-game abandon path (RunManager.CleanUp
+    // with IsAbandoned set). The override is unconditional because the game force-kills the players when
+    // abandoning, which already recorded a spurious "Death" via the AfterDeath hook that must be replaced.
+    public static void MarkAbandoned()
+    {
+        lock (Lock)
+        {
+            if (_log == null)
+            {
+                return;
+            }
+            ApplyAbandoned(_log);
+            Log.Info($"MarkAbandoned. Floor: {_log.FloorDied}, Outcome: {_log.Outcome}");
+        }
+    }
+
+    // Marks a detached RunLog (one loaded from a previous export, not the active session) as abandoned.
+    // Used by the main-menu abandon path, where no run is loaded.
+    public static void MarkAbandoned(RunLog log)
+    {
+        ApplyAbandoned(log);
+        Log.Info($"MarkAbandoned (Detached). Seed: {log.RunSeed}, Floor: {log.FloorDied}, Outcome: {log.Outcome}");
+    }
+
+    // Keeps the floor the run was abandoned on: the in-game path already has FloorDied set by the
+    // force-kill's MarkDeath, while a save-&-quit log carries the floor reached in FinalFloor.
+    private static void ApplyAbandoned(RunLog log)
+    {
+        log.Outcome = OutcomeAbandoned;
+        log.KilledBy = "Run Abandoned";
+        if (log.FloorDied < 0)
+        {
+            log.FloorDied = log.FinalFloor;
         }
     }
 

@@ -1,10 +1,13 @@
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
 
 namespace DeckTracker;
 
@@ -104,6 +107,38 @@ internal static partial class HookPatches
         Log.Info($"AfterDeathPostfix. Player died. Floor: {ExtractFloorNum(runState)}, Gold: {finalGold}, Encounter: {encounter}");
         RunLogRecorder.MarkDeath(ExtractFloorNum(runState), finalGold, encounter);
         CardRegistry.FinalizeFatalCombat();
+    });
+
+    // Abandoning a run from the main menu (after a save & quit) never loads the run, so RunManager.CleanUp
+    // does not fire and the export keeps its stale "InProgress" outcome. The saved run is read off the menu
+    // node's already-loaded save result, then its previously exported JSON is reloaded, relabelled, and
+    // rewritten in place. Runs as a prefix because AbandonRun ends by refreshing the menu, which clears
+    // _readRunSaveResult once the underlying save is deleted.
+    public static void MainMenuAbandonRunPrefix(NMainMenu __instance) => Guard(nameof(MainMenuAbandonRunPrefix), () =>
+    {
+        var saveResult = AccessTools.FieldRefAccess<NMainMenu, ReadSaveResult<SerializableRun>?>("_readRunSaveResult")(__instance);
+        if (saveResult is not { Success: true, SaveData: { } saveData })
+        {
+            Log.Warn("MainMenuAbandonRunPrefix. No valid run save to mark abandoned.");
+            return;
+        }
+
+        var seed = saveData.SerializableRng?.Seed ?? "";
+        Log.Info($"MainMenuAbandonRunPrefix. Abandoning saved run from main menu. Seed: {seed}");
+        if (string.IsNullOrEmpty(seed))
+        {
+            Log.Warn("MainMenuAbandonRunPrefix. Save has no seed; cannot locate export.");
+            return;
+        }
+
+        var log = RunExporter.TryLoadExportedRun(seed);
+        if (log == null)
+        {
+            Log.Warn($"MainMenuAbandonRunPrefix. No export to amend for seed: {seed}");
+            return;
+        }
+        RunLogRecorder.MarkAbandoned(log);
+        RunExporter.ExportRun(log);
     });
 
     public static void AfterCombatVictoryPostfix(IRunState runState, CombatRoom room) => Guard(nameof(AfterCombatVictoryPostfix), () =>

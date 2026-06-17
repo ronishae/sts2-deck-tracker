@@ -81,8 +81,14 @@ internal static partial class HookPatches
         CardRegistry.ProcessCombatEnd();
     });
 
-    public static void RunManagerCleanUpPrefix() => Guard(nameof(RunManagerCleanUpPrefix), () =>
+    public static void RunManagerCleanUpPrefix(RunManager __instance) => Guard(nameof(RunManagerCleanUpPrefix), () =>
     {
+        // A player-initiated abandon force-kills the players, so the run was already (wrongly) recorded as a
+        // death; relabel it as abandoned before the finalize export overwrites the JSON.
+        if (__instance.IsAbandoned)
+        {
+            RunLogRecorder.MarkAbandoned();
+        }
         FinalizeRunForLog();
         CardRegistry.ClearSession();
     });

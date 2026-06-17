@@ -19,6 +19,31 @@ public static class RunExporter
         "floorObtained,floorUsed,floorDiscarded," +
         "timesDrawn,timesPlayed,playRate,damage,generatedDamage,damageContribPct,rawForge,connectedForge,receivedForge";
 
+    // Reads back a run's previously exported JSON document into a RunLog. Used to amend a run that is no
+    // longer the active session (e.g. abandoned from the main menu after a save & quit), since the export
+    // file persists indefinitely whereas the internal save file is LRU-evicted. Returns null if absent.
+    public static RunLog? TryLoadExportedRun(string seed)
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(ExportDirectory, $"{CardRegistry.GetRunFileStem(seed)}.json");
+            if (!System.IO.File.Exists(path))
+            {
+                Log.Warn($"TryLoadExportedRun. No export found. Seed: {seed}, Path: {path}");
+                return null;
+            }
+            var json = System.IO.File.ReadAllText(path);
+            var log = JsonSerializer.Deserialize(json, RunExportCtx.Default.RunLog);
+            Log.Info($"TryLoadExportedRun. Loaded. Seed: {seed}, Outcome: {log?.Outcome}");
+            return log;
+        }
+        catch (Exception e)
+        {
+            Log.Error($"TryLoadExportedRun Failed: {e.Message}");
+            return null;
+        }
+    }
+
     // Overwrites the run's JSON document with the current state of its log. Cheap and idempotent, so it is
     // safe to call after every combat and at run end.
     public static void ExportRun(RunLog log)

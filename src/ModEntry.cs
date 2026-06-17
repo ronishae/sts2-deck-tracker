@@ -32,6 +32,11 @@ public static class ModEntry
         var setUpNewRunPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.SetUpNewRunPostfix)));
         _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.SetUpNewSingleplayer)), postfix: setUpNewRunPostfix);
         _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.SetUpNewMultiplayer)), postfix: setUpNewRunPostfix);
+
+        // Abandoning a saved run from the main menu never loads RunManager, so mark its export abandoned here.
+        // Patched as a prefix: AbandonRun clears its cached save result before returning.
+        var abandonRunPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MainMenuAbandonRunPrefix)));
+        _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu), nameof(MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu.AbandonRun)), prefix: abandonRunPrefix);
         
         // --- Potion Lifecycle ---
         PatchHook(nameof(Hook.AfterPotionProcured), nameof(HookPatches.AfterPotionProcuredPrefix));
