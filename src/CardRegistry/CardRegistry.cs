@@ -64,6 +64,12 @@ public static partial class CardRegistry
     // debuffs), its tracking id changes; this lets us migrate the old entry's stats onto the new id so the
     // card stays one row instead of splitting. Cleared each combat (ids are recomputed fresh per combat).
     private static readonly Dictionary<CardModel, string> _cardCurrentTrackingId = new();
+    // Tracking id each deck card was marked removed under, keyed on the deck-master CardModel object.
+    // Lets us revive the original entry when the SAME object returns to the deck under a new tracking
+    // id (e.g. a Thieving Hopper steal/return, where the game rewrites FloorAddedToDeck to the current
+    // floor and so changes the id). Persists across combats within a run; cleared only on ResetRun
+    // because the stolen card is typically returned mid-combat but the deck is re-scanned afterward.
+    private static readonly Dictionary<CardModel, string> _removedDeckCardIds = new();
 
     // Cards that always share one tracking entry regardless of how many instances are generated mid-combat.
     private static readonly HashSet<string> SingletonCardIds = new() { "SOVEREIGN_BLADE" };
@@ -599,6 +605,51 @@ public static partial class CardRegistry
         Log.Debug($"MigrateStatsOnIdentityChange. Renamed {oldTrackingId} -> {newTrackingId}");
     }
 
+    // A deck-master object that was previously removed has reappeared in the deck under a new tracking
+    // id (its FloorAddedToDeck was rewritten on re-add, e.g. Thieving Hopper return). Re-key its
+    // original entry onto the new id so its accumulated stats survive as one row, preserving the
+    // original FloorAdded/BaseCardKey so the overlay still shows the true add-floor and merges with
+    // any un-stolen siblings. Must be called under SyncRoot.
+    private static void TryReviveReturnedDeckCard(CardModel sourceCard, string newTrackingId)
+    {
+        if (!_removedDeckCardIds.TryGetValue(sourceCard, out var oldTrackingId))
+        {
+            return;
+        }
+        _removedDeckCardIds.Remove(sourceCard);
+        if (oldTrackingId == newTrackingId)
+        {
+            return; // same id -> SyncDeckState's refresh branch already clears the removal markers
+        }
+        if (!EntityLedger.TryGetValue(oldTrackingId, out var oldEntity) || oldEntity is not CardStats oldStat)
+        {
+            return;
+        }
+
+        // A separate entry already exists under the new id (rare id collision) -> fold stats in, but keep
+        // the original add-floor identity on the survivor.
+        if (EntityLedger.TryGetValue(newTrackingId, out var newEntity) && newEntity is CardStats newStat)
+        {
+            MergeCardStats(newStat, oldStat);
+            newStat.FloorAdded = oldStat.FloorAdded;
+            newStat.BaseCardKey = oldStat.BaseCardKey;
+            EntityLedger.Remove(oldTrackingId);
+            Log.Debug($"TryReviveReturnedDeckCard. Merged {oldTrackingId} into {newTrackingId}");
+            return;
+        }
+
+        // Re-key the removed entry onto the new id and clear the removal markers. FloorAdded and
+        // BaseCardKey are intentionally left at their original (pre-theft) values.
+        EntityLedger.Remove(oldTrackingId);
+        oldStat.Id = newTrackingId;
+        oldStat.FloorRemoved = -1;
+        oldStat.FloorLeftDeck = -1;
+        oldStat.IsActive = true;
+        oldStat.CopiesInDeck = 1; // SyncDeckState re-counts copies immediately after this scan
+        EntityLedger[newTrackingId] = oldStat;
+        Log.Debug($"TryReviveReturnedDeckCard. Revived {oldTrackingId} -> {newTrackingId} (FloorAdded kept {oldStat.FloorAdded})");
+    }
+
     // Folds one card's accumulated stats into another (used when a mid-combat identity change lands on an
     // id that already exists). Must be called under SyncRoot.
     private static void MergeCardStats(CardStats target, CardStats source)
@@ -840,6 +891,7 @@ public static partial class CardRegistry
             _cardInstanceIds.Clear();
             _cardInstanceCounters.Clear();
             _deckScanOrdinals.Clear();
+            _removedDeckCardIds.Clear();
             _playerIndexByNetId.Clear();
             PlayerLabels.Clear();
             _steamNameCache.Clear();
@@ -1247,6 +1299,10 @@ public static partial class CardRegistry
                     stat.FloorLeftDeck = floorRemoved;
                     stat.IsActive = false;
                     stat.CopiesInDeck = 0;
+                    // Remember the object under its removal id so we can revive this entry if the SAME card
+                    // returns to the deck under a new id (e.g. Thieving Hopper rewrites FloorAddedToDeck).
+                    _removedDeckCardIds[ResolveSourceCard(card)] = uniqueTrackingId;
+                    Log.Debug($"HandleRemove. Recorded for revival. Card: {uniqueTrackingId}");
                 }
             }
         }
@@ -1286,6 +1342,10 @@ public static partial class CardRegistry
             if (!isDeckScan)
             {
                 MigrateStatsOnIdentityChange(card, uniqueTrackingId);
+            }
+            else
+            {
+                TryReviveReturnedDeckCard(sourceCard, uniqueTrackingId);
             }
             if (!EntityLedger.TryGetValue(uniqueTrackingId, out var existing) || existing is not CardStats stat)
             {
