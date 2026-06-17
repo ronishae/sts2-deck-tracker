@@ -16,14 +16,6 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("USED", "USED", 100));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("DISCARDED", "REMOVED", 100));
 
-        // Effective = the displayed damage value, summing every damage bucket (direct + generated-card
-        // damage from cards this potion created + connected-forge adjustment).
-        decimal EffectiveCombat(PotionStats s) =>
-            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
-
-        decimal EffectiveRun(ActData agg) =>
-            _showRawForge ? agg.RawForgeTotal : (agg.TotalDamage + agg.GeneratedDamageTotal + (_includeConnectedForge ? agg.ConnectedForgeTotal - agg.ReceivedForgeTotal : 0));
-
         var unsortedList = CardRegistry.EntityLedger.Values.OfType<PotionStats>()
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
             .Where(x => !_hideZeroDamageCards || EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
@@ -31,31 +23,13 @@ public static partial class DeckTrackerOverlay
 
         var sortedList = _currentSort.Column switch
         {
-            "NAME" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat))
-                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
-
-            "COMBAT_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveCombat(x.Stat))
-                : unsortedList.OrderByDescending(x => EffectiveCombat(x.Stat)),
-
-            "RUN_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveRun(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveRun(x.Agg)),
-
-            "ADDED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorObtained)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorObtained),
-
-            "USED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorUsed)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorUsed),
-
-            "REMOVED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorDiscarded)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorDiscarded),
-
-            _ => unsortedList.OrderByDescending(x => EffectiveRun(x.Agg))
+            "NAME"       => SortBy(unsortedList, x => GetEntityDisplayTitle(x.Stat)),
+            "COMBAT_DMG" => SortBy(unsortedList, x => EffectiveCombat(x.Stat)),
+            "RUN_DMG"    => SortBy(unsortedList, x => EffectiveRun(x.Agg)),
+            "ADDED"      => SortBy(unsortedList, x => x.Stat.FloorObtained),
+            "USED"       => SortBy(unsortedList, x => x.Stat.FloorUsed),
+            "REMOVED"    => SortBy(unsortedList, x => x.Stat.FloorDiscarded),
+            _            => unsortedList.OrderByDescending(x => EffectiveRun(x.Agg))
         };
 
         // Secondary sort to keep multiple instances ordered chronologically

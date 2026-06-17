@@ -33,18 +33,13 @@ public static partial class DeckTrackerOverlay
 
         foreach (Node child in _smallRowsContainer.GetChildren()) { _smallRowsContainer.RemoveChild(child); child.QueueFree(); }
 
-        // Effective combat = summed damage buckets (direct + generated-card damage + connected-forge adj).
-        // Generalised to EntityStats so cards, relics and potions all use the same value.
-        decimal SmallEffectiveCombat(EntityStats s) =>
-            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
-
         // Cards (stacked), plus relics and potions read straight from the ledger like the full-screen tabs.
         var entities = new List<EntityStats>();
         entities.AddRange(BuildStackedCardList(ApplyCombatOnlyFilter(stats)).Where(s => s.CardType != "Status"));
         entities.AddRange(CardRegistry.EntityLedger.Values.OfType<RelicStats>());
         entities.AddRange(CardRegistry.EntityLedger.Values.OfType<PotionStats>());
 
-        var present = entities.Where(s => SmallEffectiveCombat(s) > 0).ToList();
+        var present = entities.Where(s => EffectiveCombat(s) > 0).ToList();
 
         // A generated card's damage already lives in its creator's generated bucket, so drop the card row
         // when its creator (card/relic/potion) is itself shown — avoids counting the same damage twice. The
@@ -54,7 +49,7 @@ public static partial class DeckTrackerOverlay
 
         var rows = present
             .Where(s => s is not CardStats c || string.IsNullOrEmpty(c.GeneratedById) || !presentCreatorIds.Contains(c.GeneratedById))
-            .OrderByDescending(SmallEffectiveCombat)
+            .OrderByDescending(EffectiveCombat)
             .ThenBy(s => s.FloorAdded)
             .ToList();
 
@@ -67,7 +62,7 @@ public static partial class DeckTrackerOverlay
             var nameText = generatorName != null ? $"{GetEntityDisplayTitle(stat)} ({generatorName})" : GetEntityDisplayTitle(stat);
             Label nameLabel = new Label { Text = nameText, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 
-            decimal combatDamage = SmallEffectiveCombat(stat);
+            decimal combatDamage = EffectiveCombat(stat);
             Label damageLabel = new Label { Text = combatDamage.ToString("0.##") };
             Color dmgColor = (_includeConnectedForge && stat.ConnectedForgeCombat > 0) ? new Color("38BDF8") : new Color("4ADE80");
             damageLabel.AddThemeColorOverride("font_color", dmgColor);
@@ -125,23 +120,6 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ADDED", "ADDED", 80));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("EVOLVED", "EVOLVED", 80));
-
-        // Effective = the displayed damage value. In normal mode it SUMS every damage bucket (direct +
-        // generated-card damage + connected-forge adjustment); future buckets only need adding here.
-        decimal EffectiveCombat(CardStats s) =>
-            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
-
-        decimal EffectiveRun(ActData a) =>
-            _showRawForge ? a.RawForgeTotal : (a.TotalDamage + a.GeneratedDamageTotal + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
-
-        decimal EffectiveHallway(ActData a) =>
-            _showRawForge ? a.RawForgeHallway : (a.DamageHallway + a.GeneratedDamageHallway + (_includeConnectedForge ? a.ConnectedForgeHallway - a.ReceivedForgeHallway : 0));
-
-        decimal EffectiveElite(ActData a) =>
-            _showRawForge ? a.RawForgeElite : (a.DamageElite + a.GeneratedDamageElite + (_includeConnectedForge ? a.ConnectedForgeElite - a.ReceivedForgeElite : 0));
-
-        decimal EffectiveBoss(ActData a) =>
-            _showRawForge ? a.RawForgeBoss : (a.DamageBoss + a.GeneratedDamageBoss + (_includeConnectedForge ? a.ConnectedForgeBoss - a.ReceivedForgeBoss : 0));
 
         // --- Build the generation tree (multi-level, keyed by immediate parent) ---------------------------
         // Every row shows its SUBTREE total of direct damage: a card's own damage counted once at its node,
@@ -231,40 +209,18 @@ public static partial class DeckTrackerOverlay
         {
             IOrderedEnumerable<CardStats> ordered = _currentSort.Column switch
             {
-                "NAME" => _currentSort.Ascending
-                    ? nodes.OrderBy(GetEntityDisplayTitle)
-                    : nodes.OrderByDescending(GetEntityDisplayTitle),
-                "PLAY_RATE" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => Display(s).Agg.PlayRate)
-                    : nodes.OrderByDescending(s => Display(s).Agg.PlayRate),
-                "COMBAT_DMG" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => EffectiveCombat(Display(s).Stat))
-                    : nodes.OrderByDescending(s => EffectiveCombat(Display(s).Stat)),
-                "RUN_DMG" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => EffectiveRun(Display(s).Agg))
-                    : nodes.OrderByDescending(s => EffectiveRun(Display(s).Agg)),
-                "AVG_DMG" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => Display(s).Agg.EncountersSeenTotal > 0 ? EffectiveRun(Display(s).Agg) / Display(s).Agg.EncountersSeenTotal : 0)
-                    : nodes.OrderByDescending(s => Display(s).Agg.EncountersSeenTotal > 0 ? EffectiveRun(Display(s).Agg) / Display(s).Agg.EncountersSeenTotal : 0),
-                "HALLWAY_DMG" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => EffectiveHallway(Display(s).Agg))
-                    : nodes.OrderByDescending(s => EffectiveHallway(Display(s).Agg)),
-                "ELITE_DMG" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => EffectiveElite(Display(s).Agg))
-                    : nodes.OrderByDescending(s => EffectiveElite(Display(s).Agg)),
-                "BOSS_DMG" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => EffectiveBoss(Display(s).Agg))
-                    : nodes.OrderByDescending(s => EffectiveBoss(Display(s).Agg)),
-                "ADDED" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => s.FloorAdded)
-                    : nodes.OrderByDescending(s => s.FloorAdded),
-                "REMOVED" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => s.FloorRemoved)
-                    : nodes.OrderByDescending(s => s.FloorRemoved),
-                "EVOLVED" => _currentSort.Ascending
-                    ? nodes.OrderBy(s => s.FloorLeftDeck)
-                    : nodes.OrderByDescending(s => s.FloorLeftDeck),
-                _ => nodes.OrderByDescending(s => EffectiveRun(Display(s).Agg))
+                "NAME"       => SortBy(nodes, GetEntityDisplayTitle),
+                "PLAY_RATE"  => SortBy(nodes, s => Display(s).Agg.PlayRate),
+                "COMBAT_DMG" => SortBy(nodes, s => EffectiveCombat(Display(s).Stat)),
+                "RUN_DMG"    => SortBy(nodes, s => EffectiveRun(Display(s).Agg)),
+                "AVG_DMG"    => SortBy(nodes, s => Display(s).Agg.EncountersSeenTotal > 0 ? EffectiveRun(Display(s).Agg) / Display(s).Agg.EncountersSeenTotal : 0),
+                "HALLWAY_DMG" => SortBy(nodes, s => EffectiveHallway(Display(s).Agg)),
+                "ELITE_DMG"  => SortBy(nodes, s => EffectiveElite(Display(s).Agg)),
+                "BOSS_DMG"   => SortBy(nodes, s => EffectiveBoss(Display(s).Agg)),
+                "ADDED"      => SortBy(nodes, s => s.FloorAdded),
+                "REMOVED"    => SortBy(nodes, s => s.FloorRemoved),
+                "EVOLVED"    => SortBy(nodes, s => s.FloorLeftDeck),
+                _            => nodes.OrderByDescending(s => EffectiveRun(Display(s).Agg))
             };
 
             return ordered

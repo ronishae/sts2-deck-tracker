@@ -19,23 +19,6 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("ADDED", "ADDED", 80));
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
 
-        // Effective = the displayed damage value, summing every damage bucket (direct + generated-card
-        // damage from cards this relic created + connected-forge adjustment).
-        decimal EffectiveCombat(RelicStats s) =>
-            _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
-
-        decimal EffectiveRun(ActData a) =>
-            _showRawForge ? a.RawForgeTotal : (a.TotalDamage + a.GeneratedDamageTotal + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
-
-        decimal EffectiveHallway(ActData a) =>
-            _showRawForge ? a.RawForgeHallway : (a.DamageHallway + a.GeneratedDamageHallway + (_includeConnectedForge ? a.ConnectedForgeHallway - a.ReceivedForgeHallway : 0));
-
-        decimal EffectiveElite(ActData a) =>
-            _showRawForge ? a.RawForgeElite : (a.DamageElite + a.GeneratedDamageElite + (_includeConnectedForge ? a.ConnectedForgeElite - a.ReceivedForgeElite : 0));
-
-        decimal EffectiveBoss(ActData a) =>
-            _showRawForge ? a.RawForgeBoss : (a.DamageBoss + a.GeneratedDamageBoss + (_includeConnectedForge ? a.ConnectedForgeBoss - a.ReceivedForgeBoss : 0));
-
         var unsortedList = CardRegistry.EntityLedger.Values.OfType<RelicStats>()
             .Select(r => new { Stat = r, Agg = AggregateActData(r) })
             .Where(x => !_hideZeroDamageCards || EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
@@ -43,43 +26,16 @@ public static partial class DeckTrackerOverlay
 
         var sortedList = _currentSort.Column switch
         {
-            "NAME" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => GetEntityDisplayTitle(x.Stat))
-                : unsortedList.OrderByDescending(x => GetEntityDisplayTitle(x.Stat)),
-
-            "COMBAT_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveCombat(x.Stat))
-                : unsortedList.OrderByDescending(x => EffectiveCombat(x.Stat)),
-
-            "RUN_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveRun(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveRun(x.Agg)),
-
-            "AVG_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0)
-                : unsortedList.OrderByDescending(x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0),
-
-            "HALLWAY_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveHallway(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveHallway(x.Agg)),
-
-            "ELITE_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveElite(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveElite(x.Agg)),
-
-            "BOSS_DMG" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => EffectiveBoss(x.Agg))
-                : unsortedList.OrderByDescending(x => EffectiveBoss(x.Agg)),
-
-            "ADDED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorAdded)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorAdded),
-
-            "REMOVED" => _currentSort.Ascending
-                ? unsortedList.OrderBy(x => x.Stat.FloorRemoved)
-                : unsortedList.OrderByDescending(x => x.Stat.FloorRemoved),
-
-            _ => unsortedList.OrderByDescending(x => EffectiveRun(x.Agg))
+            "NAME"        => SortBy(unsortedList, x => GetEntityDisplayTitle(x.Stat)),
+            "COMBAT_DMG"  => SortBy(unsortedList, x => EffectiveCombat(x.Stat)),
+            "RUN_DMG"     => SortBy(unsortedList, x => EffectiveRun(x.Agg)),
+            "AVG_DMG"     => SortBy(unsortedList, x => x.Agg.EncountersSeenTotal > 0 ? EffectiveRun(x.Agg) / x.Agg.EncountersSeenTotal : 0),
+            "HALLWAY_DMG" => SortBy(unsortedList, x => EffectiveHallway(x.Agg)),
+            "ELITE_DMG"   => SortBy(unsortedList, x => EffectiveElite(x.Agg)),
+            "BOSS_DMG"    => SortBy(unsortedList, x => EffectiveBoss(x.Agg)),
+            "ADDED"       => SortBy(unsortedList, x => x.Stat.FloorAdded),
+            "REMOVED"     => SortBy(unsortedList, x => x.Stat.FloorRemoved),
+            _             => unsortedList.OrderByDescending(x => EffectiveRun(x.Agg))
         };
 
         var finalSort = sortedList;

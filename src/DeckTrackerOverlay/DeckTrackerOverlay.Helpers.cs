@@ -150,6 +150,29 @@ public static partial class DeckTrackerOverlay
         check.AddThemeColorOverride("font_focus_color", color);
     }
 
+    // Effective damage = all buckets summed (direct + generated + optional connected-forge adj).
+    // Single source of truth shared by all three render tabs and the small overlay.
+    private static decimal EffectiveCombat(EntityStats s) =>
+        _showRawForge ? s.RawForgeCombat : (s.CombatDamage + s.GeneratedCombatDamage + (_includeConnectedForge ? s.ConnectedForgeCombat - s.ReceivedForgeCombat : 0));
+
+    private static decimal EffectiveRun(ActData a) =>
+        _showRawForge ? a.RawForgeTotal : (a.TotalDamage + a.GeneratedDamageTotal + (_includeConnectedForge ? a.ConnectedForgeTotal - a.ReceivedForgeTotal : 0));
+
+    private static decimal EffectiveHallway(ActData a) =>
+        _showRawForge ? a.RawForgeHallway : (a.DamageHallway + a.GeneratedDamageHallway + (_includeConnectedForge ? a.ConnectedForgeHallway - a.ReceivedForgeHallway : 0));
+
+    private static decimal EffectiveElite(ActData a) =>
+        _showRawForge ? a.RawForgeElite : (a.DamageElite + a.GeneratedDamageElite + (_includeConnectedForge ? a.ConnectedForgeElite - a.ReceivedForgeElite : 0));
+
+    private static decimal EffectiveBoss(ActData a) =>
+        _showRawForge ? a.RawForgeBoss : (a.DamageBoss + a.GeneratedDamageBoss + (_includeConnectedForge ? a.ConnectedForgeBoss - a.ReceivedForgeBoss : 0));
+
+    // Sorts a sequence ascending or descending based on the active sort state.
+    private static IOrderedEnumerable<T> SortBy<T, TKey>(IEnumerable<T> source, Func<T, TKey> key)
+    {
+        return _currentSort.Ascending ? source.OrderBy(key) : source.OrderByDescending(key);
+    }
+
     private static PanelContainer CreateHoverableRow(Control content, Color? bgTint = null)
     {
         PanelContainer panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };

@@ -44,63 +44,31 @@ public class ActData
     public decimal AvgBoss => EncountersSeenBoss > 0 ? DamageBoss / EncountersSeenBoss : 0;
     public decimal AvgTotal => EncountersSeenTotal > 0 ? TotalDamage / EncountersSeenTotal : 0;
 
-    public void AddDamage(string combatType, decimal amount)
-    {
-        switch (combatType)
-        {
-            case "Elite": DamageElite += amount; break;
-            case "Boss": DamageBoss += amount; break;
-            default: DamageHallway += amount; break;
-        }
-    }
+    public void AddDamage(string combatType, decimal amount) =>
+        ApplyByCombatType(combatType, () => DamageHallway += amount, () => DamageElite += amount, () => DamageBoss += amount);
 
-    public void AddGeneratedDamage(string combatType, decimal amount)
-    {
-        switch (combatType)
-        {
-            case "Elite": GeneratedDamageElite += amount; break;
-            case "Boss": GeneratedDamageBoss += amount; break;
-            default: GeneratedDamageHallway += amount; break;
-        }
-    }
+    public void AddGeneratedDamage(string combatType, decimal amount) =>
+        ApplyByCombatType(combatType, () => GeneratedDamageHallway += amount, () => GeneratedDamageElite += amount, () => GeneratedDamageBoss += amount);
 
-    public void AddEncounterSeen(string combatType)
-    {
-        switch (combatType)
-        {
-            case "Elite": EncountersSeenElite++; break;
-            case "Boss": EncountersSeenBoss++; break;
-            default: EncountersSeenHallway++; break;
-        }
-    }
+    public void AddEncounterSeen(string combatType) =>
+        ApplyByCombatType(combatType, () => EncountersSeenHallway++, () => EncountersSeenElite++, () => EncountersSeenBoss++);
 
-    public void AddRawForge(string combatType, decimal amount)
-    {
-        switch (combatType)
-        {
-            case "Elite": RawForgeElite += amount; break;
-            case "Boss": RawForgeBoss += amount; break;
-            default: RawForgeHallway += amount; break;
-        }
-    }
+    public void AddRawForge(string combatType, decimal amount) =>
+        ApplyByCombatType(combatType, () => RawForgeHallway += amount, () => RawForgeElite += amount, () => RawForgeBoss += amount);
 
-    public void AddConnectedForge(string combatType, decimal amount)
-    {
-        switch (combatType)
-        {
-            case "Elite": ConnectedForgeElite += amount; break;
-            case "Boss": ConnectedForgeBoss += amount; break;
-            default: ConnectedForgeHallway += amount; break;
-        }
-    }
+    public void AddConnectedForge(string combatType, decimal amount) =>
+        ApplyByCombatType(combatType, () => ConnectedForgeHallway += amount, () => ConnectedForgeElite += amount, () => ConnectedForgeBoss += amount);
 
-    public void AddReceivedForge(string combatType, decimal amount)
+    public void AddReceivedForge(string combatType, decimal amount) =>
+        ApplyByCombatType(combatType, () => ReceivedForgeHallway += amount, () => ReceivedForgeElite += amount, () => ReceivedForgeBoss += amount);
+
+    private void ApplyByCombatType(string combatType, Action onHallway, Action onElite, Action onBoss)
     {
         switch (combatType)
         {
-            case "Elite": ReceivedForgeElite += amount; break;
-            case "Boss": ReceivedForgeBoss += amount; break;
-            default: ReceivedForgeHallway += amount; break;
+            case "Elite": onElite(); break;
+            case "Boss": onBoss(); break;
+            default: onHallway(); break;
         }
     }
 
