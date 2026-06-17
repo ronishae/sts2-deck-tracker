@@ -183,7 +183,9 @@ public static partial class CardRegistry
     private static readonly string SaveDirectory = ProjectSettings.GlobalizePath("user://deck_tracker_saves/");
     private const int MaxStoredRuns = 5;
 
-    public static event Action<List<CardStats>>? Changed;
+    // Set by Publish() on any ledger mutation; read+cleared once per frame by DrainPendingSnapshot so the
+    // expensive ledger clone happens at most once per rendered frame instead of once per damage event.
+    private static volatile bool _publishPending;
 
     // --- Persistence Logic ---
 
@@ -1484,13 +1486,26 @@ public static partial class CardRegistry
         Publish();
     }
 
-    private static void Publish()
+    // Signals that the ledger changed. Cheap by design: the actual snapshot clone is deferred to
+    // DrainPendingSnapshot (pulled once per frame by the overlay), so per-event mutations never clone.
+    private static void Publish() => _publishPending = true;
+
+    // Returns a fresh immutable snapshot for the overlay when state changed since the last pull, else null.
+    // Cloning under SyncRoot gives the render thread a stable copy; called once per Godot process frame.
+    public static List<CardStats>? DrainPendingSnapshot()
     {
-        List<CardStats> statsCopy;
+        if (!_publishPending)
+        {
+            return null;
+        }
         lock (SyncRoot)
         {
-            statsCopy = EntityLedger.Values.OfType<CardStats>().Select(s => (CardStats)s.Clone()).ToList();
+            if (!_publishPending)
+            {
+                return null;
+            }
+            _publishPending = false;
+            return EntityLedger.Values.OfType<CardStats>().Select(s => (CardStats)s.Clone()).ToList();
         }
-        Changed?.Invoke(statsCopy);
     }
 }

@@ -1,5 +1,4 @@
 using Godot;
-using System.Collections.Concurrent;
 
 namespace DeckTracker;
 
@@ -45,7 +44,6 @@ public static partial class DeckTrackerOverlay
     private static readonly HashSet<int> _enabledPlayers = new() { 0, 1, 2, 3 };
 
     // --- State & Data ---
-    private static readonly ConcurrentQueue<List<CardStats>> UpdateQueue = new();
     private static bool _isHookedToProcess;
 
     private static bool _includeConnectedForge = true;
@@ -91,7 +89,6 @@ public static partial class DeckTrackerOverlay
             {
                 tree.ProcessFrame += OnProcessFrame;
                 tree.Root.TreeExiting += OnGameExiting;
-                CardRegistry.Changed += (stats) => UpdateQueue.Enqueue(stats);
                 _isHookedToProcess = true;
             }
 
@@ -127,13 +124,14 @@ public static partial class DeckTrackerOverlay
             HookPatches.PollDeckChange();
         }
 
-        bool hasUpdate = false;
-        while (UpdateQueue.TryDequeue(out var stats))
+        // Pull a fresh snapshot at most once per frame; the registry clones only when state changed since
+        // the last pull, so per-event mutations no longer clone the whole ledger.
+        var snapshot = CardRegistry.DrainPendingSnapshot();
+        if (snapshot != null)
         {
-            _latestStats = stats;
-            hasUpdate = true;
+            _latestStats = snapshot;
+            RedrawUI(_latestStats);
         }
-        if (hasUpdate) RedrawUI(_latestStats);
     }
 
     private static void HandleInputs()
