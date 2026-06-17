@@ -38,7 +38,7 @@ public static class RunLogRecorder
 
     // --- Run lifecycle ---
 
-    public static void BeginRun(string seed, string character, int ascensionLevel, int startingGold)
+    public static void BeginRun(string seed, string character, int ascensionLevel, int startingGold, string gameVersion)
     {
         lock (Lock)
         {
@@ -47,13 +47,14 @@ public static class RunLogRecorder
                 RunSeed = seed,
                 StartedAtUtc = DateTime.UtcNow.ToString("o"),
                 Character = character,
-                AscensionLevel = ascensionLevel
+                AscensionLevel = ascensionLevel,
+                GameVersion = gameVersion
             };
             _currentCombat = null;
             _lastGold = startingGold;
             _previousDeck = new Dictionary<string, DeckCardInfo>();
             _deckBaselinePending = false;
-            Log.Info($"BeginRun. Seed: {seed}, Character: {character}, Ascension: {ascensionLevel}, Gold: {startingGold}");
+            Log.Info($"BeginRun. Seed: {seed}, Character: {character}, Ascension: {ascensionLevel}, Gold: {startingGold}, GameVersion: {gameVersion}");
         }
     }
 

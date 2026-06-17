@@ -247,7 +247,7 @@ public static partial class CardRegistry
             }
             else
             {
-                RunLogRecorder.BeginRun(runSeed, ExtractCharacterLabel(liveRun), liveRun?.AscensionLevel ?? 0, FirstPlayerGold(liveRun));
+                RunLogRecorder.BeginRun(runSeed, ExtractCharacterLabel(liveRun), liveRun?.AscensionLevel ?? 0, FirstPlayerGold(liveRun), GameRelease.Version);
             }
         }
         Publish();

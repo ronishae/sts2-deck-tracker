@@ -10,6 +10,8 @@ public sealed class RunLog
     public string StartedAtUtc { get; set; } = "";
     public string Character { get; set; } = "";
     public int AscensionLevel { get; set; }
+    // Slay the Spire 2 patch version the run was played on (e.g. "v0.107.0"), from ReleaseInfoManager.
+    public string GameVersion { get; set; } = "";
 
     // "InProgress" until the run resolves, then "Victory" or "Death".
     public string Outcome { get; set; } = "InProgress";

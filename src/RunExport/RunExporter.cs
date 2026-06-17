@@ -14,7 +14,7 @@ public static class RunExporter
     private const string FightCsvName = "card_fights.csv";
 
     private const string CsvHeader =
-        "runSeed,runStartedAt,character,ascension,act,actName,floor,combatIndex,encounterId,combatType,turns," +
+        "runSeed,runStartedAt,character,ascension,gameVersion,act,actName,floor,combatIndex,encounterId,combatType,turns," +
         "entityType,name,playerIndex,ownerNetId,floorAdded,copyIndex,upgradeLevel,enchantment,rarity," +
         "floorObtained,floorUsed,floorDiscarded," +
         "timesDrawn,timesPlayed,playRate,damage,generatedDamage,damageContribPct,rawForge,connectedForge,receivedForge";
@@ -108,7 +108,7 @@ public static class RunExporter
         {
             var fields = new[]
             {
-                log.RunSeed, log.StartedAtUtc, log.Character, Num(log.AscensionLevel),
+                log.RunSeed, log.StartedAtUtc, log.Character, Num(log.AscensionLevel), log.GameVersion,
                 Num(combat.Act), combat.ActName, Num(combat.Floor), Num(combat.Index), combat.EncounterId, combat.CombatType, Num(combat.Turns),
                 entity.EntityType, entity.Name, Num(entity.PlayerIndex), entity.OwnerNetId,
                 Num(entity.FloorAdded), Num(entity.CopyIndex), Num(entity.UpgradeLevel), entity.Enchantment, entity.Rarity,
