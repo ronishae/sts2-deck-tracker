@@ -138,7 +138,13 @@ public static partial class CardRegistry
         }
 
         string? generatorId;
-        if (CurrentPlayingCard != null)
+        if (!string.IsNullOrEmpty(InstancedTracker.ExecutingSourceId))
+        {
+            // An explicitly-wrapped power generator takes priority even while a card is playing, so
+            // reactive generators like CalamityPower (AfterCardPlayed) are credited over the trigger card.
+            generatorId = InstancedTracker.ExecutingSourceId;
+        }
+        else if (CurrentPlayingCard != null)
         {
             generatorId = GetTrackingId(CurrentPlayingCard);
         }
@@ -152,9 +158,7 @@ public static partial class CardRegistry
         }
         else
         {
-            // A relic/power only sets an executing id while a method we've wrapped runs, so this branch is
-            // the implicit opt-in for those generators (cards and potions always have a context).
-            generatorId = InstancedTracker.ExecutingSourceId;
+            generatorId = null;
         }
 
         if (string.IsNullOrEmpty(generatorId))
