@@ -19,7 +19,7 @@ public sealed class CombatRecord
     // Gold entering the fight. Gold only changes between combats (rewards land after), so a single
     // "before" value is all that is meaningful; the GoldGained timeline events carry the actual deltas.
     public int GoldBefore { get; set; }
-    // "Won" or "Died".
+    // "Won", "Died", or "Abandoned".
     public string Outcome { get; set; } = "";
     public List<EntityFightStat> Contributions { get; set; } = new();
 }

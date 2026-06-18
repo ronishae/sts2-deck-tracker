@@ -187,6 +187,13 @@ public static class RunLogRecorder
         {
             log.FloorDied = log.FinalFloor;
         }
+
+        // The game force-kills the player on abandon, which records the last combat as "Died".
+        // Override it to "Abandoned" so the CSV reflects the true reason for the combat ending.
+        if (log.Combats.Count > 0 && log.Combats[^1].Outcome == "Died")
+        {
+            log.Combats[^1].Outcome = OutcomeAbandoned;
+        }
     }
 
     public static void RecordMap(int actIndex, List<MapNodeSnapshot> nodes)
