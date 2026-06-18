@@ -209,8 +209,12 @@ public static partial class CardRegistry
 
     private static bool ParticipatedThisCombat(EntityStats entity)
     {
-        if (entity is CardStats)
+        if (entity is CardStats card)
         {
+            if (card.CardType == "Status")
+            {
+                return false;
+            }
             // Always include active deck cards so the export represents a full deck snapshot per fight.
             // Generated/combat cards (IsActive=false, e.g. Shivs) fall through to the draw/damage check.
             return entity.IsActive || entity.CombatTimesDrawn > 0 || entity.CombatDamage > 0 || entity.GeneratedCombatDamage > 0;
