@@ -17,4 +17,8 @@ public class DamageHistoryItem(ICombatState combatState, Creature? dealer, Damag
     // (the full dealt amount) — is what the blade and its forgers should split, or those modifiers would be
     // double-counted. Equals Results.TotalDamage when the hit had no tracked modifiers.
     public decimal BaseDamage { get; set; } = baseDamage;
+
+    // Captured at hit-registration time (inside TryHandleCustomCardDamage), before any end-of-turn dequeue
+    // or enemy-death power cleanup can empty the ConquerorTracker queue. Null if no Conqueror was active.
+    public string? ActiveConquerorId { get; set; }
 }

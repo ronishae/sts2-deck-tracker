@@ -18,7 +18,11 @@ public static partial class CardRegistry
         switch (cardSource.Id.Entry)
         {
             case "SOVEREIGN_BLADE":
-                AddSovereignBladeDamageHistoryItem(new DamageHistoryItem(combatState, dealer, results, target, cardSource, baseDmg));
+                var item = new DamageHistoryItem(combatState, dealer, results, target, cardSource, baseDmg)
+                {
+                    ActiveConquerorId = GetEarliestActiveConqueror(target)
+                };
+                AddSovereignBladeDamageHistoryItem(item);
                 return true;
             case "SHIV":
                 AddShivDamage(cardSource, baseDmg);
@@ -66,8 +70,15 @@ public static partial class CardRegistry
                 }
                 break;
             case < 0:
-                var dequeued = conquerorQueue.Dequeue();
-                Log.Debug($"UpdateConquerorTracker. Conqueror card dequeued. ID: {dequeued}");
+                if (conquerorQueue.Count > 0)
+                {
+                    var dequeued = conquerorQueue.Dequeue();
+                    Log.Debug($"UpdateConquerorTracker. Conqueror card dequeued. ID: {dequeued}");
+                }
+                else
+                {
+                    Log.Warn("UpdateConquerorTracker. Attempted to dequeue from empty Conqueror queue.");
+                }
                 break;
         }
         
@@ -76,7 +87,9 @@ public static partial class CardRegistry
     
     private static string? GetEarliestActiveConqueror(Creature target)
     {
-        return ConquerorTracker.TryGetValue(target, out var conquerorQueue) ? conquerorQueue.Peek() : null;
+        return ConquerorTracker.TryGetValue(target, out var conquerorQueue) && conquerorQueue.Count > 0
+            ? conquerorQueue.Peek()
+            : null;
     }
     
     // For SwordSage, replayCountAdded would be 1. Later when supporting Hidden Gem hitting this, it may be 2 or 3
@@ -97,12 +110,11 @@ public static partial class CardRegistry
         Publish();
     }
     
-    private static void SplitForgeDamage(CardModel bladeCard, DamageResult results, decimal baseDamage, Creature target, CardModel? seekingEdge, CardModel? replayModifyingCard)
+    private static void SplitForgeDamage(CardModel bladeCard, DamageResult results, decimal baseDamage, Creature target, CardModel? seekingEdge, CardModel? replayModifyingCard, string? conquerorId)
     {
         lock (SyncRoot)
         {
-            var conquerorId = GetEarliestActiveConqueror(target);
-            Log.VeryDebug($"ConquerorID requested: {conquerorId}.");
+            Log.VeryDebug($"ConquerorID: {conquerorId}.");
             // Split the card-intrinsic base damage (modifiers like Strength/Vigor/Vulnerable have already
             // been paid out to their own sources by ProcessDamageSnapshot), not Results.TotalDamage, or
             // those modifiers would be double-counted onto the blade.
@@ -256,12 +268,12 @@ public static partial class CardRegistry
             if (damageHistoryItem == maxTotalDamageInstance)
             {
                 Log.Debug($"ProcessSovereignBladeHistory. Max-damage hit; attributing to blade and forgers (no seeking edge).");
-                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.BaseDamage, damageHistoryItem.Target, null, replayModifyingCard);
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.BaseDamage, damageHistoryItem.Target, null, replayModifyingCard, damageHistoryItem.ActiveConquerorId);
             }
             else
             {
                 Log.Debug($"ProcessSovereignBladeHistory. Attributing to Seeking Edge: {GetTrackingId(_activeSeekingEdgeCard)}.");
-                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.BaseDamage, damageHistoryItem.Target, _activeSeekingEdgeCard, replayModifyingCard);
+                SplitForgeDamage(damageHistoryItem.CardModel, damageHistoryItem.Results, damageHistoryItem.BaseDamage, damageHistoryItem.Target, _activeSeekingEdgeCard, replayModifyingCard, damageHistoryItem.ActiveConquerorId);
             }
         }
         

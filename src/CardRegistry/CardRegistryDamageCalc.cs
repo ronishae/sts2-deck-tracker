@@ -104,7 +104,12 @@ public static partial class CardRegistry
                     if (!paid)
                     {
                         extraDamage += awardedDamage;
-                        Log.Warn($"ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
+                        // CONQUEROR_POWER is intentionally unattributed here — its bonus is folded back into
+                        // baseDamage so SplitForgeDamage can split it using ActiveConquerorId.
+                        if (multMod.PowerId == "CONQUEROR_POWER")
+                            Log.Debug($"ProcessDamageSnapshot. CONQUEROR_POWER {awardedDamage} folded into BaseDamage for SplitForgeDamage.");
+                        else
+                            Log.Warn($"ProcessDamageSnapshot. Unattributed {awardedDamage} damage from {multMod.PowerId} routed to Base Card.");
                     }
                 }
 
