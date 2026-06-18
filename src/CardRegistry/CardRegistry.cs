@@ -14,6 +14,9 @@ public static partial class CardRegistry
 
     private static int _currentAct = 1;
     private static string _currentCombatType = "Unknown";
+    // True from FinalizeFatalCombat until ResetRun, so relic-removal events fired by game cleanup
+    // after a player death are not recorded as legitimate mid-run removals.
+    private static bool _isRunEnding;
 
     private static HashSet<string> _incrementedThisCombat = new();
 

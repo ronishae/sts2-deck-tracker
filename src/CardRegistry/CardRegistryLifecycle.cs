@@ -60,6 +60,7 @@ public static partial class CardRegistry
         {
             EntityLedger.Clear();
             _currentAct = 1;
+            _isRunEnding = false;
             ResetInternalsCombat();
             RelicExecutionManager.ResetState();
             RelicNameCache.Clear();
@@ -175,6 +176,9 @@ public static partial class CardRegistry
     // outcome is "Died"), resets combat state, and persists. Safe if no combat is open (EndCombat no-ops).
     public static void FinalizeFatalCombat()
     {
+        // Set before ResetInternalsCombat so that any PlayerRemoveRelicPostfix calls fired by
+        // game cleanup after death are suppressed in HandleRelicRemove.
+        _isRunEnding = true;
         FinalizeCombatExport();
         lock (SyncRoot)
         {

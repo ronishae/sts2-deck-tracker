@@ -68,6 +68,12 @@ public static partial class CardRegistry
 
     public static void HandleRelicRemove(RelicModel relic, string? ownerNetId, int floorRemoved)
     {
+        if (_isRunEnding)
+        {
+            Log.Debug($"HandleRelicRemove. Skipping removal of {relic.Id.Entry} — run is ending (death cleanup).");
+            return;
+        }
+
         lock (SyncRoot)
         {
             var key = ownerNetId != null ? $"RELIC_{relic.Id.Entry}_P{ownerNetId}" : "RELIC_" + relic.Id.Entry;
