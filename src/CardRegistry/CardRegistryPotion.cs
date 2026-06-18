@@ -114,6 +114,10 @@ public static partial class CardRegistry
             {
                 stat.FloorUsed = floor;
                 stat.IsActive = false;
+                if (IsCombatActive)
+                {
+                    stat.CombatTimesPlayed++;
+                }
                 id = resolved;
             }
             else
@@ -135,6 +139,10 @@ public static partial class CardRegistry
             {
                 stat.FloorDiscarded = floor;
                 stat.IsActive = false;
+                if (IsCombatActive)
+                {
+                    stat.CombatTimesPlayed++;
+                }
             }
         }
 

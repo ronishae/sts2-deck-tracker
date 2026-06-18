@@ -14,8 +14,8 @@ public static class RunExporter
     private const string FightCsvName = "card_fights.csv";
 
     private const string CsvHeader =
-        "runSeed,runStartedAt,character,ascension,gameVersion,act,actName,floor,combatIndex,encounterId,combatType,turns," +
-        "entityType,name,playerIndex,ownerNetId,floorAdded,copyIndex,upgradeLevel,enchantment,rarity," +
+        "runSeed,runStartedAt,character,ascension,gameVersion,act,actName,floor,combatIndex,encounterId,combatType,turns,damageTaken," +
+        "entityType,name,playerIndex,ownerNetId,floorAdded,copyIndex,upgradeLevel,enchantment,generatedBy,rarity," +
         "floorObtained,floorUsed,floorDiscarded," +
         "timesDrawn,timesPlayed,playRate,damage,generatedDamage,damageContribPct,rawForge,connectedForge,receivedForge";
 
@@ -109,9 +109,9 @@ public static class RunExporter
             var fields = new[]
             {
                 log.RunSeed, log.StartedAtUtc, log.Character, Num(log.AscensionLevel), log.GameVersion,
-                Num(combat.Act), combat.ActName, Num(combat.Floor), Num(combat.Index), combat.EncounterId, combat.CombatType, Num(combat.Turns),
+                Num(combat.Act), combat.ActName, Num(combat.Floor), Num(combat.Index), combat.EncounterId, combat.CombatType, Num(combat.Turns), Num(combat.DamageTaken),
                 entity.EntityType, entity.Name, Num(entity.PlayerIndex), entity.OwnerNetId,
-                Num(entity.FloorAdded), Num(entity.CopyIndex), Num(entity.UpgradeLevel), entity.Enchantment, entity.Rarity,
+                Num(entity.FloorAdded), Num(entity.CopyIndex), Num(entity.UpgradeLevel), entity.Enchantment, entity.GeneratedBy, entity.Rarity,
                 Num(entity.FloorObtained), Num(entity.FloorUsed), Num(entity.FloorDiscarded),
                 Num(entity.TimesDrawn), Num(entity.TimesPlayed), Num(entity.PlayRate),
                 Num(entity.Damage), Num(entity.GeneratedDamage), Num(entity.DamageContribPct),

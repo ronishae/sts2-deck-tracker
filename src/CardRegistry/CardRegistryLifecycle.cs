@@ -215,6 +215,12 @@ public static partial class CardRegistry
             // Generated/combat cards (IsActive=false, e.g. Shivs) fall through to the draw/damage check.
             return entity.IsActive || entity.CombatTimesDrawn > 0 || entity.CombatDamage > 0 || entity.GeneratedCombatDamage > 0;
         }
+        if (entity is PotionStats)
+        {
+            // Include potions that dealt damage OR were used/discarded this combat (CombatTimesPlayed is
+            // incremented by MarkPotionUsed/MarkPotionDiscarded when combat is active).
+            return entity.CombatDamage > 0 || entity.CombatTimesPlayed > 0;
+        }
         return entity.CombatDamage > 0;
     }
 
@@ -248,6 +254,11 @@ public static partial class CardRegistry
                 stat.PlayRate = card.CombatTimesDrawn > 0
                     ? Math.Round((decimal)card.CombatTimesPlayed / card.CombatTimesDrawn, 4)
                     : 0;
+                if (!string.IsNullOrEmpty(card.GeneratedById)
+                    && EntityLedger.TryGetValue(card.GeneratedById, out var generator))
+                {
+                    stat.GeneratedBy = generator.DisplayName;
+                }
                 break;
             case RelicStats relic:
                 stat.EntityType = "Relic";

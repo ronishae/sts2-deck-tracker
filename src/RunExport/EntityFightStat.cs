@@ -25,7 +25,9 @@ public sealed class EntityFightStat
     public int? FloorUsed { get; set; }
     public int? FloorDiscarded { get; set; }
 
-    // Card-only activity.
+    // Card-only identity/activity.
+    // Blank for deck cards; display name of the generator (card/relic/potion) for cards created mid-combat.
+    public string GeneratedBy { get; set; } = "";
     public int? TimesDrawn { get; set; }
     public int? TimesPlayed { get; set; }
     public decimal? PlayRate { get; set; }
