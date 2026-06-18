@@ -61,11 +61,11 @@ internal static partial class HookPatches
             return;
         }
 
-        if (powerId == "ROLLING_BOULDER_POWER" || powerId == "PANACHE_POWER" || powerId == "MONOLOGUE_POWER"
-            || powerId == "THE_BOMB_POWER"
+        if (power is RollingBoulderPower || power is PanachePower || power is MonologuePower
+            || power is TheBombPower || power is HammerTimePower
             || CardGeneratingPowerManager.PowerTypes.Contains(power.GetType()))
         {
-             CardRegistry.InstancedTracker.LogInstance(power, cardSource, CardRegistry.GetCurrentSourceId());
+            CardRegistry.InstancedTracker.LogInstance(power, cardSource, CardRegistry.GetCurrentSourceId());
         }
 
         if (CardRegistry.PersistentBuffPowerIds.Contains(powerId) && target.IsPlayer)

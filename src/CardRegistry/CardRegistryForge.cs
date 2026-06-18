@@ -1,5 +1,6 @@
 using Godot;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace DeckTracker;
 
@@ -83,6 +84,18 @@ public static partial class CardRegistry
         }
         Log.Debug($"AddPotionForge. Potion: {potion.Id.Entry}, Id: {potionId}, Amount: {amount}");
         AddForgeById(potionId, amount);
+    }
+
+    public static void HandleHammerTimeForge(HammerTimePower power, decimal amount)
+    {
+        var sourceId = InstancedTracker.GetIdForInstance(power);
+        if (string.IsNullOrEmpty(sourceId))
+        {
+            Log.Warn($"HandleHammerTimeForge. No source mapped for HammerTimePower ({power.GetHashCode()}).");
+            return;
+        }
+        Log.Debug($"HandleHammerTimeForge. Source: {sourceId}, Amount: {amount}");
+        AddForgeById(sourceId, amount);
     }
 
     public static void HandleFurnaceForge(decimal forgeAmount)

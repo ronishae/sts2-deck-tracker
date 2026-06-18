@@ -171,9 +171,13 @@ internal static partial class HookPatches
         {
             CardRegistry.AddForge(card, amount);
         }
-        else if (source is PowerModel power && power is FurnacePower)
+        else if (source is FurnacePower)
         {
             CardRegistry.HandleFurnaceForge(amount);
+        }
+        else if (source is HammerTimePower hammerTimePower)
+        {
+            CardRegistry.HandleHammerTimeForge(hammerTimePower, amount);
         }
         else if (source is RelicModel relic)
         {
