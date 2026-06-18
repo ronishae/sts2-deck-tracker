@@ -58,7 +58,8 @@ internal static partial class HookPatches
 
     public static void AfterItemPurchasedPostfix(IRunState runState, Player player, MerchantEntry itemPurchased, int goldSpent) => Guard(nameof(AfterItemPurchasedPostfix), () =>
     {
-        RunLogRecorder.RecordPurchase(ExtractFloorNum(runState), ExtractActNum(runState), itemPurchased.GetType().Name, goldSpent);
+        var (itemType, itemName) = GetPurchaseDetails(itemPurchased);
+        RunLogRecorder.RecordPurchase(ExtractFloorNum(runState), ExtractActNum(runState), itemType, itemName, goldSpent);
         // A purchase spends gold without firing AfterGoldGained, so re-sync the baseline to the new total.
         RunLogRecorder.SetGoldBaseline(player.Gold);
     });
@@ -67,21 +68,41 @@ internal static partial class HookPatches
     {
         // Only card rewards represent a meaningful choice to log; gold/relic/potion/removal rewards are
         // already covered by their own timeline events (GoldGained, RelicGained, PotionGained, deck changes).
-        if (reward is not CardReward card)
+        if (reward is not CardReward)
         {
             return;
         }
-        var offered = string.Join(", ", card.Cards.Select(c => c.Title ?? c.Id.Entry));
-        RunLogRecorder.RecordReward(ExtractFloorNum(runState), ExtractActNum(runState), "Card", offered, reward.SuccessfullySelected);
+        var floor = ExtractFloorNum(runState);
+        var act = ExtractActNum(runState);
 
-        // When a card was taken it is already in the deck; diff the deck now so it is logged as a CardAdded
-        // (Source Reward) immediately, instead of relying on the next deck poll or room entry. Gated to
-        // out-of-combat: ScanDeckForCards resets copy-index maps that live combat tracking depends on.
-        if (reward.SuccessfullySelected && !CardRegistry.IsCombatActive)
+        // Sync the deck first so the taken card shows up in DeckChanges before we read it back.
+        // AfterRewardTaken only fires when a card was actually taken, so this is always the right time.
+        // Gated to out-of-combat: ScanDeckForCards resets copy-index maps that live combat tracking depends on.
+        if (!CardRegistry.IsCombatActive)
         {
             ScanDeckForCards(runState);
             RecordDeckSyncForLog(runState, runState.CurrentRoom);
         }
+
+        // AfterRewardTaken only fires inside the success branch of Reward.SelectUnsynchronized (after OnSelect
+        // returns true), so this event is always a taken reward. SuccessfullySelected is set to true after this
+        // hook fires and cannot be used here — always record as Reward (taken=true).
+        // The taken card name comes from the deck diff that was just recorded above.
+        var takenCardName = RunLogRecorder.GetLastAddedCardName(floor);
+        RunLogRecorder.RecordReward(floor, act, "Card", takenCardName, taken: true);
+    });
+
+    // Records a RewardSkipped event when the player closes the card reward screen without picking a card.
+    // At this point card.Cards still contains all originally offered cards (none were removed).
+    public static void CardRewardOnSkippedPostfix(CardReward __instance) => Guard(nameof(CardRewardOnSkippedPostfix), () =>
+    {
+        var runState = CardRegistry.GetLiveRunState();
+        if (runState == null)
+        {
+            return;
+        }
+        var offered = string.Join(", ", __instance.Cards.Select(c => c.Title ?? c.Id.Entry));
+        RunLogRecorder.RecordReward(ExtractFloorNum(runState), ExtractActNum(runState), "Card", offered, taken: false);
     });
 
     public static void AfterRestSiteHealPostfix(IRunState runState) => Guard(nameof(AfterRestSiteHealPostfix), () =>
@@ -101,6 +122,16 @@ internal static partial class HookPatches
         {
             return;
         }
+
+        // The Architect (final boss) victory triggers GuaranteeKillAllPlayers after the run is won, so the
+        // player dies even though the run is a victory. Detect this via IsVictoryRoom and record it correctly.
+        if (runState.CurrentRoom?.IsVictoryRoom == true)
+        {
+            Log.Info($"AfterDeathPostfix (Victory). Architect victory forced death. Floor: {ExtractFloorNum(runState)}");
+            RunLogRecorder.MarkVictory(ExtractFloorNum(runState));
+            return;
+        }
+
         // In co-op the run continues while any teammate is alive, so only record the loss once everyone is down.
         if (runState.Players.Any(p => p.Creature.IsAlive))
         {
@@ -238,6 +269,19 @@ internal static partial class HookPatches
             RoomType.Event => "Event",
             RoomType.Treasure => "Treasure",
             _ => "Unknown"
+        };
+    }
+
+    // Returns a user-friendly type label and item name for a shop purchase event.
+    private static (string type, string? name) GetPurchaseDetails(MerchantEntry item)
+    {
+        return item switch
+        {
+            MerchantCardEntry cardEntry => ("Card", cardEntry.CreationResult?.Card?.Title),
+            MerchantRelicEntry relicEntry => ("Relic", relicEntry.Model?.Title?.GetFormattedText()),
+            MerchantPotionEntry potionEntry => ("Potion", potionEntry.Model?.Title?.GetFormattedText()),
+            MerchantCardRemovalEntry => ("CardRemoval", null),
+            _ => (item.GetType().Name, null)
         };
     }
 

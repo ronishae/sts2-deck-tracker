@@ -9,6 +9,7 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Rewards;
 
 namespace DeckTracker;
 
@@ -83,6 +84,12 @@ public static class ModEntry
         PatchHook(nameof(Hook.AfterRestSiteSmith), nameof(HookPatches.AfterRestSiteSmithPostfix));
         PatchHook(nameof(Hook.AfterCombatVictory), nameof(HookPatches.AfterCombatVictoryPostfix));
         PatchHook(nameof(Hook.AfterDeath), nameof(HookPatches.AfterDeathPostfix));
+
+        // Records a RewardSkipped event when the card reward screen is closed without taking a card.
+        _harmony.Patch(
+            AccessTools.Method(typeof(CardReward), nameof(CardReward.OnSkipped)),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CardRewardOnSkippedPostfix)))
+        );
 
         // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));

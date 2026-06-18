@@ -326,7 +326,7 @@ public static class RunLogRecorder
         }
     }
 
-    public static void RecordReward(int floor, int act, string rewardType, string detail, bool taken)
+    public static void RecordReward(int floor, int act, string rewardType, string? detail, bool taken)
     {
         lock (Lock)
         {
@@ -335,12 +335,24 @@ public static class RunLogRecorder
         }
     }
 
-    public static void RecordPurchase(int floor, int act, string itemLabel, int goldSpent)
+    public static void RecordPurchase(int floor, int act, string itemType, string? itemName, int goldSpent)
     {
         lock (Lock)
         {
-            AddEvent(EventPurchase, floor, act, itemLabel, null, goldSpent, null);
-            Log.Debug($"RecordPurchase. Item: {itemLabel}, Gold: {goldSpent}");
+            AddEvent(EventPurchase, floor, act, itemType, itemName, goldSpent, null);
+            Log.Debug($"RecordPurchase. Type: {itemType}, Name: {itemName}, Gold: {goldSpent}");
+        }
+    }
+
+    // Returns the display name of the most recently added deck card at the given floor, or null if none.
+    // Used to determine which card was just taken from a reward after a deck sync.
+    public static string? GetLastAddedCardName(int floor)
+    {
+        lock (Lock)
+        {
+            return _log?.DeckChanges
+                .LastOrDefault(c => c.Floor == floor && c.ChangeType == "Added")
+                ?.DisplayName;
         }
     }
 
