@@ -17,6 +17,7 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("DISCARDED", "REMOVED", 100));
 
         var unsortedList = CardRegistry.EntityLedger.Values.OfType<PotionStats>()
+            .Where(s => _enabledPlayers.Contains(s.PlayerIndex))
             .Select(s => new { Stat = s, Agg = AggregateActData(s) })
             .Where(x => !_hideZeroDamageCards || EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
             .ToList();

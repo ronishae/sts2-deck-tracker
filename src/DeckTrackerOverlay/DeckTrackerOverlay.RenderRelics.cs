@@ -20,6 +20,7 @@ public static partial class DeckTrackerOverlay
         _fullScreenHeadersContainer.AddChild(CreateSortableHeader("REMOVED", "REMOVED", 90));
 
         var unsortedList = CardRegistry.EntityLedger.Values.OfType<RelicStats>()
+            .Where(r => _enabledPlayers.Contains(r.PlayerIndex))
             .Select(r => new { Stat = r, Agg = AggregateActData(r) })
             .Where(x => !_hideZeroDamageCards || EffectiveCombat(x.Stat) > 0 || EffectiveRun(x.Agg) > 0)
             .ToList();
