@@ -21,10 +21,11 @@ public static class RelicExecutionManager
         Log.Debug("RelicExecutionManager state fully reset.");
     }
     
-    // A generic Prefix that grabs the Relic's class name right before it fires
+    // A generic Prefix that sets the scoped relic ID ("{id}_P{netId}" or bare "{id}") before the relic fires.
+    // "RELIC_" + ExecutingRelicId.Value always produces the correct per-player ledger key.
     public static void GenericRelicPrefix(RelicModel __instance)
     {
-        ExecutingRelicId.Value = __instance.Id.Entry;
+        ExecutingRelicId.Value = CardRegistry.GetRelicScopedId(__instance);
         CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
     }
 
@@ -48,7 +49,7 @@ public static class RelicExecutionManager
         {
             CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
             var delta = modifiedAmount - amount;
-            var relicId = "RELIC_" + __instance.Id.Entry;
+            var relicId = CardRegistry.GetRelicLedgerKey(__instance);
             var powerId = canonicalPower.Id.Entry ?? "";
 
             Log.Debug($"TryModifyPowerAmountReceivedPostfix. {relicId} intercepted! Directly adding {delta} {powerId} to ledger.");
@@ -65,7 +66,7 @@ public static class RelicExecutionManager
 
     public static void ModifyPowerAmountGivenPostfix(RelicModel __instance, PowerModel power, Creature giver, decimal amount, Creature? target, CardModel? cardSource, ref decimal __result)
     {
-        var relicId = "RELIC_" + __instance.Id.Entry;
+        var relicId = CardRegistry.GetRelicLedgerKey(__instance);
         var powerId = power.Id.Entry ?? "";
         Log.Debug($"ModifyPowerAmountGivenPostfix. RelicId: {relicId}, PowerId: {powerId}, Amount: {amount}, Result: {__result}");
 
@@ -106,7 +107,7 @@ public static class RelicExecutionManager
         if (CardRegistry.ExecutingOrb != null && __result != value)
         {
             PendingOrbModifiers.Value ??= new();
-            PendingOrbModifiers.Value.Add((__instance.Id.Entry, __result - value));
+            PendingOrbModifiers.Value.Add((CardRegistry.GetRelicScopedId(__instance), __result - value));
         }
     }
     

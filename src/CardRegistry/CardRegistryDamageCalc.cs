@@ -138,7 +138,7 @@ public static partial class CardRegistry
 
             if (awardedDamage > 0)
             {
-                var paid = PayoutAdditiveDamage(addMod.PowerId, awardedDamage);
+                var paid = PayoutAdditiveDamage(addMod.PowerId, awardedDamage, snapshot.Dealer);
                 if (!paid)
                 {
                     extraDamage += awardedDamage;
@@ -157,9 +157,11 @@ public static partial class CardRegistry
     {
         Log.VeryDebug($"PayoutMultiplierDamage. Power: {powerId}, Amount: {amount}");
 
-        if (EntityLedger.ContainsKey("RELIC_" + powerId) || powerId == "PEN_NIB" || powerId == "PAPER_PHROG")
+        var relicMultKey = ResolveRelicLedgerKey(powerId, dealer);
+        if (relicMultKey != null)
         {
-            AddRelicDamage(powerId, amount);
+            AddDamageById(relicMultKey, amount);
+            Log.VeryDebug($"PayoutMultiplierDamage (Relic). Paid {amount} to {relicMultKey}");
             return true;
         }
 
@@ -256,14 +258,24 @@ public static partial class CardRegistry
         return false;
     }
 
-    private static bool PayoutAdditiveDamage(string powerId, decimal amount)
+    private static bool PayoutAdditiveDamage(string powerId, decimal amount, Creature? dealer)
     {
         Log.VeryDebug($"PayoutAdditiveDamage. Power: {powerId}, Amount: {amount}");
 
-        if (EntityLedger.ContainsKey("RELIC_" + powerId) || powerId == "STRIKE_DUMMY" || powerId == "FAKE_STRIKE_DUMMY"
-            || powerId == "MYSTIC_LIGHTER" || powerId == "MINIATURE_CANNON")
+        var relicAddKey = ResolveRelicLedgerKey(powerId, dealer);
+        if (relicAddKey != null)
         {
-            AddRelicDamage(powerId, amount);
+            AddDamageById(relicAddKey, amount);
+            Log.VeryDebug($"PayoutAdditiveDamage (Relic). Paid {amount} to {relicAddKey}");
+            return true;
+        }
+
+        // Fallback for relics whose power ID matches their relic ID and that may not be in the ledger
+        // (e.g. on first damage event before registration, or on saves predating owner tracking).
+        if (powerId is "STRIKE_DUMMY" or "FAKE_STRIKE_DUMMY" or "MYSTIC_LIGHTER" or "MINIATURE_CANNON")
+        {
+            Log.Warn($"PayoutAdditiveDamage. {powerId} not in ledger; creating bare-key fallback entry.");
+            GetOrCreateRelicStats(powerId).AddCombatDamage(amount, _currentAct, _currentCombatType);
             return true;
         }
 

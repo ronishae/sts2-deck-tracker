@@ -10,19 +10,36 @@ internal static partial class HookPatches
     {
         var relicName = __instance.Title.GetFormattedText();
         CardRegistry.RelicNameCache[__instance.Id.Entry] = relicName;
-        var stats = CardRegistry.GetOrCreateRelicStats(__instance.Id.Entry);
+
+        // Scan the live run state to find which player now owns this relic instance.
+        // AfterObtained fires after the relic is added to the player's collection, so the scan succeeds.
+        var run = CardRegistry.GetLiveRunState();
+        var ownerNetId = run?.Players
+            .FirstOrDefault(p => p.Relics.Any(r => ReferenceEquals(r, __instance)))
+            ?.NetId.ToString();
+
+        var stats = CardRegistry.GetOrCreateRelicStats(__instance.Id.Entry, ownerNetId);
+        if (ownerNetId != null)
+        {
+            CardRegistry.SetRelicOwnerNetId(__instance, ownerNetId);
+        }
+        else
+        {
+            Log.Warn($"RelicAfterObtainedPrefix. Could not find owner for relic: {__instance.Id.Entry}. Using bare key; RestoreLiveInstances will migrate.");
+        }
+
         stats.FloorAdded = __instance.FloorAddedToDeck;
         stats.IsActive = true;
-        Log.Debug($"RelicAfterObtainedPrefix. Relic: {__instance.Id.Entry}, Floor: {stats.FloorAdded}");
-        RunLogRecorder.RecordRelicGained(stats.FloorAdded, ExtractActNum(CardRegistry.GetLiveRunState()), relicName);
+        Log.Debug($"RelicAfterObtainedPrefix. Relic: {__instance.Id.Entry}, OwnerNetId: {ownerNetId}, Floor: {stats.FloorAdded}");
+        RunLogRecorder.RecordRelicGained(stats.FloorAdded, ExtractActNum(run), relicName);
     });
 
     public static void PlayerRemoveRelicPostfix(Player __instance, RelicModel relic) => Guard(nameof(PlayerRemoveRelicPostfix), () =>
     {
         if (relic != null)
         {
-            Log.Debug($"PlayerRemoveRelicPostfix. Relic: {relic.Id.Entry}");
-            CardRegistry.HandleRelicRemove(relic, ExtractFloorNum(__instance.RunState));
+            Log.Debug($"PlayerRemoveRelicPostfix. Relic: {relic.Id.Entry}, Player: {__instance.NetId}");
+            CardRegistry.HandleRelicRemove(relic, __instance.NetId.ToString(), ExtractFloorNum(__instance.RunState));
         }
     });
 
@@ -71,12 +88,12 @@ internal static partial class HookPatches
         CardRegistry.IsRitualTriggering.Value = false;
     });
 
-    public static void HandDrillAfterDamagePrefix() => Guard(nameof(HandDrillAfterDamagePrefix), () =>
+    public static void HandDrillAfterDamagePrefix(RelicModel __instance) => Guard(nameof(HandDrillAfterDamagePrefix), () =>
     {
-        RelicExecutionManager.ExecutingRelicId.Value = "HAND_DRILL";
+        RelicExecutionManager.ExecutingRelicId.Value = CardRegistry.GetRelicScopedId(__instance);
     });
 
-    public static void HandDrillAfterDamagePostfix() => Guard(nameof(HandDrillAfterDamagePostfix), () =>
+    public static void HandDrillAfterDamagePostfix(RelicModel __instance) => Guard(nameof(HandDrillAfterDamagePostfix), () =>
     {
         RelicExecutionManager.ExecutingRelicId.Value = null;
     });
@@ -91,7 +108,7 @@ internal static partial class HookPatches
                 var floor = (int)Math.Floor(amount);
                 var boot = (int)Math.Floor(__result - floor);
                 Log.Debug($"TheBootModifyHpPostfix. Damage: {boot}");
-                CardRegistry.AddDamageById("RELIC_" + (__instance.Id.Entry ?? "THE_BOOT"), boot);
+                CardRegistry.AddDamageById(CardRegistry.GetRelicLedgerKey(__instance), boot);
                 CardRegistry.PendingBootDamage.Value += boot;
             }
         }

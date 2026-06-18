@@ -63,6 +63,7 @@ public static partial class CardRegistry
             ResetInternalsCombat();
             RelicExecutionManager.ResetState();
             RelicNameCache.Clear();
+            _relicOwnerNetIdByModel.Clear();
             PotionInstanceIds.Clear();
             _potionCounter = 0;
             _cardInstanceIds.Clear();

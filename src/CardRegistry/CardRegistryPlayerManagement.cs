@@ -87,7 +87,20 @@ public static partial class CardRegistry
             foreach (var relic in player.Relics)
             {
                 RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
-                var stats = GetOrCreateRelicStats(relic.Id.Entry);
+                _relicOwnerNetIdByModel[relic] = netId;
+
+                var bareKey = "RELIC_" + relic.Id.Entry;
+                var playerKey = $"RELIC_{relic.Id.Entry}_P{netId}";
+
+                // Migrate any bare-key entry created before owner tracking to the player-scoped key.
+                if (EntityLedger.TryGetValue(bareKey, out var bareEntity) && !EntityLedger.ContainsKey(playerKey))
+                {
+                    EntityLedger[playerKey] = bareEntity;
+                    EntityLedger.Remove(bareKey);
+                    Log.Debug($"RestoreLiveInstances. Migrated relic {relic.Id.Entry} from bare key to {playerKey}");
+                }
+
+                var stats = GetOrCreateRelicStats(relic.Id.Entry, netId);
                 stats.Model = relic;
                 stats.IsActive = true;
                 stats.PlayerIndex = playerIdx;
