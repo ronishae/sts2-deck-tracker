@@ -62,6 +62,7 @@ internal static partial class HookPatches
         }
 
         if (powerId == "ROLLING_BOULDER_POWER" || powerId == "PANACHE_POWER" || powerId == "MONOLOGUE_POWER"
+            || powerId == "THE_BOMB_POWER"
             || CardGeneratingPowerManager.PowerTypes.Contains(power.GetType()))
         {
              CardRegistry.InstancedTracker.LogInstance(power, cardSource, CardRegistry.GetCurrentSourceId());
@@ -443,6 +444,24 @@ internal static partial class HookPatches
         catch (Exception e)
         {
             LogHookError(nameof(RollingBoulderAfterPlayerTurnStartPostfix), e);
+        }
+    }
+
+    public static void TheBombBeforeSideTurnEndPrefix(TheBombPower __instance) => Guard(nameof(TheBombBeforeSideTurnEndPrefix), () =>
+    {
+        Log.VeryDebug("TheBombBeforeSideTurnEndPrefix.");
+        CardRegistry.InstancedTracker.StartExecution(__instance);
+    });
+
+    public static void TheBombBeforeSideTurnEndPostfix(TheBombPower __instance, ref Task __result)
+    {
+        try
+        {
+            __result = CardRegistry.InstancedTracker.AwaitTaskAsync(__result, __instance);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(TheBombBeforeSideTurnEndPostfix), e);
         }
     }
 
