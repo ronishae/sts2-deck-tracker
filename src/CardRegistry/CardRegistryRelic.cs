@@ -19,11 +19,59 @@ public static partial class CardRegistry
 
     // Returns "{id}_P{netId}" or "{id}" (no RELIC_ prefix) — matches ExecutingRelicId.Value format
     // so that "RELIC_" + ExecutingRelicId.Value always produces the correct ledger key.
+    // Falls back to a live run-state scan when the instance isn't cached: for remote players in co-op,
+    // AfterObtained fires on a temporary instance while gameplay hooks fire on the persistent one.
     public static string GetRelicScopedId(RelicModel relic)
     {
         var netId = GetRelicOwnerNetId(relic);
+        if (netId != null)
+            return $"{relic.Id.Entry}_P{netId}";
+
+        netId = ResolveAndCacheRelicOwner(relic);
         return netId != null ? $"{relic.Id.Entry}_P{netId}" : relic.Id.Entry;
     }
+
+    // Scans the live run state using the current relic instance (the persistent gameplay instance).
+    // On success: caches the owner mapping, migrates any bare ledger key to the scoped key,
+    // and fixes PlayerIndex if the stats entry exists.
+    private static string? ResolveAndCacheRelicOwner(RelicModel relic)
+    {
+        var run = GetLiveRunState();
+        var owner = run?.Players
+            .Select((p, idx) => (player: p, index: idx))
+            .FirstOrDefault(t => t.player.Relics.Any(r => ReferenceEquals(r, relic)));
+
+        if (owner == null)
+        {
+            Log.Warn($"ResolveAndCacheRelicOwner. Could not resolve owner for {relic.Id.Entry}.");
+            return null;
+        }
+
+        var netId = owner.Value.player.NetId.ToString();
+        SetRelicOwnerNetId(relic, netId);
+
+        lock (SyncRoot)
+        {
+            var playerKey = $"RELIC_{relic.Id.Entry}_P{netId}";
+            var bareKey = "RELIC_" + relic.Id.Entry;
+            if (!EntityLedger.ContainsKey(playerKey) && EntityLedger.TryGetValue(bareKey, out var bareEntry))
+            {
+                EntityLedger[playerKey] = bareEntry;
+                EntityLedger.Remove(bareKey);
+                Log.Debug($"ResolveAndCacheRelicOwner. Migrated {relic.Id.Entry} bare key to {playerKey}");
+            }
+            if (EntityLedger.TryGetValue(playerKey, out var entry) && entry is RelicStats stats)
+            {
+                stats.PlayerIndex = owner.Value.index;
+            }
+        }
+
+        Log.Debug($"ResolveAndCacheRelicOwner. Lazily resolved owner for {relic.Id.Entry}: P{netId}");
+        return netId;
+    }
+
+    public static bool TryGetPlayerIndex(string netId, out int playerIdx) =>
+        _playerIndexByNetId.TryGetValue(netId, out playerIdx);
 
     public static string GetRelicLedgerKey(RelicModel relic) => "RELIC_" + GetRelicScopedId(relic);
 

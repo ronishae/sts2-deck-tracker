@@ -22,10 +22,14 @@ internal static partial class HookPatches
         if (ownerNetId != null)
         {
             CardRegistry.SetRelicOwnerNetId(__instance, ownerNetId);
+            if (CardRegistry.TryGetPlayerIndex(ownerNetId, out var playerIdx))
+            {
+                stats.PlayerIndex = playerIdx;
+            }
         }
         else
         {
-            Log.Warn($"RelicAfterObtainedPrefix. Could not find owner for relic: {__instance.Id.Entry}. Using bare key; RestoreLiveInstances will migrate.");
+            Log.Warn($"RelicAfterObtainedPrefix. Could not find owner for relic: {__instance.Id.Entry}. Using bare key; lazy resolution will migrate on first gameplay event.");
         }
 
         stats.FloorAdded = __instance.FloorAddedToDeck;

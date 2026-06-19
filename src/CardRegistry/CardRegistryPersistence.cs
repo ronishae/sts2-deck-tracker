@@ -98,8 +98,9 @@ public static partial class CardRegistry
                         .ToDictionary(s => s.Id, s => (CardStats)s.Clone()),
                     Potions = EntityLedger.Values.OfType<PotionStats>()
                         .ToDictionary(s => s.Id, s => (PotionStats)s.Clone()),
-                    Relics = EntityLedger.Values.OfType<RelicStats>()
-                        .ToDictionary(s => "RELIC_" + s.Id, s => (RelicStats)s.Clone())
+                    Relics = EntityLedger
+                        .Where(kvp => kvp.Value is RelicStats)
+                        .ToDictionary(kvp => kvp.Key, kvp => (RelicStats)kvp.Value.Clone())
                 };
             }
 
