@@ -88,10 +88,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="DeckTrackerCode\Cards\" />
-    </ItemGroup>
-
-    <ItemGroup>
       <Content Include="ARCHITECTURE.md" />
       <Content Include="Logs\conqueror_bug.log" />
       <Content Include="Logs\kusarigama_and_more_bugs.log" />
