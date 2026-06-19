@@ -70,7 +70,8 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             bool isGenerated = card.FloorAddedToDeck == null;
-            if (isGenerated && !IsStatusCard(card) && !IsGenerationAttributionExcluded(card))
+            if (isGenerated && !IsStatusCard(card) && !IsGenerationAttributionExcluded(card)
+                && !EntityLedger.ContainsKey(uniqueTrackingId))
             {
                 TryTagGeneratedCard(card);
             }
@@ -184,7 +185,8 @@ public static partial class CardRegistry
         if (amount <= 0
             || !EntityLedger.TryGetValue(generatedTrackingId, out var entity)
             || entity is not CardStats stat
-            || string.IsNullOrEmpty(stat.GeneratedById))
+            || string.IsNullOrEmpty(stat.GeneratedById)
+            || stat.GeneratedById == generatedTrackingId)
         {
             return;
         }

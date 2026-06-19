@@ -102,6 +102,13 @@ public static partial class CardRegistry
             {
                 return;
             }
+            // If a ledger entry already exists for this card's tracking ID, it's a pre-existing
+            // card being repositioned (e.g. Hologram drawing from deck) — not newly generated.
+            var trackingId = GetTrackingId(card);
+            if (!string.IsNullOrEmpty(trackingId) && EntityLedger.ContainsKey(trackingId))
+            {
+                return;
+            }
             TryApplyGeneratorTag(card);
         }
     }
@@ -146,7 +153,15 @@ public static partial class CardRegistry
         }
         else if (CurrentPlayingCard != null)
         {
-            generatorId = GetTrackingId(CurrentPlayingCard);
+            var proposedId = GetTrackingId(CurrentPlayingCard);
+            if (proposedId == GetTrackingId(card))
+            {
+                // Same logical card by tracking ID — self-attribution, skip. This catches cases
+                // where the game uses different CardModel objects for the same logical card
+                // (e.g. cardPlay.Card from reflection vs. the hand object).
+                return false;
+            }
+            generatorId = proposedId;
         }
         else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId))
         {
