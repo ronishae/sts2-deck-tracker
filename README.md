@@ -7,7 +7,9 @@ Damage for the current run is shown in the in-game overlay.
 Entity damage tracking is also accumulated per fight, per run in `deck_tracker_exports/card_fights.csv`.
 I plan to make a website to receive statistic uploads to aggregate everything in the future.
 
-![Full Screen Overlay Preview](thumbnail.png)
+![Full Screen Overlay Preview](images/thumbnail.png)
+
+![Small UI Overlay Preview](images/smallUI.png)
 
 ## Controls
 
