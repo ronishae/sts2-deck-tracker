@@ -63,9 +63,9 @@ public static partial class DeckTrackerOverlay
     private static int _deckPollCounter;
 
     private static bool _smallUIVisibleInternal = true;
-    private static bool _hWasPressed;
-    private static bool _gWasPressed;
-    private static bool _logLevelToggleWasPressed;
+    private static bool _bracketLeftWasPressed;
+    private static bool _bracketRightWasPressed;
+    private static bool _backslashWasPressed;
 
     private class SortState
     {
@@ -131,29 +131,29 @@ public static partial class DeckTrackerOverlay
 
     private static void HandleInputs()
     {
-        bool hPressed = Input.IsKeyPressed(Key.H);
-        if (hPressed && !_hWasPressed)
+        bool bracketLeftPressed = Input.IsKeyPressed(Key.Bracketleft);
+        if (bracketLeftPressed && !_bracketLeftWasPressed)
         {
             _smallUIVisibleInternal = !_smallUIVisibleInternal;
             SyncVisibility();
         }
-        _hWasPressed = hPressed;
+        _bracketLeftWasPressed = bracketLeftPressed;
 
-        bool gPressed = Input.IsKeyPressed(Key.G);
-        if (gPressed && !_gWasPressed)
+        bool bracketRightPressed = Input.IsKeyPressed(Key.Bracketright);
+        if (bracketRightPressed && !_bracketRightWasPressed)
         {
             SetFullScreenVisible(!(_fullScreenPanel?.Visible ?? false));
         }
-        _gWasPressed = gPressed;
+        _bracketRightWasPressed = bracketRightPressed;
 
         // Toggle full VeryDebug logging on demand for bug reports; ships quiet at Info (see Log.Level).
-        bool logTogglePressed = Input.IsKeyPressed(Key.J);
-        if (logTogglePressed && !_logLevelToggleWasPressed)
+        bool backslashPressed = Input.IsKeyPressed(Key.Backslash);
+        if (backslashPressed && !_backslashWasPressed)
         {
             Log.Level = Log.Level == LogLevel.VeryDebug ? LogLevel.Info : LogLevel.VeryDebug;
             Log.Info($"HandleInputs. Log level toggled. Level: {Log.Level}");
         }
-        _logLevelToggleWasPressed = logTogglePressed;
+        _backslashWasPressed = backslashPressed;
     }
 
     private static void SetFullScreenVisible(bool visible)
