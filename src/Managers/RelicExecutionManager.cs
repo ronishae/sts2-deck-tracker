@@ -205,6 +205,12 @@ public static class RelicExecutionManager
             (typeof(Crossbow), nameof(Crossbow.AfterSideTurnStart)),
             (typeof(ChoicesParadox), nameof(ChoicesParadox.AfterPlayerTurnStart)),
             (typeof(MusicBox), nameof(MusicBox.AfterCardPlayed)),
+            (typeof(FuneraryMask), nameof(FuneraryMask.BeforeHandDraw)),
+            (typeof(RadiantPearl), nameof(RadiantPearl.BeforeHandDraw)),
+            (typeof(OrangeDough), nameof(OrangeDough.AfterSideTurnStart)),
+            (typeof(BigHat), nameof(BigHat.AfterSideTurnStart)),
+            (typeof(BiiigHug), nameof(BiiigHug.AfterShuffle)),
+            (typeof(BlessedAntler), nameof(BlessedAntler.BeforeHandDraw)),
         };
 
         foreach (var (relicType, methodName) in relicMethodsToPatch)
