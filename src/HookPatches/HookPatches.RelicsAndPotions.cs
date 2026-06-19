@@ -35,7 +35,6 @@ internal static partial class HookPatches
         stats.FloorAdded = __instance.FloorAddedToDeck;
         stats.IsActive = true;
         Log.Debug($"RelicAfterObtainedPrefix. Relic: {__instance.Id.Entry}, OwnerNetId: {ownerNetId}, Floor: {stats.FloorAdded}");
-        RunLogRecorder.RecordRelicGained(stats.FloorAdded, ExtractActNum(run), relicName);
     });
 
     public static void PlayerRemoveRelicPostfix(Player __instance, RelicModel relic) => Guard(nameof(PlayerRemoveRelicPostfix), () =>
@@ -52,7 +51,6 @@ internal static partial class HookPatches
         var floor = CardRegistry.GetLiveRunState()?.TotalFloor ?? 0;
         Log.Debug($"AfterPotionProcuredPrefix. Potion: {potion.Id.Entry}, Floor: {floor}");
         CardRegistry.RegisterPotionProcured(potion, floor);
-        RunLogRecorder.RecordPotionGained(floor, ExtractActNum(CardRegistry.GetLiveRunState()), potion.Title?.GetFormattedText() ?? potion.Id.Entry);
     });
 
     public static void AfterPotionDiscardedPrefix(PotionModel potion) => Guard(nameof(AfterPotionDiscardedPrefix), () =>

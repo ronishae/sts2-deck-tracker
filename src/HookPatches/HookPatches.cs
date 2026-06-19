@@ -37,8 +37,6 @@ internal static partial class HookPatches
         var activeDeckIds = ScanDeckForCards(runState);
         Log.Info($"AfterRoomEnteredPostfix. Floor: {currentFloor}, Room: {room.RoomType}");
         CardRegistry.SyncDeckState(currentFloor, activeDeckIds);
-        RecordRoomForLog(runState, room);
-        RecordDeckSyncForLog(runState, room);
         CardRegistry.SaveState();
     });
 
@@ -83,13 +81,6 @@ internal static partial class HookPatches
 
     public static void RunManagerCleanUpPrefix(RunManager __instance) => Guard(nameof(RunManagerCleanUpPrefix), () =>
     {
-        // A player-initiated abandon force-kills the players, so the run was already (wrongly) recorded as a
-        // death; relabel it as abandoned before the finalize export overwrites the JSON.
-        if (__instance.IsAbandoned)
-        {
-            RunLogRecorder.MarkAbandoned();
-        }
-        FinalizeRunForLog();
         CardRegistry.ClearSession();
     });
 
@@ -150,7 +141,6 @@ internal static partial class HookPatches
         _lastDeckSignature = signature;
         Log.Debug($"PollDeckChange. Deck changed (sig {signature}); resyncing.");
         CardRegistry.SyncDeckState(ExtractFloorNum(run), ScanDeckForCards(run));
-        RecordDeckSyncForLog(run, run.CurrentRoom);
     });
 
     // Order-independent signature over every player's master deck: changes on add/remove (count + members),

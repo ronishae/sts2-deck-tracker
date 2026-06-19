@@ -34,11 +34,6 @@ public static class ModEntry
         _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.SetUpNewSingleplayer)), postfix: setUpNewRunPostfix);
         _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.SetUpNewMultiplayer)), postfix: setUpNewRunPostfix);
 
-        // Abandoning a saved run from the main menu never loads RunManager, so mark its export abandoned here.
-        // Patched as a prefix: AbandonRun clears its cached save result before returning.
-        var abandonRunPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.MainMenuAbandonRunPrefix)));
-        _harmony.Patch(AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu), nameof(MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu.AbandonRun)), prefix: abandonRunPrefix);
-        
         // --- Potion Lifecycle ---
         PatchHook(nameof(Hook.AfterPotionProcured), nameof(HookPatches.AfterPotionProcuredPrefix));
         PatchHook(nameof(Hook.AfterPotionDiscarded), nameof(HookPatches.AfterPotionDiscardedPrefix));
@@ -71,25 +66,10 @@ public static class ModEntry
         PatchHook(nameof(Hook.AfterCombatEnd), nameof(HookPatches.AfterCombatEndPostfix)); 
         PatchHook(nameof(Hook.BeforeRoomEntered), nameof(HookPatches.BeforeRoomEnteredPrefix));
 
-        // --- Run Export Timeline ---
-        PatchHook(nameof(Hook.AfterMapGenerated), nameof(HookPatches.AfterMapGeneratedPostfix));
-        PatchHook(nameof(Hook.AfterActEntered), nameof(HookPatches.AfterActEnteredPostfix));
+        // --- Run Export Hooks ---
         PatchHook(nameof(Hook.AfterDamageReceived), nameof(HookPatches.AfterDamageReceivedPostfix));
-        PatchHook(nameof(Hook.AfterBlockGained), nameof(HookPatches.AfterBlockGainedPostfix));
         PatchHook(nameof(Hook.AfterPlayerTurnStart), nameof(HookPatches.AfterPlayerTurnStartPostfix));
-        PatchHook(nameof(Hook.AfterGoldGained), nameof(HookPatches.AfterGoldGainedPostfix));
-        PatchHook(nameof(Hook.AfterItemPurchased), nameof(HookPatches.AfterItemPurchasedPostfix));
-        PatchHook(nameof(Hook.AfterRewardTaken), nameof(HookPatches.AfterRewardTakenPostfix));
-        PatchHook(nameof(Hook.AfterRestSiteHeal), nameof(HookPatches.AfterRestSiteHealPostfix));
-        PatchHook(nameof(Hook.AfterRestSiteSmith), nameof(HookPatches.AfterRestSiteSmithPostfix));
-        PatchHook(nameof(Hook.AfterCombatVictory), nameof(HookPatches.AfterCombatVictoryPostfix));
         PatchHook(nameof(Hook.AfterDeath), nameof(HookPatches.AfterDeathPostfix));
-
-        // Records a RewardSkipped event when the card reward screen is closed without taking a card.
-        _harmony.Patch(
-            AccessTools.Method(typeof(CardReward), nameof(CardReward.OnSkipped)),
-            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.CardRewardOnSkippedPostfix)))
-        );
 
         // --- Damage Hooks ---
         PatchHook(nameof(Hook.AfterDamageGiven), nameof(HookPatches.AfterDamageGivenPostfix));

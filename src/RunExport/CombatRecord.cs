@@ -13,12 +13,6 @@ public sealed class CombatRecord
     public string EncounterId { get; set; } = "";
     public int Turns { get; set; }
     public decimal DamageTaken { get; set; }
-    public decimal BlockGained { get; set; }
-    public int PlayerHpBefore { get; set; }
-    public int PlayerHpAfter { get; set; }
-    // Gold entering the fight. Gold only changes between combats (rewards land after), so a single
-    // "before" value is all that is meaningful; the GoldGained timeline events carry the actual deltas.
-    public int GoldBefore { get; set; }
     // "Won", "Died", or "Abandoned".
     public string Outcome { get; set; } = "";
     public List<EntityFightStat> Contributions { get; set; } = new();

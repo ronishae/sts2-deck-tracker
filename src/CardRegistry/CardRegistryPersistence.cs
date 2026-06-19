@@ -62,17 +62,12 @@ public static partial class CardRegistry
             _pendingFreshRun = false;
             RestoreLiveInstances();
 
-            // A fresh run starts a new export log now that the players (character/ascension) are restored.
-            // A resumed run already adopted its log from the save file inside TryLoadState; it only needs its
-            // gold baseline re-synced to the live total so the next gold gain reports a correct delta.
+            // A fresh run starts a new log now that the players (character/ascension) are restored.
+            // A resumed run already adopted its log from the save file inside TryLoadState.
             var liveRun = GetLiveRunState();
-            if (resumed)
+            if (!resumed)
             {
-                RunLogRecorder.SetGoldBaseline(FirstPlayerGold(liveRun));
-            }
-            else
-            {
-                RunLogRecorder.BeginRun(runSeed, ExtractCharacterLabel(liveRun), liveRun?.AscensionLevel ?? 0, FirstPlayerGold(liveRun), GameRelease.Version);
+                RunLogRecorder.BeginRun(runSeed, ExtractCharacterLabel(liveRun), liveRun?.AscensionLevel ?? 0, GameRelease.Version);
             }
         }
         Publish();

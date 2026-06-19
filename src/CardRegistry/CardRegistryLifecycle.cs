@@ -187,16 +187,15 @@ public static partial class CardRegistry
         SaveState();
     }
 
-    // Snapshots the just-ended combat (each entity's contribution + the local player's HP/alive state) into
-    // the run export log, which triggers the automatic JSON + CSV writes inside RunLogRecorder.EndCombat.
+    // Snapshots the just-ended combat (each entity's contribution + the local player's alive state) into
+    // the run log, which triggers the CSV write inside RunLogRecorder.EndCombat.
     private static void FinalizeCombatExport()
     {
         var contributions = BuildCombatEntityStats();
         var run = GetLiveRunState();
         var player = run != null && run.Players.Count > 0 ? run.Players[0] : null;
-        var hpAfter = player?.Creature.CurrentHp ?? 0;
         var alive = player?.Creature.IsAlive ?? true;
-        RunLogRecorder.EndCombat(hpAfter, alive, contributions);
+        RunLogRecorder.EndCombat(alive, contributions);
     }
 
     // Builds the per-entity stats for the combat that just ended from the live per-combat fields. Cards are
@@ -321,28 +320,4 @@ public static partial class CardRegistry
         }
     }
 
-    // Snapshots every player's master deck as DeckCardInfo for the export log's out-of-combat deck diff.
-    // Must be called after a deck scan so tracking ids resolve consistently.
-    public static List<DeckCardInfo> BuildDeckInfo(IRunState run)
-    {
-        var list = new List<DeckCardInfo>();
-        lock (SyncRoot)
-        {
-            foreach (var player in run.Players)
-            {
-                var netId = player.NetId.ToString();
-                foreach (var card in player.Deck.Cards)
-                {
-                    var id = GetTrackingId(card, netId);
-                    list.Add(new DeckCardInfo
-                    {
-                        Id = id,
-                        DisplayName = card.Title ?? card.Id.Entry ?? id,
-                        BaseKey = GetBaseCardKey(card, netId)
-                    });
-                }
-            }
-        }
-        return list;
-    }
 }
