@@ -1,9 +1,9 @@
-using Godot;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Models.Relics;
 
 namespace DeckTracker;
 
@@ -13,6 +13,16 @@ internal static partial class HookPatches
     {
         Log.VeryDebug($"OrbChannelPostfix. Orb: {orb.Id.Entry}");
         CardRegistry.RegisterChanneledOrb(orb, CardRegistry.CurrentPlayingCard);
+    });
+
+    public static void GoldPlatedCablesModifyOrbPassivePostfix(GoldPlatedCables __instance, int triggerCount, int __result)
+        => Guard(nameof(GoldPlatedCablesModifyOrbPassivePostfix), () =>
+    {
+        Log.VeryDebug($"GoldPlatedCablesModifyOrbPassivePostfix. TriggerDelta: {__result - triggerCount}");
+        if (__result > triggerCount)
+        {
+            CardRegistry.PendingExtraPassiveSource = __instance;
+        }
     });
 
     public static void OrbPassivePrefix(OrbModel __instance) => Guard(nameof(OrbPassivePrefix), () =>
@@ -37,9 +47,10 @@ internal static partial class HookPatches
             {
                 int count = CardRegistry.EotPassiveCounts.GetValueOrDefault(__instance, 0) + 1;
                 CardRegistry.EotPassiveCounts[__instance] = count;
-                if (count > 1)
+                if (count > 1 && CardRegistry.PendingExtraPassiveSource != null)
                 {
-                    forcingActor = "RELIC_GoldPlatedCables";
+                    forcingActor = CardRegistry.GetRelicLedgerKey(CardRegistry.PendingExtraPassiveSource);
+                    CardRegistry.PendingExtraPassiveSource = null;
                 }
             }
         }

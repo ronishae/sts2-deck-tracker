@@ -154,9 +154,12 @@ public static class ModEntry
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPrefix))), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RitualPowerTurnEndPostfix))));
 
-        _harmony.Patch(AccessTools.Method(typeof(HandDrill), nameof(HandDrill.AfterDamageGiven)), 
-            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePrefix))), 
+        _harmony.Patch(AccessTools.Method(typeof(HandDrill), nameof(HandDrill.AfterDamageGiven)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.HandDrillAfterDamagePostfix))));
+
+        _harmony.Patch(AccessTools.Method(typeof(GoldPlatedCables), nameof(GoldPlatedCables.ModifyOrbPassiveTriggerCounts)),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.GoldPlatedCablesModifyOrbPassivePostfix))));
         
         _harmony.Patch(AccessTools.Method(typeof(TheBoot), nameof(TheBoot.ModifyHpLostAfterOstyLate)), 
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TheBootModifyHpPostfix))));
