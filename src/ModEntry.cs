@@ -22,7 +22,7 @@ public static class ModEntry
     {
         if (_harmony != null) return;
         Log.Info("Initializing DeckTracker mod...");
-        _harmony = new Harmony("com.yourname.sts2.deck_tracker");
+        _harmony = new Harmony("com.roni.sts2.deck_tracker");
         
         var cleanUpMethod = AccessTools.Method(typeof(MegaCrit.Sts2.Core.Runs.RunManager), nameof(MegaCrit.Sts2.Core.Runs.RunManager.CleanUp));
         var cleanUpPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.RunManagerCleanUpPrefix)));
