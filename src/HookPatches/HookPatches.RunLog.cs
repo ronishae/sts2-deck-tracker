@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
@@ -58,8 +59,13 @@ internal static partial class HookPatches
 
     public static void AfterItemPurchasedPostfix(IRunState runState, Player player, MerchantEntry itemPurchased, int goldSpent) => Guard(nameof(AfterItemPurchasedPostfix), () =>
     {
-        var (itemType, itemName) = GetPurchaseDetails(itemPurchased);
-        RunLogRecorder.RecordPurchase(ExtractFloorNum(runState), ExtractActNum(runState), itemType, itemName, goldSpent);
+        var floor = ExtractFloorNum(runState);
+        var act = ExtractActNum(runState);
+        var playerData = GetCurrentPlayerHistory(runState, player.NetId);
+        var (itemType, itemName) = ResolvePurchaseDetails(itemPurchased, playerData);
+
+        Log.Debug($"AfterItemPurchasedPostfix. Type: {itemType}, Name: {itemName}, Gold: {goldSpent}");
+        RunLogRecorder.RecordPurchase(floor, act, itemType, itemName, goldSpent);
         // A purchase spends gold without firing AfterGoldGained, so re-sync the baseline to the new total.
         RunLogRecorder.SetGoldBaseline(player.Gold);
     });
@@ -90,6 +96,18 @@ internal static partial class HookPatches
         // The taken card name comes from the deck diff that was just recorded above.
         var takenCardName = RunLogRecorder.GetLastAddedCardName(floor);
         RunLogRecorder.RecordReward(floor, act, "Card", takenCardName, taken: true);
+
+        // OnSelect() removes the taken card from _cards before this hook fires, so card.Cards now
+        // contains exactly the cards that were offered but not taken for this reward.
+        // RewardsSetSynchronizer.SkipRewardsSet never calls OnSkipped for a taken reward
+        // (SuccessfullySelected is true), so we must emit RewardSkipped here.
+        var cardReward = (CardReward)reward;
+        var skippedCards = string.Join(", ", cardReward.Cards.Select(c => c.Title ?? c.Id.Entry));
+        if (!string.IsNullOrEmpty(skippedCards))
+        {
+            Log.Debug($"AfterRewardTakenPostfix. Skipped cards: {skippedCards}");
+            RunLogRecorder.RecordReward(floor, act, "Card", skippedCards, taken: false);
+        }
     });
 
     // Records a RewardSkipped event when the player closes the card reward screen without picking a card.
@@ -272,17 +290,44 @@ internal static partial class HookPatches
         };
     }
 
-    // Returns a user-friendly type label and item name for a shop purchase event.
-    private static (string type, string? name) GetPurchaseDetails(MerchantEntry item)
+    // Gets the current floor's history entry for a specific player. Returns null if unavailable.
+    private static PlayerMapPointHistoryEntry? GetCurrentPlayerHistory(IRunState runState, ulong playerId)
+    {
+        return runState.CurrentMapPointHistoryEntry?.PlayerStats.FirstOrDefault(e => e.PlayerId == playerId);
+    }
+
+    // Returns the purchase item type and display name read from CurrentMapPointHistoryEntry.
+    // ClearAfterPurchase() nulls the item model reference before AfterItemPurchased fires, so we
+    // read from the history which the game has already updated at this point.
+    private static (string type, string? name) ResolvePurchaseDetails(MerchantEntry item, PlayerMapPointHistoryEntry? playerData)
     {
         return item switch
         {
-            MerchantCardEntry cardEntry => ("Card", cardEntry.CreationResult?.Card?.Title),
-            MerchantRelicEntry relicEntry => ("Relic", relicEntry.Model?.Title?.GetFormattedText()),
-            MerchantPotionEntry potionEntry => ("Potion", potionEntry.Model?.Title?.GetFormattedText()),
+            MerchantCardEntry => ("Card", ResolveLastCardName(playerData)),
+            MerchantRelicEntry => ("Relic", ResolveLastRelicName(playerData)),
+            MerchantPotionEntry => ("Potion", ResolveLastPotionName(playerData)),
             MerchantCardRemovalEntry => ("CardRemoval", null),
             _ => (item.GetType().Name, null)
         };
+    }
+
+    private static string? ResolveLastCardName(PlayerMapPointHistoryEntry? data)
+    {
+        var card = data?.CardsGained.LastOrDefault();
+        if (card?.Id is not {} id) { return null; }
+        return ModelDb.GetByIdOrNull<CardModel>(id)?.Title;
+    }
+
+    private static string? ResolveLastRelicName(PlayerMapPointHistoryEntry? data)
+    {
+        if (data == null || data.BoughtRelics.Count == 0) { return null; }
+        return ModelDb.GetByIdOrNull<RelicModel>(data.BoughtRelics[^1])?.Title?.GetFormattedText();
+    }
+
+    private static string? ResolveLastPotionName(PlayerMapPointHistoryEntry? data)
+    {
+        if (data == null || data.BoughtPotions.Count == 0) { return null; }
+        return ModelDb.GetByIdOrNull<PotionModel>(data.BoughtPotions[^1])?.Title?.GetFormattedText();
     }
 
     // Maps the room a deck change was detected in to a human-readable acquisition source.
