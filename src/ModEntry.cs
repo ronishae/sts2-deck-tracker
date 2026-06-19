@@ -188,12 +188,16 @@ public static class ModEntry
         // 2. Targeted FIFO Damage Trackers
         var targetedMethods = new (Type, string)[] {
             (typeof(StranglePower), nameof(StranglePower.AfterCardPlayed)),
-            (typeof(OblivionPower), nameof(OblivionPower.AfterCardPlayed)),
             (typeof(DemisePower), nameof(DemisePower.AfterSideTurnEnd)),
         };
         var targetedPrefix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TargetedPowerPrefix)));
         var targetedPostfix = new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TargetedPowerPostfix)));
         foreach (var (t, m) in targetedMethods) _harmony.Patch(AccessTools.Method(t, m), prefix: targetedPrefix, postfix: targetedPostfix);
+
+        // OblivionPower uses dedicated hooks to route its doom stacks into DoomHistory via CurrentOblivionContributions.
+        _harmony.Patch(AccessTools.Method(typeof(OblivionPower), nameof(OblivionPower.AfterCardPlayed)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OblivionAfterCardPlayedPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.OblivionAfterCardPlayedPostfix))));
 
         // 3. Middleman Buff Handoffs
         var handoffMethods = new (Type, string)[] {

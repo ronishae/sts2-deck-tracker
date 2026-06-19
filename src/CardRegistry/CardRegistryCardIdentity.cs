@@ -148,9 +148,9 @@ public static partial class CardRegistry
         {
             generatorId = GetTrackingId(CurrentPlayingCard);
         }
-        else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+        else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId))
         {
-            generatorId = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+            generatorId = "RELIC_" + RelicExecutionManager.ExecutingRelicId;
         }
         else if (!string.IsNullOrEmpty(CurrentPlayingPotionId))
         {
@@ -392,7 +392,7 @@ public static partial class CardRegistry
     public static string GetCurrentSourceId(CardModel? cardSource = null, string fallback = "External_Source")
     {
         if (cardSource != null) return GetTrackingId(cardSource);
-        if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value)) return "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+        if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId)) return "RELIC_" + RelicExecutionManager.ExecutingRelicId;
         if (!string.IsNullOrEmpty(CurrentPlayingPotionId)) return CurrentPlayingPotionId;
         return fallback;
     }

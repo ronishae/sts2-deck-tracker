@@ -100,10 +100,16 @@ public static partial class CardRegistry
     public static readonly Dictionary<string, TargetedDamageTracker> TargetedTrackers = new()
     {
         { "STRANGLE_POWER", new TargetedDamageTracker("STRANGLE_POWER") },
-        { "OBLIVION_POWER", new TargetedDamageTracker("OBLIVION_POWER") },
         // Enemy-side debuff (Powdered Demise potion); per-target ledger handles multiple enemies.
         { "DEMISE_POWER", new TargetedDamageTracker("DEMISE_POWER") },
     };
+
+    // Per OblivionPower instance: tracks which cards applied it and how many stacks each contributed.
+    // Keyed on the PowerModel instance so multiplayer (InstancedPerApplier → one instance per player) is handled correctly.
+    public static readonly Dictionary<PowerModel, List<Contribution>> OblivionSourceMap = new();
+
+    // Set during OblivionPower.AfterCardPlayed to route its doom stacks into DoomHistory proportionally.
+    public static readonly AsyncLocal<List<Contribution>?> CurrentOblivionContributions = new();
 
     public static readonly Dictionary<string, BuffHandoffTracker> HandoffTrackers = new()
     {

@@ -8,12 +8,14 @@ namespace DeckTracker;
 
 public static class RelicExecutionManager
 {
-    // Holds the Class Name of the Relic currently executing its action
-    public static readonly AsyncLocal<string?> ExecutingRelicId = new();
+    // Holds the Class Name of the Relic currently executing its action.
+    // Plain static (not AsyncLocal) so that writes from any async context are globally visible.
+    // AsyncLocal writes only propagate downward to child contexts; we need sideways visibility.
+    public static string? ExecutingRelicId;
     
     public static void ResetState()
     {
-        ExecutingRelicId.Value = null;
+        ExecutingRelicId = null;
 
         // Clear and nullify the pending orb modifiers
         PendingOrbModifiers.Value?.Clear();
@@ -25,7 +27,7 @@ public static class RelicExecutionManager
     // "RELIC_" + ExecutingRelicId.Value always produces the correct per-player ledger key.
     public static void GenericRelicPrefix(RelicModel __instance)
     {
-        ExecutingRelicId.Value = CardRegistry.GetRelicScopedId(__instance);
+        ExecutingRelicId = CardRegistry.GetRelicScopedId(__instance);
         CardRegistry.RelicNameCache[__instance.Id.Entry] = __instance.Title.GetFormattedText();
     }
 
@@ -35,12 +37,29 @@ public static class RelicExecutionManager
         __result = ClearRelicIdAfterTask(__result);
     }
 
-    // Awaits the task and clears ExecutingRelicId in finally so the relic context is gone only after
-    // all async damage has resolved — not immediately when the postfix returns.
-    private static async Task ClearRelicIdAfterTask(Task originalTask)
+    // Clears ExecutingRelicId once the relic's task is done. When the task is already synchronously
+    // complete (e.g. Kusarigama's early-return for non-attack cards), clear immediately so that
+    // powers firing in the same scheduler turn (e.g. SleightOfFlesh) don't see a stale relic context.
+    private static Task ClearRelicIdAfterTask(Task originalTask)
+    {
+        if (originalTask.IsCompletedSuccessfully)
+        {
+            ExecutingRelicId = null;
+            return Task.CompletedTask;
+        }
+        var capturedId = ExecutingRelicId;
+        return ClearAfterAsync(originalTask, capturedId);
+    }
+
+    private static async Task ClearAfterAsync(Task originalTask, string? relicId)
     {
         try { await originalTask; }
-        finally { ExecutingRelicId.Value = null; }
+        finally
+        {
+            // Guard against clobbering a later relic's context that fired after AfterCardPlayedPostfix cleared ours.
+            if (ExecutingRelicId == relicId)
+                ExecutingRelicId = null;
+        }
     }
     
     public static void TryModifyPowerAmountReceivedPostfix(RelicModel __instance, PowerModel canonicalPower, Creature target, decimal amount, Creature? applier, ref decimal modifiedAmount, ref bool __result)

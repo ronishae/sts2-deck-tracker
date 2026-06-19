@@ -51,10 +51,10 @@ public static partial class CardRegistry
             return;
         }
 
-        var executingTargeted = TargetedTrackers.Values.FirstOrDefault(t => t.IsExecuting);
-        if (executingTargeted != null)
+        var oblivionContributions = CurrentOblivionContributions.Value;
+        if (oblivionContributions != null && oblivionContributions.Count > 0)
         {
-            executingTargeted.DistributeDamage(target, amount);
+            DistributeDoomToHistory(target, amount, oblivionContributions);
         }
         else
         {
@@ -68,7 +68,37 @@ public static partial class CardRegistry
         {
             DoomHistory.Clear();
             PendingDoomHp.Clear();
+            OblivionSourceMap.Clear();
         }
+    }
+
+    // Proportionally splits doom stack attribution across multiple contributors into DoomHistory.
+    // The last contributor absorbs any rounding remainder to ensure the full amount is always recorded.
+    private static void DistributeDoomToHistory(Creature target, decimal amount, List<Contribution> contributions)
+    {
+        var totalContributions = contributions.Sum(c => c.Amount);
+        var remaining = amount;
+        for (var i = 0; i < contributions.Count; i++)
+        {
+            if (remaining <= 0) break;
+            var contribution = contributions[i];
+            var share = i == contributions.Count - 1
+                ? remaining
+                : Math.Floor(amount * (contribution.Amount / totalContributions));
+            var toAdd = Math.Min(remaining, share);
+            if (toAdd > 0)
+            {
+                AddDoomHistoryById(target, toAdd, contribution.TrackingId);
+                remaining -= toAdd;
+            }
+        }
+        Log.Debug($"DistributeDoomToHistory. Target: {target.Name}, Amount: {amount}, Contributors: {contributions.Count}");
+    }
+
+    public static async Task AwaitOblivionTaskAsync(Task task)
+    {
+        try { await task; }
+        finally { CurrentOblivionContributions.Value = null; }
     }
 
     public static void AddDoomHistory(Creature target, decimal amount, CardModel? cardSource)

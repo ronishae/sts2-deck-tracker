@@ -143,6 +143,11 @@ internal static partial class HookPatches
     {
         CardRegistry.EndCardPlay();
         CardRegistry.ForcePublish();
+        // AfterCardPlayed relic damage (e.g. Kusarigama proc) always fires before this hook.
+        // Clear any stale ExecutingRelicId now so powers that fire after the card play don't
+        // inherit the relic's attribution context.
+        RelicExecutionManager.ExecutingRelicId = null;
+        Log.VeryDebug("AfterCardPlayedPostfix. ExecutingRelicId cleared.");
         var id = cardPlay.Card.Id.Entry ?? "";
         Log.Debug($"AfterCardPlayedPostfix. Card: {id}");
         if (id.Equals("SEEKING_EDGE"))
@@ -215,9 +220,9 @@ internal static partial class HookPatches
             Log.VeryDebug($"  -> Reduced by Boot: {damageAmount}");
         }
 
-        if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+        if (cardSource == null && !string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId))
         {
-            CardRegistry.AddRelicDamage(RelicExecutionManager.ExecutingRelicId.Value, damageAmount);
+            CardRegistry.AddRelicDamage(RelicExecutionManager.ExecutingRelicId, damageAmount);
             return;
         }
 

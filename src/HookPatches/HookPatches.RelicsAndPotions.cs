@@ -90,12 +90,12 @@ internal static partial class HookPatches
 
     public static void HandDrillAfterDamagePrefix(RelicModel __instance) => Guard(nameof(HandDrillAfterDamagePrefix), () =>
     {
-        RelicExecutionManager.ExecutingRelicId.Value = CardRegistry.GetRelicScopedId(__instance);
+        RelicExecutionManager.ExecutingRelicId = CardRegistry.GetRelicScopedId(__instance);
     });
 
     public static void HandDrillAfterDamagePostfix(RelicModel __instance) => Guard(nameof(HandDrillAfterDamagePostfix), () =>
     {
-        RelicExecutionManager.ExecutingRelicId.Value = null;
+        RelicExecutionManager.ExecutingRelicId = null;
     });
 
     // Has a ref parameter, which cannot be captured by the Guard lambda, so it is isolated inline instead.

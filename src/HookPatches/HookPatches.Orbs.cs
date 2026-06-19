@@ -23,9 +23,9 @@ internal static partial class HookPatches
             forcingActor = CardRegistry.CurrentTurnLoopQueue[0];
             CardRegistry.CurrentTurnLoopQueue.RemoveAt(0);
         }
-        else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value))
+        else if (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId))
         {
-            forcingActor = "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value;
+            forcingActor = "RELIC_" + RelicExecutionManager.ExecutingRelicId;
         }
         else if (CardRegistry.CurrentPlayingCard != null)
         {

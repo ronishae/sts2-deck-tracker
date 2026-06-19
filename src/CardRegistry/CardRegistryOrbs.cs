@@ -53,9 +53,9 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            string trackingId = sourceCard != null ? GetTrackingId(sourceCard) : 
-                (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
-                    "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
+            string trackingId = sourceCard != null ? GetTrackingId(sourceCard) :
+                (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId) ?
+                    "RELIC_" + RelicExecutionManager.ExecutingRelicId :
                     "External_Relic");
             
             foreach (var queueTracker in QueueTrackers.Values)
@@ -173,9 +173,9 @@ public static partial class CardRegistry
     
     public static void LogFocusChange(CardModel? cardSource, decimal amount)
     {
-        string trackingId = cardSource != null ? GetTrackingId(cardSource) : 
-            (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId.Value) ? 
-                "RELIC_" + RelicExecutionManager.ExecutingRelicId.Value : 
+        string trackingId = cardSource != null ? GetTrackingId(cardSource) :
+            (!string.IsNullOrEmpty(RelicExecutionManager.ExecutingRelicId) ?
+                "RELIC_" + RelicExecutionManager.ExecutingRelicId :
                 (amount > 0 ? "External_Buff" : "External_Debuff"));
         
         Log.Debug($"LogFocusChange (Forwarder). TrackingId: {trackingId}, Amount: {amount}");

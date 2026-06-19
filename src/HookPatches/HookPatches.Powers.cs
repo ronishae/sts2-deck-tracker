@@ -111,6 +111,18 @@ internal static partial class HookPatches
             case DoomPower:
                 CardRegistry.RouteDoomApplication(target, amount, cardSource);
                 break;
+            case OblivionPower oblivionPower:
+                if (amount > 0)
+                {
+                    if (!CardRegistry.OblivionSourceMap.ContainsKey(oblivionPower))
+                    {
+                        CardRegistry.OblivionSourceMap[oblivionPower] = new List<Contribution>();
+                    }
+                    var source = CardRegistry.GetCurrentSourceId(cardSource);
+                    CardRegistry.OblivionSourceMap[oblivionPower].Add(new Contribution { TrackingId = source, Amount = amount });
+                    Log.Debug($"BeforePowerAmountChangedPostfix (Oblivion). Source: {source}, Amount: {amount}");
+                }
+                break;
             case FocusPower:
                 CardRegistry.LogFocusChangeById(CardRegistry.GetCurrentSourceId(cardSource), amount);
                 break;
@@ -216,6 +228,10 @@ internal static partial class HookPatches
         if (CardRegistry.SimpleDamageTrackers.TryGetValue(power.Id.Entry, out var tracker))
         {
             tracker.Reset();
+        }
+        if (power is OblivionPower oblivionPower)
+        {
+            CardRegistry.OblivionSourceMap.Remove(oblivionPower);
         }
     });
 
@@ -480,6 +496,31 @@ internal static partial class HookPatches
         catch (Exception e)
         {
             LogHookError(nameof(PrepTimePostfix), e);
+        }
+    }
+
+    public static void OblivionAfterCardPlayedPrefix(OblivionPower __instance) => Guard(nameof(OblivionAfterCardPlayedPrefix), () =>
+    {
+        if (CardRegistry.OblivionSourceMap.TryGetValue(__instance, out var contributions))
+        {
+            CardRegistry.CurrentOblivionContributions.Value = contributions;
+            Log.Debug($"OblivionAfterCardPlayedPrefix. Owner: {__instance.Owner?.Name}, Contributors: {contributions.Count}");
+        }
+        else
+        {
+            Log.Warn($"OblivionAfterCardPlayedPrefix. No source tracked for instance on {__instance.Owner?.Name}.");
+        }
+    });
+
+    public static void OblivionAfterCardPlayedPostfix(OblivionPower __instance, ref Task __result)
+    {
+        try
+        {
+            __result = CardRegistry.AwaitOblivionTaskAsync(__result);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(OblivionAfterCardPlayedPostfix), e);
         }
     }
 }
