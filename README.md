@@ -54,7 +54,7 @@ I plan to make a website to receive statistic uploads to aggregate everything in
 * Damage dealt to block is counted as damage
 * Overkill damage is not counted
 * Direct damage is attributed to the entity that dealt the damage (e.g. Strike, Inferno, Fire Potion)
-* Additive and multiplicative damage modifiers get their credit (e.g. Accuracy, Strike Dummy, Patter, Tracking, Flanking, Pen Nib, Gigantification Potion)
+* Additive and multiplicative damage modifiers get their credit (e.g. Accuracy, Strike Dummy, Patter, Demon Form, Tracking, Flanking, Pen Nib, Gigantification Potion, etc...)
 * AOE enablers like Fan of Knives or Seeking edge get credit for the extra hits they add, while the largest individual hit is attributed to the base card
 
 ### Vulnerable
@@ -95,9 +95,11 @@ in the event of overkill
 ### Card Generation
 * Card generators get damage for the cards that they generate (e.g. Blade Dance, Infernal Blade, Spectrum Shift)
 They are added in a dropdown and can be revealed or hidden by pressing on the dropdown arrow.
+* Dropdowns only exist for cards that generate cards. Relics or potions that generate cards (e.g. Big Hat, Attack Potion) do not show the generated card on the relic or potion tab.
+The added card is listed in the cards tab with the generator source in brackets after it. 
 * Card generation is handled in a tree-like manner, so cards that generate cards that generate cards are all linked back to the root
 * Possible future improvement: If a card that generates multiple tokens like Blade Dance is played, even if only 1 token is played, the UI will stack them immediately (it will show Shiv x3) 
-* Combat generated copies from Anger, Adaptive Strike, Dual Wield, Music Box, etc... are considered the same card
+* Combat generated copies from Anger, Adaptive Strike, Dual Wield, Music Box, Burning Sticks, etc... are considered the same card
 
 ## Limitations
 
@@ -109,7 +111,10 @@ damage from the upgraded card is given to the base card.
 * Damage lost from minus focus (e.g. Biased Cognition, Hyperbeam), minus strength (Friendship, Shared Fate) are not tracked anywhere,
 the affected cards will simply appear to do less damage
 * Potion generation is not tracked (e.g. Petrified Toad, Alchemize, Entropic Brew, Delicate Frond, etc...)
-
+* Chemical X does not get damage attributed to it 
+* Enchantments are treated as part of the card, so relics that add enchantments do not get credit if their 
+enchantment adds damage (e.g. Gnarled Hammer, Punch Dagger, Tri-Boomerang). The card is simply shown as having 
+an enchantment and also doing more damage.
 ## Future Plans
 * Create a website to upload statistics and accumulate them
 * Address some of the limitations
