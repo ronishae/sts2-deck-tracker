@@ -54,7 +54,7 @@ I plan to make a website to receive statistic uploads to aggregate everything in
 * Damage dealt to block is counted as damage
 * Overkill damage is not counted
 * Direct damage is attributed to the entity that dealt the damage (e.g. Strike, Inferno, Fire Potion)
-* Additive and multiplicative damage modifiers get their credit (e.g. Accuracy, Strike Dummy, Patter, Tracking, Flanking, Pen Nib)
+* Additive and multiplicative damage modifiers get their credit (e.g. Accuracy, Strike Dummy, Patter, Tracking, Flanking, Pen Nib, Gigantification Potion)
 * AOE enablers like Fan of Knives or Seeking edge get credit for the extra hits they add, while the largest individual hit is attributed to the base card
 
 ### Vulnerable
@@ -86,9 +86,11 @@ in the event of overkill
 
 ### Orbs
 * Orb passive damage goes to the entity that channeled the orb
-* Extra passive procs from Darkness, Loop, or Gold Plated Cables are attributed accordingly
+* Extra passive procs from Darkness, Tesla Coil, Loop, or Gold Plated Cables are attributed accordingly
 * The damage from the first orb evoke goes to the original channeler. Further evokes are given to the card that added the extra proc
   (e.g. Dual Cast, Shatter, Multicast).
+* Extra damage from focus is attributed to the entities that applied the focus (e.g. Hotfix, Defragment, Data Disk)
+* Extra damage on lightning orbs from Infused Core is also attributed accordingly
 
 ### Card Generation
 * Card generators get damage for the cards that they generate (e.g. Blade Dance, Infernal Blade, Spectrum Shift)
@@ -101,7 +103,7 @@ They are added in a dropdown and can be revealed or hidden by pressing on the dr
 
 * Added damage from Slow from Bygone Effigy is attributed to the card dealing the damage
 * Accelerant does not get any credit for the double proc of poison
-* Replay / forced play is attributed to the base card, not the card that added plays (e.g. Echo Form, Knife Trap)
+* Replay / forced play is attributed to the base card, not the card that added plays (e.g. Echo Form, Knife Trap, Tag Team, Soldier's Stew)
 * Entities that upgrade cards mid-combat do not get credit for the upgraded card (e.g. Razor Tooth, Armaments). Any extra
 damage from the upgraded card is given to the base card.
 * Damage lost from minus focus (e.g. Biased Cognition, Hyperbeam), minus strength (Friendship, Shared Fate) are not tracked anywhere,
@@ -111,5 +113,5 @@ the affected cards will simply appear to do less damage
 ## Future Plans
 * Create a website to upload statistics and accumulate them
 * Address some of the limitations
-* Fix any bugs
+* Fix any bugs / add unwired damage attribution methods (Please report any you notice!)
 * Expand to track block
