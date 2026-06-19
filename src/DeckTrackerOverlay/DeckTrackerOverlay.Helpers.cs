@@ -112,10 +112,11 @@ public static partial class DeckTrackerOverlay
     private static bool IsMultiplayer() => CardRegistry.PlayerLabels.Count > 1;
 
     // One base colour per player; both the row tint and the text/checkbox colour derive from it so they match.
+    // Player 0 uses fuchsia (not violet) so it reads clearly as pink-purple rather than blue-adjacent.
     private static Color GetPlayerBaseColor(int playerIndex) => playerIndex switch
     {
-        0 => new Color("A78BFA"),
-        1 => new Color("60A5FA"),
+        0 => new Color("E879F9"),
+        1 => new Color("38BDF8"),
         2 => new Color("4ADE80"),
         3 => new Color("FB923C"),
         _ => new Color("E2E8F0")
@@ -129,7 +130,7 @@ public static partial class DeckTrackerOverlay
             return new Color(0, 0, 0, 0);
         }
         var c = GetPlayerBaseColor(playerIndex);
-        return new Color(c.R, c.G, c.B, 0.09f);
+        return new Color(c.R, c.G, c.B, 0.2f);
     }
 
     private static Color GetPlayerTextColor(int playerIndex)
