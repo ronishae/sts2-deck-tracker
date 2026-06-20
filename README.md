@@ -112,8 +112,8 @@ The added card is listed in the cards tab with the generator source in brackets 
 * Replay / forced play is attributed to the base card, not the card that added plays (e.g. Echo Form, Knife Trap, Tag Team, Soldier's Stew)
 * Entities that upgrade cards mid-combat do not get credit for the upgraded card (e.g. Razor Tooth, Armaments). Any extra
 damage from the upgraded card is given to the base card.
-* Damage lost from minus focus (e.g. Biased Cognition, Hyperbeam), minus strength (Friendship, Shared Fate) are not tracked anywhere,
-the affected cards will simply appear to do less damage
+* Damage lost from minus focus (e.g. Biased Cognition, Hyperbeam), minus strength (Friendship, Shared Fate) are not tracked anywhere. 
+The affected cards will simply appear to do less damage
 * Potion generation is not tracked (e.g. Petrified Toad, Alchemize, Entropic Brew, Delicate Frond, etc...)
 * Chemical X does not get damage attributed to it 
 * Enchantments are treated as part of the card, so relics that add enchantments do not get credit if their 
