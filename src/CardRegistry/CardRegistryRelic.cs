@@ -58,6 +58,8 @@ public static partial class CardRegistry
             {
                 EntityLedger[playerKey] = bareEntry;
                 EntityLedger.Remove(bareKey);
+                if (bareEntry is RelicStats bareStats)
+                    bareStats.Id = $"{relic.Id.Entry}_P{netId}";
                 Log.Debug($"ResolveAndCacheRelicOwner. Migrated {relic.Id.Entry} bare key to {playerKey}");
             }
             if (EntityLedger.TryGetValue(playerKey, out var entry) && entry is RelicStats stats)
@@ -166,7 +168,7 @@ public static partial class CardRegistry
                 displayName = System.Text.RegularExpressions.Regex.Replace(displayName, "([a-z])([A-Z])", "$1 $2");
             }
 
-            stats = new RelicStats { Id = relicId, DisplayName = displayName };
+            stats = new RelicStats { Id = ownerNetId != null ? $"{relicId}_P{ownerNetId}" : relicId, DisplayName = displayName };
             EntityLedger[key] = stats;
         }
         return stats;
