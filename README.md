@@ -73,7 +73,7 @@ On turn 1, card A gets 5/12 * 12 = 5 damage, card B gets 7/12 * 12 = 7 damage.
 1 poison decrements on turn end. 
 
 Card A loses 5/12 * 1 = 0.417 shares, so it has 4.583 shares left. Card B loses 7/12 * 1 = 0.583
-shares, so it has 6.417 shares left. The total is still 11 shares. 
+shares, so it has 6.417 shares left. The total is 11 shares. 
 
 When the poison ticks again, Card A gets 4.583/11 * 11 = 4.583 damage.
 Card B gets 6.417/11 * 11 = 6.417 damage.
