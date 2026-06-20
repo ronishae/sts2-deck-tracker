@@ -187,7 +187,9 @@ internal static partial class HookPatches
         else if (source is RelicModel relic)
         {
             CardRegistry.RelicNameCache[relic.Id.Entry] = relic.Title.GetFormattedText();
-            CardRegistry.AddForgeById("RELIC_" + relic.Id.Entry, amount);
+            var ledgerKey = CardRegistry.GetRelicLedgerKey(relic);
+            CardRegistry.GetOrCreateRelicStats(relic.Id.Entry, CardRegistry.GetRelicOwnerNetId(relic));
+            CardRegistry.AddForgeById(ledgerKey, amount);
         }
         else if (source is PotionModel potion)
         {

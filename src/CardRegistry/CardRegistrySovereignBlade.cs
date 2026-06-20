@@ -168,7 +168,8 @@ public static partial class CardRegistry
         AddDamage(bladeCard, Math.Min(damageToAttribute, sovereignBladeBaseDamage));
         damageToAttribute -= sovereignBladeBaseDamage;
 
-        var (totalDistributed, remaining) = DistributeForgeHistory(Math.Max(0, damageToAttribute));
+        var sourceModel = ResolveSourceCard(bladeCard);
+        var (totalDistributed, remaining) = DistributeForgeHistory(Math.Max(0, damageToAttribute), sourceModel);
 
         if (remaining > 0)
         {
@@ -188,10 +189,15 @@ public static partial class CardRegistry
         bladeEntity.GetAct(_currentAct)?.AddReceivedForge(_currentCombatType, totalDistributed);
     }
 
-    private static (decimal distributed, decimal remaining) DistributeForgeHistory(decimal damageToDistribute)
+    private static (decimal distributed, decimal remaining) DistributeForgeHistory(decimal damageToDistribute, CardModel bladeSourceModel)
     {
+        if (!BladeForgeHistories.TryGetValue(bladeSourceModel, out var history))
+        {
+            Log.Warn($"DistributeForgeHistory. No forge history for blade: {GetTrackingId(bladeSourceModel)}. Forge damage unattributed.");
+            return (0, damageToDistribute);
+        }
         decimal totalDistributed = 0;
-        foreach (var forgeInstance in ForgeHistory)
+        foreach (var forgeInstance in history)
         {
             if (damageToDistribute <= 0) break;
 
@@ -203,12 +209,7 @@ public static partial class CardRegistry
 
             Log.Debug($"Adding connected forge to {forgeInstance.TrackingId} with amount {amount}");
             entity.ConnectedForgeCombat += amount;
-
-            // Relics don't track act-level forge breakdowns.
-            if (entity is not RelicStats)
-            {
-                entity.GetAct(_currentAct)?.AddConnectedForge(_currentCombatType, amount);
-            }
+            entity.GetAct(_currentAct)?.AddConnectedForge(_currentCombatType, amount);
         }
         return (totalDistributed, damageToDistribute);
     }

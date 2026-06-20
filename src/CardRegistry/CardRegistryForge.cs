@@ -6,14 +6,27 @@ namespace DeckTracker;
 
 public static partial class CardRegistry
 {
-    private static readonly List<Contribution> ForgeHistory = new();
+    // Maps each physical Sovereign Blade CardModel (resolved via ResolveSourceCard) to the ordered list
+    // of forge contributions it has accumulated since it was registered this combat. Keyed by CardModel
+    // rather than tracking ID because all blades share one tracking ID (singleton), but each physical
+    // instance starts accumulating from a different point in the fight.
+    private static readonly Dictionary<CardModel, List<Contribution>> BladeForgeHistories = new();
     private static readonly List<FurnaceContribution> FurnaceContributions = [];
+
+    public static void RegisterBladeForgeHistory(CardModel sourceCardModel)
+    {
+        if (!BladeForgeHistories.ContainsKey(sourceCardModel))
+        {
+            BladeForgeHistories[sourceCardModel] = [];
+            Log.Debug($"RegisterBladeForgeHistory. Registered forge history for: {GetTrackingId(sourceCardModel)}");
+        }
+    }
 
     public static void ResetForgeState()
     {
         lock (SyncRoot)
         {
-            ForgeHistory.Clear();
+            BladeForgeHistories.Clear();
             FurnaceContributions.Clear();
             Log.Debug("ResetForgeState. Forge state cleared.");
         }
@@ -36,17 +49,24 @@ public static partial class CardRegistry
     {
         lock (SyncRoot)
         {
-            if (!EntityLedger.TryGetValue(trackingId, out var entity)) return;
-
-            entity.RawForgeCombat += amount;
-
-            // Relics don't track act-level forge breakdowns.
-            if (entity is not RelicStats)
+            if (EntityLedger.TryGetValue(trackingId, out var entity))
             {
+                entity.RawForgeCombat += amount;
                 entity.GetAct(_currentAct)?.AddRawForge(_currentCombatType, amount);
             }
+            else
+            {
+                Log.Warn($"AddForgeById. Source {trackingId} not in EntityLedger; forge will be attributed to blade without a ConnectedForge source.");
+            }
 
-            ForgeHistory.Add(new Contribution { TrackingId = trackingId, Amount = amount });
+            // Record the contribution in every active blade's per-blade history regardless of whether
+            // the forger entity is tracked. DistributeForgeHistory handles a missing entity gracefully
+            // (continues past it, still credits the blade's ReceivedForgeCombat).
+            var contribution = new Contribution { TrackingId = trackingId, Amount = amount };
+            foreach (var history in BladeForgeHistories.Values)
+            {
+                history.Add(contribution);
+            }
         }
         Publish();
     }

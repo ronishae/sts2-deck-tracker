@@ -108,6 +108,9 @@ public static partial class CardRegistry
                 EntityLedger[uniqueTrackingId] = stat;
             }
 
+            if (sourceCard.Id.Entry == "SOVEREIGN_BLADE")
+                RegisterBladeForgeHistory(sourceCard);
+
             stat.PlayerIndex = ResolvePlayerIndex(owner);
             stat.Model = card;
             if (_cardGeneratedBy.TryGetValue(card, out var generatorId))

@@ -92,10 +92,16 @@ public static partial class CardRegistry
     // and cards already tracked/tagged. Stays silent when no source is executing: RegisterCard warns later.
     public static void TagGeneratedCardOnCreation(CardModel card)
     {
-        if (card.FloorAddedToDeck != null || IsStatusCard(card) || IsGenerationAttributionExcluded(card))
+        if (IsStatusCard(card)) return;
+
+        if (IsGenerationAttributionExcluded(card))
         {
+            lock (SyncRoot) { RegisterBladeForgeHistory(ResolveSourceCard(card)); }
             return;
         }
+
+        if (card.FloorAddedToDeck != null) return;
+
         lock (SyncRoot)
         {
             if (_cardGeneratedBy.ContainsKey(card) || _cardInstanceIds.ContainsKey(card))
@@ -382,6 +388,7 @@ public static partial class CardRegistry
 
         string baseId = sourceCard.Id.Entry ?? "Unknown";
         int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
+        if (SingletonCardIds.Contains(baseId)) floorAdded = 0;
         int upgradeLevel = sourceCard.CurrentUpgradeLevel;
         string enchant = sourceCard.Enchantment?.Id.Entry ?? "None";
         int copyIndex = GetCopyIndex(sourceCard);
@@ -399,6 +406,7 @@ public static partial class CardRegistry
         CardModel sourceCard = ResolveSourceCard(card);
         string baseId = sourceCard.Id.Entry ?? "Unknown";
         int floorAdded = sourceCard.FloorAddedToDeck ?? 0;
+        if (SingletonCardIds.Contains(baseId)) floorAdded = 0;
         string owner = ownerNetId ?? ResolveOwnerNetId(sourceCard);
         return $"{baseId}_F{floorAdded}_P{owner}";
     }
