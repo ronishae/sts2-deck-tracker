@@ -78,6 +78,7 @@ Card B gets 6.417/11 * 11 = 6.417 damage.
 ### Forge
 * Forge cards get damage for their forge amounts when the Sovereign Blade deals damage 
 * Forge is handled in a queue manner, where the first forgers get credit first in the event of overkill (with the base 10 being given to the Sovereign Blade card itself) 
+* Multiple Sovereign Blades (caused by Summon Forth pulling from exhaust pile, or from card duplicators like Dual Wield) should work, but there may be some bugs I didn't catch 
 
 ### Doom
 * Doom only counts for damage if the doom animation plays and kills the enemy
@@ -115,6 +116,7 @@ the affected cards will simply appear to do less damage
 * Enchantments are treated as part of the card, so relics that add enchantments do not get credit if their 
 enchantment adds damage (e.g. Gnarled Hammer, Punch Dagger, Tri-Boomerang). The card is simply shown as having 
 an enchantment and also doing more damage.
+
 ## Future Plans
 * Create a website to upload statistics and accumulate them
 * Address some of the limitations
