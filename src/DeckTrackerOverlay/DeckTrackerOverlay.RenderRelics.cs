@@ -88,7 +88,7 @@ public static partial class DeckTrackerOverlay
             Label bossLabel = new Label { Text = $"{valBoss:0.##} ({avgBoss:0.#}) (#{agg.EncountersSeenBoss})", CustomMinimumSize = new Vector2(185, 0) };
             bossLabel.AddThemeColorOverride("font_color", statColor);
 
-            string addedText = stat.FloorAdded == 0 ? "GEN" : stat.FloorAdded.ToString();
+            string addedText = stat.FloorAdded == 0 ? "0" : stat.FloorAdded.ToString();
             Label addedLabel = new Label { Text = addedText, CustomMinimumSize = new Vector2(80, 0) };
             addedLabel.AddThemeColorOverride("font_color", new Color("A0A8B4"));
 
