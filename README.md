@@ -11,12 +11,15 @@ I plan to make a website to receive statistic uploads to aggregate everything in
 
 ![Small UI Overlay Preview](images/smallUI.png)
 
+The UI does not start until the first combat (after the Neow floor). The hotkeys won't work until the UI first appears.
+After a run finishes, the UI will only reset once a new run starts.
+
 ## Controls
 
 ### Hotkeys
 * `[` to show / hide the small UI
 * `]` to show / hide the full screen UI
-* `\` to toggle to very debug mode for the mod's logs (unnecessary)
+* `\` to toggle to very debug mode for the mod's logs (for bug reports / debugging)
 
 ### Full Screen UI Explanation
 * The top left has 3 tabs: Cards, Relics, and Potions
