@@ -2,8 +2,8 @@
   "id": "DeckTracker",
   "name": "DeckTracker",
   "author": "Roni",
-  "version": "v0.0.0",
-  "min_game_version": "0.107.0",
+  "version": "v1.0.0",
+  "min_game_version": "0.107.1",
   "has_pck": false,
   "has_dll": true,
   "affects_gameplay": false
