@@ -29,6 +29,7 @@ public static partial class CardRegistry
     {
         "DEMON_FORM_POWER", "ARSENAL_POWER", "SHADOW_STEP_POWER", "ACCURACY_POWER",
         "PHANTOM_BLADES_POWER", "PREP_TIME_POWER", "CRUELTY_POWER", "LETHALITY_POWER", "CALCIFY_POWER",
+        "MONOLOGUE_POWER",
     };
 
     // Powers whose only behaviour is add/remove a duration debuff on a target creature.

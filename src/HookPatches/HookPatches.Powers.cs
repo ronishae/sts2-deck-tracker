@@ -481,6 +481,27 @@ internal static partial class HookPatches
         }
     }
 
+    // Panache deals its damage from AfterCardPlayed (once CardsLeft hits 0), not inline on the card
+    // that applied it, so we open the execution window here to attribute that damage back to the
+    // Panache source card. Fires on every card play; harmless on the plays that deal no damage.
+    public static void PanacheAfterCardPlayedPrefix(PanachePower __instance) => Guard(nameof(PanacheAfterCardPlayedPrefix), () =>
+    {
+        Log.VeryDebug("PanacheAfterCardPlayedPrefix.");
+        CardRegistry.InstancedTracker.StartExecution(__instance);
+    });
+
+    public static void PanacheAfterCardPlayedPostfix(PanachePower __instance, ref Task __result)
+    {
+        try
+        {
+            __result = CardRegistry.InstancedTracker.AwaitTaskAsync(__result, __instance);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(PanacheAfterCardPlayedPostfix), e);
+        }
+    }
+
     public static void PrepTimePrefix(PrepTimePower __instance) => Guard(nameof(PrepTimePrefix), () =>
     {
         Log.VeryDebug("PrepTimePrefix.");

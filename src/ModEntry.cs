@@ -122,6 +122,10 @@ public static class ModEntry
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TheBombBeforeSideTurnEndPrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.TheBombBeforeSideTurnEndPostfix))));
 
+        _harmony.Patch(AccessTools.Method(typeof(PanachePower), nameof(PanachePower.AfterCardPlayed)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PanacheAfterCardPlayedPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.PanacheAfterCardPlayedPostfix))));
+
         // Powers that create cards (Infinite Blades, Spectrum Shift, ...) are wired from a single list so
         // the cards they generate attribute back to the card that applied the power.
         CardGeneratingPowerManager.PatchAll(_harmony);

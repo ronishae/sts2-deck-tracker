@@ -7,16 +7,22 @@ namespace DeckTracker;
 public class InstancedPowerTracker : ITrackerState
 {
     private ConditionalWeakTable<PowerModel, string> _instanceMap = new();
-    private readonly AsyncLocal<string?> _executingSourceId = new();
 
-    public string? ExecutingSourceId => _executingSourceId.Value;
+    // Plain field rather than AsyncLocal: instanced powers (e.g. Rolling Boulder) deal their
+    // damage through the game's combat action/VFX queue, which runs on an execution context
+    // captured before our patch set the value, so an AsyncLocal would not flow there. Combat
+    // runs sequentially on the single main thread and execution windows do not overlap, so a
+    // plain field is visible to the queue-dispatched damage for the whole window.
+    private string? _executingSourceId;
+
+    public string? ExecutingSourceId => _executingSourceId;
 
     public void Reset()
     {
         lock (CardRegistry.SyncRoot)
         {
             _instanceMap = new ConditionalWeakTable<PowerModel, string>();
-            _executingSourceId.Value = null;
+            _executingSourceId = null;
             Log.Debug("Reset (InstancedTracker). Memory map cleared.");
         }
     }
@@ -50,8 +56,8 @@ public class InstancedPowerTracker : ITrackerState
 
     public void StartExecution(PowerModel power)
     {
-        _executingSourceId.Value = GetIdForInstance(power);
-        Log.VeryDebug($"StartExecution (Instanced). Power: {power.Id.Entry}, Mapped Source: {_executingSourceId.Value}");
+        _executingSourceId = GetIdForInstance(power);
+        Log.VeryDebug($"StartExecution (Instanced). Power: {power.Id.Entry}, Mapped Source: {_executingSourceId}");
     }
 
     public async Task AwaitTaskAsync(Task originalTask, PowerModel power)
@@ -63,7 +69,7 @@ public class InstancedPowerTracker : ITrackerState
         }
         finally
         {
-            _executingSourceId.Value = null;
+            _executingSourceId = null;
             Log.VeryDebug($"AwaitTaskAsync (Instanced) finished. Power: {power.Id.Entry}");
         }
     }

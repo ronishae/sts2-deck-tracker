@@ -89,6 +89,7 @@
 
     <ItemGroup>
       <Content Include="ARCHITECTURE.md" />
+      <Content Include="CLAUDE.md" />
       <Content Include="Logs\conqueror_bug.log" />
       <Content Include="Logs\kusarigama_and_more_bugs.log" />
       <Content Include="README.md" />
