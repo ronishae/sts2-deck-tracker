@@ -39,6 +39,7 @@ public static partial class CardRegistry
     public static void StartReflectExecution()
     {
         _isReflectExecuting = true;
+        Log.VeryDebug("StartReflectExecution.");
     }
 
     public static async Task AwaitReflectTaskAsync(Task originalTask)

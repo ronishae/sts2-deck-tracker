@@ -104,6 +104,10 @@ public static class ModEntry
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPrefix))),
             postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.NecroMasteryAfterCurrentHpChangedPostfix))));
 
+        _harmony.Patch(AccessTools.Method(typeof(ReflectPower), nameof(ReflectPower.AfterDamageReceived)),
+            prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReflectAfterDamageReceivedPrefix))),
+            postfix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.ReflectAfterDamageReceivedPostfix))));
+
         _harmony.Patch(AccessTools.Method(typeof(PowerCmd), nameof(PowerCmd.Remove), new[] { typeof(PowerModel) }),
             prefix: new HarmonyMethod(AccessTools.Method(typeof(HookPatches), nameof(HookPatches.BeforePowerRemovedPrefix))));
 

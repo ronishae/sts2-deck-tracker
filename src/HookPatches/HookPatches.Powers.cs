@@ -151,6 +151,12 @@ internal static partial class HookPatches
             case StrengthPower:
                 CardRegistry.RouteStrengthApplication(target, powerId, amount, cardSource);
                 break;
+            case NecroMasteryPower:
+                if (amount > 0)
+                {
+                    CardRegistry.LogNecroMasteryApply(cardSource, (int)amount);
+                }
+                break;
             case RitualPower:
                 if (amount > 0 && target.IsPlayer)
                 {
@@ -484,6 +490,24 @@ internal static partial class HookPatches
     // Panache deals its damage from AfterCardPlayed (once CardsLeft hits 0), not inline on the card
     // that applied it, so we open the execution window here to attribute that damage back to the
     // Panache source card. Fires on every card play; harmless on the plays that deal no damage.
+    public static void ReflectAfterDamageReceivedPrefix(ReflectPower __instance) => Guard(nameof(ReflectAfterDamageReceivedPrefix), () =>
+    {
+        Log.VeryDebug("ReflectAfterDamageReceivedPrefix.");
+        CardRegistry.StartReflectExecution();
+    });
+
+    public static void ReflectAfterDamageReceivedPostfix(ReflectPower __instance, ref Task __result)
+    {
+        try
+        {
+            __result = CardRegistry.AwaitReflectTaskAsync(__result);
+        }
+        catch (Exception e)
+        {
+            LogHookError(nameof(ReflectAfterDamageReceivedPostfix), e);
+        }
+    }
+
     public static void PanacheAfterCardPlayedPrefix(PanachePower __instance) => Guard(nameof(PanacheAfterCardPlayedPrefix), () =>
     {
         Log.VeryDebug("PanacheAfterCardPlayedPrefix.");
