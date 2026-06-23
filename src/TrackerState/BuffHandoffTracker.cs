@@ -16,7 +16,7 @@ public class BuffHandoffTracker : PowerTrackerBase
 
     public override void Reset()
     {
-        _isExecuting.Value = false;
+        _isExecuting = false;
         Log.Debug($"Reset ({PowerId}). Execution flag cleared.");
     }
 

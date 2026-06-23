@@ -6,15 +6,15 @@ namespace DeckTracker;
 public static partial class CardRegistry
 {
     private static readonly List<string> _necroMasteryLedger = new();
-    private static readonly AsyncLocal<bool> _isNecroMasteryExecuting = new();
-    private static AsyncLocal<decimal> _delta = new();
+    private static bool _isNecroMasteryExecuting;
+    private static decimal _delta;
 
-    public static bool IsNecroMasteryExecuting => _isNecroMasteryExecuting.Value;
+    public static bool IsNecroMasteryExecuting => _isNecroMasteryExecuting;
 
     public static void StartNecroMasteryExecution(decimal delta)
     {
-        _isNecroMasteryExecuting.Value = true;
-        _delta.Value = delta;
+        _isNecroMasteryExecuting = true;
+        _delta = delta;
     }
 
     public static void ResetNecroMasteryState()
@@ -22,7 +22,7 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             _necroMasteryLedger.Clear();
-            _delta = new AsyncLocal<decimal>();
+            _delta = 0m;
         }
     }
 
@@ -45,12 +45,12 @@ public static partial class CardRegistry
         lock (SyncRoot)
         {
             var remainingDamage = totalDamage;
-            Log.Debug($"DistributeNecroMasteryDamage. Total Damage: {totalDamage} with delta: {_delta.Value}");
+            Log.Debug($"DistributeNecroMasteryDamage. Total Damage: {totalDamage} with delta: {_delta}");
 
             foreach (var trackingId in _necroMasteryLedger)
             {
                 if (remainingDamage <= 0) break;
-                var share = Math.Min(remainingDamage, -_delta.Value);
+                var share = Math.Min(remainingDamage, -_delta);
                 AddDamageById(trackingId, share);
                 remainingDamage -= share;
                 Log.Debug($"DistributeNecroMasteryDamage. Attributed {share} to {trackingId}. Remaining: {remainingDamage}");
@@ -72,7 +72,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            _isNecroMasteryExecuting.Value = false;
+            _isNecroMasteryExecuting = false;
             Log.VeryDebug("AwaitNecroMasteryTaskAsync finished.");
         }
     }

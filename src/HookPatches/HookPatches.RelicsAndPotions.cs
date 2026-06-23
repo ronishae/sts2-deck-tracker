@@ -82,12 +82,12 @@ internal static partial class HookPatches
     public static void RitualPowerTurnEndPrefix() => Guard(nameof(RitualPowerTurnEndPrefix), () =>
     {
         Log.VeryDebug("RitualPowerTurnEndPrefix.");
-        CardRegistry.IsRitualTriggering.Value = true;
+        CardRegistry.IsRitualTriggering = true;
     });
 
     public static void RitualPowerTurnEndPostfix() => Guard(nameof(RitualPowerTurnEndPostfix), () =>
     {
-        CardRegistry.IsRitualTriggering.Value = false;
+        CardRegistry.IsRitualTriggering = false;
     });
 
     public static void HandDrillAfterDamagePrefix(RelicModel __instance) => Guard(nameof(HandDrillAfterDamagePrefix), () =>
@@ -111,7 +111,7 @@ internal static partial class HookPatches
                 var boot = (int)Math.Floor(__result - floor);
                 Log.Debug($"TheBootModifyHpPostfix. Damage: {boot}");
                 CardRegistry.AddDamageById(CardRegistry.GetRelicLedgerKey(__instance), boot);
-                CardRegistry.PendingBootDamage.Value += boot;
+                CardRegistry.PendingBootDamage += boot;
             }
         }
         catch (Exception e)

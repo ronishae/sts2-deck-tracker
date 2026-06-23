@@ -13,7 +13,7 @@ public class ProportionalShareTracker : PowerTrackerBase
         lock (CardRegistry.SyncRoot)
         {
             _ledger.Clear();
-            _isExecuting.Value = false;
+            _isExecuting = false;
             Log.Debug($"Reset ({PowerId}). Ledger cleared.");
         }
     }

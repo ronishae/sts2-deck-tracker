@@ -8,23 +8,23 @@ public static partial class CardRegistry
     // The bucket for Reaper Form applications
     public static readonly List<Contribution> ReaperFormShares = new();
     
-    public static readonly AsyncLocal<bool> IsReaperFormExecuting = new();
-    private static AsyncLocal<decimal> _reaperDamage = new();
+    public static bool IsReaperFormExecuting;
+    private static decimal _reaperDamage;
 
-    public static void StartReaperFormExecution(decimal damage) 
+    public static void StartReaperFormExecution(decimal damage)
     {
-        IsReaperFormExecuting.Value = true;
-        _reaperDamage.Value = damage;
+        IsReaperFormExecuting = true;
+        _reaperDamage = damage;
     }
 
-    public static decimal GetReaperDamage() => _reaperDamage.Value;
+    public static decimal GetReaperDamage() => _reaperDamage;
 
     public static void ResetReaperFormState()
     {
         lock (SyncRoot)
         {
             ReaperFormShares.Clear();
-            _reaperDamage = new AsyncLocal<decimal>();
+            _reaperDamage = 0m;
         }
     }
 
@@ -60,7 +60,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            IsReaperFormExecuting.Value = false;
+            IsReaperFormExecuting = false;
         }
     }
 }

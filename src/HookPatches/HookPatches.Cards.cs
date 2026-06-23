@@ -215,10 +215,10 @@ internal static partial class HookPatches
         var damageAmount = results.TotalDamage;
         Log.Debug($"AfterDamageGivenPostfix. Damage: {damageAmount}, Target: {target.Name}, Source: {cardSource?.Id.Entry}");
 
-        if (CardRegistry.PendingBootDamage.Value > 0)
+        if (CardRegistry.PendingBootDamage > 0)
         {
-            damageAmount -= CardRegistry.PendingBootDamage.Value;
-            CardRegistry.PendingBootDamage.Value = 0;
+            damageAmount -= CardRegistry.PendingBootDamage;
+            CardRegistry.PendingBootDamage = 0;
             Log.VeryDebug($"  -> Reduced by Boot: {damageAmount}");
         }
 
@@ -228,7 +228,7 @@ internal static partial class HookPatches
             return;
         }
 
-        if (CardRegistry.CurrentPoisonTarget.Value == target && damageAmount > 0)
+        if (CardRegistry.CurrentPoisonTarget == target && damageAmount > 0)
         {
             CardRegistry.DistributePoisonDamage(target, damageAmount);
             if (!target.IsAlive)

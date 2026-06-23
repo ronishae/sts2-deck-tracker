@@ -8,8 +8,10 @@ public static partial class CardRegistry
 {
     private static readonly Dictionary<Creature, List<Contribution>> PoisonShares = new();
 
-    // AsyncLocal is used to keep the variable consistent across threads when dealing with async tasks
-    public static readonly AsyncLocal<Creature?> CurrentPoisonTarget = new();
+    // Plain field (not AsyncLocal): turn-start poison damage is dealt through the game's action
+    // queue, which an AsyncLocal set in our prefix would not flow into. Combat is single-threaded
+    // and sequential, so a plain field stays visible to that queue-dispatched damage.
+    public static Creature? CurrentPoisonTarget;
 
     public static void RoutePoisonApplication(Creature target, decimal amount, CardModel? cardSource)
     {
@@ -157,7 +159,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            CurrentPoisonTarget.Value = null;
+            CurrentPoisonTarget = null;
             Log.VeryDebug("AwaitPoisonTaskAsync finished.");
         }
     }

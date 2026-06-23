@@ -21,7 +21,7 @@ public class QueueBuilderTracker : PowerTrackerBase
         {
             _ledger.Clear();
             _queue.Clear();
-            _isExecuting.Value = false;
+            _isExecuting = false;
             _spinnerIndex = 0;
             Log.Debug($"Reset ({PowerId}). State cleared.");
         }
@@ -122,7 +122,7 @@ public class QueueBuilderTracker : PowerTrackerBase
             Log.VeryDebug($"StartExecution ({PowerId}). Spinner index reset.");
         }
 
-        _isExecuting.Value = true;
+        _isExecuting = true;
     }
 
     public async Task AwaitTaskAsync(Task originalTask, bool flatten = true)
@@ -134,7 +134,7 @@ public class QueueBuilderTracker : PowerTrackerBase
         }
         finally
         {
-            _isExecuting.Value = false;
+            _isExecuting = false;
             lock (CardRegistry.SyncRoot)
             {
                 // Storm and T2T clear the queue after every play execution

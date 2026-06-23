@@ -14,7 +14,7 @@ public class GenericDamageTracker : PowerTrackerBase
         lock (CardRegistry.SyncRoot)
         {
             _ledger.Clear();
-            _isExecuting.Value = false;
+            _isExecuting = false;
             Log.Debug($"Reset ({PowerId}). Ledger and execution flag cleared.");
         }
     }

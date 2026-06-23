@@ -18,7 +18,7 @@ public static partial class CardRegistry
     {
         if (amount <= 0) return;
 
-        if (IsCountdownExecuting.Value)
+        if (IsCountdownExecuting)
         {
             lock (SyncRoot)
             {
@@ -34,7 +34,7 @@ public static partial class CardRegistry
             return;
         }
 
-        if (IsReaperFormExecuting.Value)
+        if (IsReaperFormExecuting)
         {
             lock (SyncRoot)
             {

@@ -5,9 +5,9 @@ namespace DeckTracker;
 public static partial class CardRegistry
 {
     public static readonly List<string> ReflectQueue = new();
-    private static readonly AsyncLocal<bool> _isReflectExecuting = new();
+    private static bool _isReflectExecuting;
 
-    public static bool IsReflectExecuting => _isReflectExecuting.Value;
+    public static bool IsReflectExecuting => _isReflectExecuting;
 
     public static void ResetReflectState()
     {
@@ -38,7 +38,7 @@ public static partial class CardRegistry
 
     public static void StartReflectExecution()
     {
-        _isReflectExecuting.Value = true;
+        _isReflectExecuting = true;
     }
 
     public static async Task AwaitReflectTaskAsync(Task originalTask)
@@ -49,7 +49,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            _isReflectExecuting.Value = false;
+            _isReflectExecuting = false;
         }
     }
 

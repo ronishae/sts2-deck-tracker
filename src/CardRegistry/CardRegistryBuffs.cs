@@ -65,7 +65,7 @@ public static partial class CardRegistry
                 return;
             }
 
-            if (IsRitualTriggering.Value)
+            if (IsRitualTriggering)
             {
                 foreach (var s in RitualSources)
                 {

@@ -9,7 +9,7 @@ public static partial class CardRegistry
     public static readonly List<Contribution> CountdownHistory = new();
     
     // The Execution Scope Trap
-    public static readonly AsyncLocal<bool> IsCountdownExecuting = new();
+    public static bool IsCountdownExecuting;
 
     public static void ResetCountdownState()
     {
@@ -41,7 +41,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            IsCountdownExecuting.Value = false;
+            IsCountdownExecuting = false;
         }
     }
 }

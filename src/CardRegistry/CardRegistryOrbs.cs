@@ -18,19 +18,19 @@ public static partial class CardRegistry
     
     public static readonly List<Contribution> LoopHistory = new();
     public static readonly List<string> CurrentTurnLoopQueue = new();
-    public static readonly AsyncLocal<bool> IsLoopExecuting = new();
+    public static bool IsLoopExecuting;
     
     // Tracks if an Orb is currently dealing damage
-    private static readonly AsyncLocal<OrbExecutionContext?> _executingOrb = new();
+    private static OrbExecutionContext? _executingOrb;
     public static OrbExecutionContext? ExecutingOrb
     {
         get
         {
-            return _executingOrb.Value;
+            return _executingOrb;
         }
         set
         {
-            _executingOrb.Value = value;
+            _executingOrb = value;
         }
     }
     
@@ -418,7 +418,7 @@ public static partial class CardRegistry
         }
         finally
         {
-            IsLoopExecuting.Value = false;
+            IsLoopExecuting = false;
             CurrentTurnLoopQueue.Clear();
             Log.VeryDebug("AwaitLoopTaskAsync finished.");
         }

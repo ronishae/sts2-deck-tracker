@@ -28,7 +28,7 @@ internal static partial class HookPatches
     public static void OrbPassivePrefix(OrbModel __instance) => Guard(nameof(OrbPassivePrefix), () =>
     {
         string? forcingActor = null;
-        if (CardRegistry.IsLoopExecuting.Value && CardRegistry.CurrentTurnLoopQueue.Count > 0)
+        if (CardRegistry.IsLoopExecuting && CardRegistry.CurrentTurnLoopQueue.Count > 0)
         {
             forcingActor = CardRegistry.CurrentTurnLoopQueue[0];
             CardRegistry.CurrentTurnLoopQueue.RemoveAt(0);
@@ -129,7 +129,7 @@ internal static partial class HookPatches
     public static void LoopPrefix(LoopPower __instance) => Guard(nameof(LoopPrefix), () =>
     {
         Log.VeryDebug("LoopPrefix.");
-        CardRegistry.IsLoopExecuting.Value = true;
+        CardRegistry.IsLoopExecuting = true;
         CardRegistry.CurrentTurnLoopQueue.Clear();
         lock (CardRegistry.SyncRoot)
         {

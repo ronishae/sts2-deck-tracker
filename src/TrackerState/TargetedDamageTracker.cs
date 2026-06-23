@@ -15,7 +15,7 @@ public class TargetedDamageTracker : PowerTrackerBase
         lock (CardRegistry.SyncRoot)
         {
             _ledgers.Clear();
-            _isExecuting.Value = false;
+            _isExecuting = false;
             Log.Debug($"Reset (Targeted: {PowerId}). Ledgers and execution flag cleared.");
         }
     }

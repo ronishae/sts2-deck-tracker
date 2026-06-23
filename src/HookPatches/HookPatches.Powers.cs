@@ -360,7 +360,7 @@ internal static partial class HookPatches
         if (!__instance.Owner.IsPlayer)
         {
             Log.VeryDebug($"PoisonAfterSideTurnStartPrefix. Target: {__instance.Owner.Name}");
-            CardRegistry.CurrentPoisonTarget.Value = __instance.Owner;
+            CardRegistry.CurrentPoisonTarget = __instance.Owner;
         }
     });
 
@@ -394,7 +394,7 @@ internal static partial class HookPatches
     public static void CountdownAfterSideTurnStartPrefix(CountdownPower __instance) => Guard(nameof(CountdownAfterSideTurnStartPrefix), () =>
     {
         Log.VeryDebug("CountdownAfterSideTurnStartPrefix.");
-        CardRegistry.IsCountdownExecuting.Value = true;
+        CardRegistry.IsCountdownExecuting = true;
     });
 
     public static void CountdownAfterSideTurnStartPostfix(CountdownPower __instance, ref Task __result)
