@@ -1,4 +1,6 @@
 # Deck Tracker
+Download the latest version from the Steam workshop: https://steamcommunity.com/sharedfiles/filedetails/?id=3748139103
+
 A utility mod that helps quantify damage output by recording individual damage contribution from cards, relics, and potions. 
 
 The mod does not modify gameplay, so it can be installed for only one person in multiplayer. 
